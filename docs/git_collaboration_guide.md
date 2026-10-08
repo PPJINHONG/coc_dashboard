@@ -1,9 +1,11 @@
 # Git/GitHub 협업 운영 가이드
 
-> 프로젝트: `PPJINHONG/coc_dashboard`  
-> 협업 인원: 2명  
-> 초기 상태: `README.md`만 있는 GitHub 저장소, 각 개발자 PC에서 Clone/Pull 완료  
-> 저장소: Public로 전환하여 `main` Ruleset 적용 예정  
+> 현재 CI는 `Basic CI` Workflow의 `Compose build` 검사 하나입니다. Actions 사용법은 [입문 가이드](github-actions.md)를 참고하세요.
+
+> 프로젝트: `PPJINHONG/coc_dashboard`
+> 협업 인원: 2명
+> 현재 구조: React + TypeScript 기본 화면, Django 페이지/조회 API, PostgreSQL
+> 보호 규칙: GitHub에서 별도 설정하며, 파일 작성만으로 적용되지는 않음
 > 목표: 기능 브랜치에서 개발 → PR 리뷰 및 승인 → `main` 병합
 
 ## 1. Git 핵심 개념
@@ -37,9 +39,9 @@ main (최신 공용 코드)
   └─ feature/login-api    ── PR → 승인 → Merge ──► main
 ```
 
-## 3. README만 있는 저장소에서 최초 뼈대 올리기
+## 3. 현재 기본 뼈대를 PR로 올리기
 
-개발자 A가 공통 초기 구조를 만들어 PR을 올리고, 개발자 B가 검토한다.
+개발자 A가 현재 기본 뼈대를 기능 브랜치에 커밋해 PR을 올리고, 개발자 B가 검토한다. 이미 `chore/init-project`에서 작업 중이면 새 브랜치 생성 단계를 생략한다.
 
 ### A. 초기화 브랜치 만들기
 
@@ -49,7 +51,14 @@ git pull origin main
 git switch -c chore/init-project
 ```
 
-이 브랜치에서 프로젝트 폴더와 `.gitignore` 등을 작성한다.
+이 브랜치에서 변경 내용을 확인하고 로컬 빌드와 기본 페이지를 확인한다. 실제 환경값이 담긴 `.env`는 커밋하지 않는다.
+
+```bash
+docker compose config --quiet
+docker compose up --build -d
+```
+
+화면은 http://localhost:8080, Django 페이지는 http://localhost:8080/backend/, 조회 API는 http://localhost:8080/api/test/ 에서 확인한다.
 
 ### B. 변경 사항 커밋 및 Push
 
@@ -67,7 +76,7 @@ git push -u origin chore/init-project
 3. **Create pull request**.
 4. 개발자 B가 **Files changed**에서 변경 사항을 검토.
 5. B가 **Review changes → Approve → Submit review**.
-6. 정책/테스트 조건을 충족하면 A 또는 권한이 있는 B가 **Squash and merge** (또는 허용된 Merge 방식) 실행.
+6. `Compose build` 성공과 리뷰 승인 조건을 충족하면 A 또는 권한이 있는 B가 **Squash and merge** (또는 허용된 Merge 방식) 실행.
 
 **PR 생성과 Approve만으로는 `main`이 바뀌지 않는다. Merge해야 반영된다.** 보호 규칙에서 승인 1명을 요구하면 작성자 이외의 적격 리뷰어 승인이 필요하다.
 
@@ -170,7 +179,7 @@ git add <resolved-file>
 git commit                   # merge 중단 상태인 경우 병합 커밋 완료
 ```
 
-같은 파일을 수정했다고 무조건 충돌하는 것은 아니지만, 같은 위치의 상충하는 변경은 수동 조정이 필요할 수 있다. 병합 전후 테스트를 실행한다.
+같은 파일을 수정했다고 무조건 충돌하는 것은 아니지만, 같은 위치의 상충하는 변경은 수동 조정이 필요할 수 있다. 병합 전후 이미지 빌드와 변경한 화면을 확인한다.
 
 ## 6. GitHub Public 저장소 main 보호 Ruleset
 
@@ -187,28 +196,24 @@ git commit                   # merge 중단 상태인 경우 병합 커밋 완�
 | Required approvals | `1` | 상대방 리뷰 승인 1명 필요 |
 | Dismiss stale pull request approvals when new commits are pushed | 켜기 | 새로운 리뷰 대상 커밋 발생 시 이전 승인 해제 |
 | Block force pushes | 켜기 | 강제 Push 차단 |
-| Require status checks to pass | **CI 구축 후 켜기** | GitHub Actions 검사 결과 필수화 |
+| Require status checks to pass | **첫 CI 실행 후 켜기** | `Compose build` 성공을 필수화 |
 | Allowed merge methods | 우선 `Squash` 권장 | PR의 커밋을 하나로 정리 |
 
 **지금 단계에서는 비추천:** `Restrict creations`, `Restrict updates`, `Require deployments to succeed`, `Require signed commits` 등은 필요성과 영향 범위를 이해한 뒤 활성화한다. 특히 `Restrict updates`는 정상적인 Merge까지 막을 수 있다.
 
-### Public/Private 요금제 주의
-
-- Public 저장소는 GitHub Free에서도 일반적인 보호 규칙 적용이 가능하다.
-- Private 조직 저장소에서 무료 요금제로 Ruleset을 만들면 **강제 적용되지 않는다**는 경고가 발생할 수 있다.
-- 현재 저장소는 Public으로 변경했으므로 위 Ruleset을 적용하는 방향으로 진행한다.
+보호 규칙의 사용 가능 여부와 강제 적용 상태는 해당 저장소 Settings에서 확인한다. 이 문서는 권장 절차이며 원격 설정의 적용 완료를 의미하지 않는다.
 
 ## 7. GitHub Actions와 Ruleset의 관계
 
 GitHub Actions는 Ruleset에 독립적인 **별도 체크박스가 아니다.**
 
-1. 저장소에 `.github/workflows/ci.yml` 등 Workflow 파일 추가.
+1. 현재 `.github/workflows/ci.yml`을 브랜치에 커밋하고 Push.
 2. PR에서 Workflow를 실제 실행.
 3. **Settings → Rules → Rulesets → Protect main**으로 이동.
 4. **Require status checks to pass** 체크.
-5. **Add checks**에서 Workflow의 Job 검사 이름(예: `frontend-build`, `backend-check`)을 필수 검사로 등록.
+5. **Add checks**에서 실제 Job 이름 `Compose build`를 필수 검사로 등록.
 
-React/Django 코드가 없는 초기 단계에서는 필수 Status Check를 미리 설정하지 않고, 프로젝트 기본 구조와 CI가 실행된 후 추가하는 것이 좋다. `frontend-build`는 React 빌드, `backend-check`는 Django 설정 검사를 위한 예시 이름이다. 실제 파일·작업 정의가 있어야 동작한다.
+Workflow는 예시 환경값 준비 → Compose 설정 확인 → frontend/backend 이미지 빌드를 수행한다. React 빌드에 TypeScript 타입 검사가 포함된다.
 
 **중요:** Actions가 실패해도 Status Check를 필수 규칙으로 연결하지 않았다면 Merge가 자동으로 차단되는 것은 아니다.
 
@@ -267,11 +272,11 @@ git diff HEAD origin/main
 - [ ] Public 저장소에서 `Protect main` Ruleset을 `Active`로 생성
 - [ ] 개발자 B를 협업자로 초대하여 적절한 권한 부여
 - [ ] `chore/init-project` 브랜치 생성
-- [ ] 프로젝트 공통 폴더 구조 및 `.gitignore` 작성
+- [ ] .env 준비 후 화면·Django 페이지·조회 API와 로컬 빌드 확인
 - [ ] Commit 후 Push 및 PR 생성
 - [ ] B가 리뷰하고 Approve
 - [ ] PR을 `main`에 Merge
 - [ ] 두 개발자 모두 `main` Pull
 - [ ] 기능별 브랜치 개발 시작
-- [ ] React/Django 실행 가능해지면 GitHub Actions CI 추가
-- [ ] CI 검사 성공을 필수 Status Check로 지정
+- [ ] PR에서 Basic CI의 Compose build 성공 확인
+- [ ] Compose build를 필수 Status Check로 지정
