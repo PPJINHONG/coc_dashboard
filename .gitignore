@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+coverage/
+.venv/
+__pycache__/
+*.py[cod]
+.ruff_cache/
+*.sqlite3
+.DS_Store
+*.log
+.artifacts/
+.editorconfig

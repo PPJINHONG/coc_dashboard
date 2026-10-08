@@ -1,0 +1,9 @@
+# Django 웹 프레임워크
+Django==5.2.18
+# Django에서 PostgreSQL에 연결할 때 사용하는 드라이버
+psycopg[binary]==3.3.6
+# 컨테이너 안에서 Django를 실행하는 웹 서버
+gunicorn==26.2.0
+# API 응답과 OpenAPI/Swagger 문서
+djangorestframework==3.18.3
+drf-spectacular==0.30.0
