@@ -2,7 +2,7 @@
 
 - 실제 설정은 루트 `.env`, 공유 양식은 `.env.example`, 실행 구성은 `compose.yaml`에서 관리한다. `.env`가 없을 때만 예시를 복사하며 기존 파일을 덮어쓰지 않는다.
 - `.env`와 실제 비밀번호·서명 키·토큰은 Git, 문서, PR, 작업 보고에 포함하지 않는다. 설정 검증에는 비밀값을 출력하지 않는 `docker compose config --quiet`를 사용한다.
-- 새 환경변수나 팀 공통 기본값을 추가하면 `.env.example`, 사용 코드/Compose, [설정 문서](docs/configuration.md)를 함께 갱신한다. 셸 환경변수가 `.env`보다 우선할 수 있음을 확인한다.
+- 새 환경변수나 팀 공통 기본값을 추가하면 `.env.example`, 사용 코드/Compose, [설정 문서](docs/02-development/configuration.md)를 함께 갱신한다. 셸 환경변수가 `.env`보다 우선할 수 있음을 확인한다.
 
 ## . 문서 유지와 추가 합의 사항
 
