@@ -13,6 +13,7 @@
 | [애플리케이션](application.md) | TSX 파일, Django 템플릿, DB 연결 설정 |
 | [GitHub Actions](github-actions.md) | Basic CI 첫 실행, Compose build 로그 확인 |
 | [Git 협업](git_collaboration_guide.md) | 브랜치, PR, 리뷰, main 보호 규칙 |
+| [에이전트 협업](agent-collaboration.md) | 총괄·기능 구현·검증 에이전트, 작업 배정·수정·재검증·완료 보고 |
 
 ## 현재 확인할 화면
 
