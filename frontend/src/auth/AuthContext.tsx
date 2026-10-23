@@ -13,6 +13,8 @@ interface AuthContextValue {
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (partial: UserUpdate) => Promise<User>;
+  // API 403(세션 만료) 공통 처리: 처리했으면 true. 게시판 등 AuthContext 밖 호출에서 사용.
+  handleAuthError: (err: unknown) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -78,9 +80,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [toAnon],
   );
 
+  // 게시판 등 AuthContext 밖에서 발생한 403을 세션 만료 흐름으로 일관 처리한다.
+  const handleAuthError = useCallback(
+    (err: unknown): boolean => {
+      if (err instanceof ApiError && err.status === 403) {
+        toAnon(MSG_SESSION);
+        return true;
+      }
+      return false;
+    },
+    [toAnon],
+  );
+
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, notice, login, logout, updateUser }),
-    [status, user, notice, login, logout, updateUser],
+    () => ({ status, user, notice, login, logout, updateUser, handleAuthError }),
+    [status, user, notice, login, logout, updateUser, handleAuthError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

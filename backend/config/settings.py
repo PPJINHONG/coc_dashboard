@@ -74,3 +74,6 @@ LANGUAGE_CODE = "ko-kr"
 TIME_ZONE = "Asia/Seoul"
 USE_TZ = True
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# 게시판 첨부 이미지 저장 위치입니다. 파일은 /api/board/images/<id>/ 로만 제공합니다.
+MEDIA_ROOT = BASE_DIR / "media"

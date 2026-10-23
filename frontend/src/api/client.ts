@@ -109,3 +109,57 @@ export async function request<T>(method: HttpMethod, path: string, body?: unknow
   }
   throw toApiError(res.status, data);
 }
+
+// 413(Nginx 요청 크기 초과) 안내 문구
+export const MSG_PAYLOAD_TOO_LARGE = '이미지 용량이 너무 큽니다.';
+
+// multipart 업로드: Content-Type을 직접 지정하지 않아 브라우저가 boundary를 붙이게 둔다.
+// CSRF 토큰·credentials·오류 정규화는 request와 동일하게 처리한다.
+export async function upload<T>(path: string, formData: FormData): Promise<T> {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+
+  let token = getCookie('csrftoken');
+  if (!token) {
+    await fetchCsrf();
+    token = getCookie('csrftoken');
+  }
+  if (token) headers['X-CSRFToken'] = token;
+
+  let res: Response;
+  try {
+    res = await fetch(path, {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+      body: formData,
+    });
+  } catch {
+    throw new ApiError(0, MSG_SERVER);
+  }
+
+  // 413은 Nginx가 가로채므로 보통 비JSON 응답이다. 본문을 읽기 전에 분기한다.
+  if (res.status === 413) throw new ApiError(413, MSG_PAYLOAD_TOO_LARGE);
+
+  let text = '';
+  try {
+    text = await res.text();
+  } catch {
+    throw new ApiError(res.status || 0, MSG_SERVER);
+  }
+
+  let data: unknown = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = undefined;
+    }
+  }
+
+  if (res.ok) {
+    if (res.status === 204 || !text) return undefined as T;
+    if (data === undefined) throw new ApiError(res.status, MSG_SERVER);
+    return data as T;
+  }
+  throw toApiError(res.status, data);
+}

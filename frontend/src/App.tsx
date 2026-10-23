@@ -2,7 +2,7 @@ import './App.css';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import LoginPage from './pages/LoginPage';
-import ProfilePage from './pages/ProfilePage';
+import AuthedApp from './pages/AuthedApp';
 
 function Screen() {
   const { status, user } = useAuth();
@@ -13,7 +13,7 @@ function Screen() {
       </p>
     );
   }
-  if (status === 'authed' && user) return <ProfilePage user={user} />;
+  if (status === 'authed' && user) return <AuthedApp />;
   return <LoginPage />;
 }
 

@@ -9,4 +9,19 @@ urlpatterns = [
     path("auth/login/", views.LoginView.as_view(), name="auth-login"),
     path("auth/logout/", views.LogoutView.as_view(), name="auth-logout"),
     path("me/", views.MeView.as_view(), name="me"),
+    # 게시판 슬라이스
+    path("board/posts/", views.PostListCreateView.as_view(), name="board-post-list"),
+    path("board/posts/<int:pk>/", views.PostDetailView.as_view(), name="board-post-detail"),
+    path(
+        "board/posts/<int:pk>/comments/",
+        views.CommentCreateView.as_view(),
+        name="board-comment-create",
+    ),
+    path(
+        "board/comments/<int:pk>/",
+        views.CommentDetailView.as_view(),
+        name="board-comment-detail",
+    ),
+    path("board/images/", views.ImageUploadView.as_view(), name="board-image-upload"),
+    path("board/images/<int:pk>/", views.ImageServeView.as_view(), name="board-image-serve"),
 ]

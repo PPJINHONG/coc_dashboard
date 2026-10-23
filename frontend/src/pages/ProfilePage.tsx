@@ -27,10 +27,9 @@ function formatDate(value: string): string {
 }
 
 export default function ProfilePage({ user }: { user: User }) {
-  const { updateUser, logout } = useAuth();
+  const { updateUser } = useAuth();
   const [form, setForm] = useState<FormState>(() => toForm(user));
   const [saving, setSaving] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldMessages>({});
   const [success, setSuccess] = useState<string | null>(null);
@@ -68,14 +67,6 @@ export default function ProfilePage({ user }: { user: User }) {
     }
   }
 
-  async function onLogout() {
-    if (loggingOut) return;
-    setLoggingOut(true);
-    await logout();
-  }
-
-  const busy = saving || loggingOut;
-
   return (
     <main className="card">
       <h1>내 프로필</h1>
@@ -104,17 +95,14 @@ export default function ProfilePage({ user }: { user: User }) {
               onChange={(e) => setForm((prev) => ({ ...prev, [f.key]: e.target.value }))}
               aria-invalid={fieldErrors[f.key] ? true : undefined}
               aria-describedby={fieldErrors[f.key] ? `${f.key}-error` : undefined}
-              disabled={busy}
+              disabled={saving}
             />
             <ErrorMessage id={`${f.key}-error`} message={fieldErrors[f.key]} />
           </div>
         ))}
         <div className="actions">
-          <button type="submit" disabled={busy}>
+          <button type="submit" disabled={saving}>
             {saving ? '저장 중…' : '저장'}
-          </button>
-          <button type="button" className="secondary" onClick={onLogout} disabled={busy}>
-            {loggingOut ? '로그아웃 중…' : '로그아웃'}
           </button>
         </div>
       </form>
