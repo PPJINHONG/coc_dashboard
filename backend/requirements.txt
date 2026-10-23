@@ -7,3 +7,6 @@ gunicorn==26.2.0
 # API 응답과 OpenAPI/Swagger 문서
 djangorestframework==3.18.3
 drf-spectacular==0.30.0
+# 슬라이스1 결정론 테스트 실행용 (pytest + Django 통합)
+pytest==8.4.2
+pytest-django==4.11.1

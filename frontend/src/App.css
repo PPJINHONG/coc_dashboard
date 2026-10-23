@@ -1,0 +1,16 @@
+.card { max-width: 420px; margin: 48px auto; padding: 24px; border: 1px solid #ccc; border-radius: 8px; font-family: system-ui, sans-serif; }
+.card h1 { margin-top: 0; font-size: 1.5rem; }
+.card form { display: flex; flex-direction: column; gap: 8px; }
+.card label { font-weight: 600; }
+.card input { padding: 8px; font-size: 1rem; border: 1px solid #999; border-radius: 4px; }
+.card input[aria-invalid='true'] { border-color: #b00020; }
+.card button { padding: 8px 16px; font-size: 1rem; cursor: pointer; }
+.card button:disabled { cursor: not-allowed; opacity: 0.6; }
+.card dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; }
+.card dt { font-weight: 600; }
+.card dd { margin: 0; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.actions { display: flex; gap: 8px; margin-top: 8px; }
+.error { color: #b00020; margin: 4px 0; }
+.success { color: #1b5e20; margin: 4px 0; }
+.loading, .fallback { text-align: center; margin-top: 48px; font-family: system-ui, sans-serif; }

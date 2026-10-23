@@ -9,14 +9,23 @@ DEBUG = False
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "backend"]
 
 # 기본 페이지를 제공하는 core 앱을 등록합니다.
-INSTALLED_APPS = ["core", "rest_framework", "drf_spectacular"]
+# 슬라이스1(세션 로그인·회원정보)에 필요한 Django 기본 인증/세션 앱을 추가합니다.
+INSTALLED_APPS = [
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "core",
+    "rest_framework",
+    "drf_spectacular",
+]
 
-# 현재 공개 조회 API에 필요한 최소 설정입니다.
+# 세션 인증 기반 API 설정입니다.
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
-    "DEFAULT_AUTHENTICATION_CLASSES": [],
-    "UNAUTHENTICATED_USER": None,
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.SessionAuthentication",
+    ],
 }
 SPECTACULAR_SETTINGS = {
     "TITLE": "COC Dashboard API",
@@ -25,9 +34,13 @@ SPECTACULAR_SETTINGS = {
 }
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
 ]
+# Nginx(localhost:8080) 뒤에서 CSRF Origin 검사를 통과시키기 위한 신뢰 출처입니다.
+CSRF_TRUSTED_ORIGINS = ["http://localhost:8080", "http://127.0.0.1:8080"]
 ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
 
