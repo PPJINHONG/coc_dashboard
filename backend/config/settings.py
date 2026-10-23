@@ -40,7 +40,14 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
 ]
 # Nginx(localhost:8080) 뒤에서 CSRF Origin 검사를 통과시키기 위한 신뢰 출처입니다.
-CSRF_TRUSTED_ORIGINS = ["http://localhost:8080", "http://127.0.0.1:8080"]
+# 접속 포트가 다를 때만 DJANGO_CSRF_TRUSTED_ORIGINS(쉼표 구분)로 바꿉니다.
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        "DJANGO_CSRF_TRUSTED_ORIGINS", "http://localhost:8080,http://127.0.0.1:8080"
+    ).split(",")
+    if origin.strip()
+]
 ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
 
