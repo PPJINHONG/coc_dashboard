@@ -11,6 +11,7 @@
 - **`feat/prototype-harness` 브랜치 안에서만 작업한다.** main은 코워커 승인 없이는 머지할 수 없도록 보호되어 있다.
   **main으로의 PR은 사용자가 명시적으로 요청할 때만** 만든다. 그 전에는 이 파일도 삭제하지 않는다.
 - 브랜치에 push할 때는 **항상 이 파일을 갱신**하고, 최종 보고에 **다음 에이전트에게 줄 프롬프트**를 함께 적는다.
+- 사용자는 화면을 직접 열어 보기 어려울 때가 많다. **작업을 마치면 주요 화면을 캡처해 보낸다.**
 - 응답·문서·보고는 한국어 존댓말, 코드 식별자·명령은 원문 유지.
 - 승인이 필요한 결정도 묻지 말고 권장안으로 진행하고, 끝날 때 결정 사항을 목록으로 보고한다(단, 새 기능의 범위처럼 사용자만 정할 수 있는 것은 확인한다).
 
@@ -27,7 +28,7 @@
 
 ---
 
-## 현재 상태 (2026-10-27 기준)
+## 현재 상태 (2026-10-27 저녁 기준)
 
 | 커밋 | 내용 | 검증 |
 |---|---|---|
@@ -36,8 +37,25 @@
 | `1238a14` | 게시판(글 CRUD·댓글·이미지 업로드) + `docs/02-development/api.md`, `database.md` | pytest 19/19, B1~B15 PASS |
 | `08b642c` | UI: 다크 테마 + 사이드바(게시판/대시보드/유저관리), `PlaceholderPage.tsx` | 아래 `3599b02`에서 독립 검증 완료 |
 | `3599b02` | 08b642c 검증 FAIL 수정(아래 참고) | 기능 F01~F21 PASS, 7개 화면 × 4개 폭 PASS, `npm run build` 통과 |
+| `41782f7` | **대시보드(Grafana식 패널)** 구현 — 아래 "대시보드 요약" | pytest 46건 중 45 통과(1건은 Windows 환경 차이), 기능 D01~D13 PASS, 게시판 회귀 F01~F21 PASS, 11개 화면 × 4개 폭 문제 0건 |
 
-슬라이스2(패널 대시보드)·유저관리 기능은 미착수(준비 중 화면만 있음).
+유저관리 기능은 미착수(준비 중 화면만 있음).
+
+### 대시보드 요약 (`41782f7`)
+
+사용자 요구: "대시보드에 Grafana 패널을 만든다. 사용자가 값을 넣으면 수식·그래프식을 거쳐 패널에 보여 준다. 그래프는 Grafana와 비슷한 틀, UI는 지금 기준(다크 테마). 패널은 편집 화면 밖에서도 크기 조정 가능. 숫자↔그래프 같은 유형 변경도 편집기에 들어가지 않고 가능."
+
+- 데이터: 패널마다 **직접 입력**(라벨·값 최대 200행, 일괄 붙여넣기) 또는 **함수식** `f(t)`(시작·끝·간격, 최대 500점).
+- **변환 수식**(선택): 변수 `x`(원본 값), `i`, `n`, `t`, `prev`, `sum`, `avg`, `min`, `max`, 상수 `pi`, `e`, 연산 `+ - * / % ^`, 함수 `abs round floor ceil sqrt log log10 exp sin cos tan pow min max clamp`.
+  - 계산은 화면(`frontend/src/dashboard/expr.ts`), 저장 전 문법 검사는 서버(`backend/core/dashboard_expr.py`). **두 파일의 문법을 항상 같이 바꾼다.**
+- 시각화 5종: 시계열·막대·숫자(Stat)·게이지·표. `frontend/package.json` 보호 때문에 차트 라이브러리 없이 **SVG로 직접** 그림(`frontend/src/dashboard/viz/`).
+- 편집기 밖 조작(`PanelCard.tsx`): 오른쪽 아래 손잡이 끌기 또는 포커스 후 방향키로 크기 조정(24칸 격자, 너비 3~24·높이 3~20칸, 400ms 뒤 저장), 머리글 유형 버튼으로 즉시 전환, ⋮ 메뉴로 편집·복제·앞/뒤 이동·삭제. 패널 폭 640px 미만이면 한 줄에 하나씩 쌓고 높이만 조정.
+- 옵션: 단위(%, ms, s, bytes, 개수, ₩, 직접), 소수 자리, 최소/최대, 대표값 계산(마지막·평균·합계 등), 기본 색, 임계값(값 이상이면 그 색).
+- API: `/api/dashboard/panels/`(GET·POST), `/{id}/`(GET·PATCH·DELETE, 남의 패널 404), `/reorder/`(POST). 문서: `docs/02-development/api.md`, `database.md`.
+- DB: `core_dashboardpanel`(마이그레이션 `0002_dashboardpanel.py`). **받은 뒤 `migrate`를 꼭 실행**해야 대시보드가 동작한다.
+- 빈 대시보드에서 "예시 패널 4개 만들기"로 데모 패널을 만들 수 있다.
+
+권장안으로 정한 것(코워커 합의 필요): 패널은 **사용자별**(공유 대시보드 아님), 격자 배치는 순서 기반(`dense` 미사용, 자유 위치 드래그 없음, 메뉴로 앞/뒤 이동), 시간축 대신 라벨 축(실시간 데이터 연동 없음).
 
 ### `3599b02`에서 고친 것 (`frontend/src`만)
 
@@ -55,21 +73,26 @@
 - frontend: `npm run build` 결과 `dist`를 Node 프록시로 서빙. `nginx.conf`처럼 `/api/`·`/backend/`를 Django로 넘기고 1MB 초과 본문은 413.
 - 브라우저: `playwright-core`를 직접 `require`, `channel: 'chrome'`, headless.
   - 기능 스크립트: 로그인 오류 문구 → 글 CRUD → 12.9MB PNG 업로드(자동 축소 확인) → 실제 클립보드 Ctrl+V → 댓글 CRUD → 다른 사용자 글 버튼 미노출·API 403 → 탭 전환 → 프로필 → 로그아웃 → 늦은 403 회귀(목록 요청을 `page.route`로 붙잡았다가 로그아웃 후 놓아줌).
-  - 화면 스크립트: 각 화면·폭에서 `document.scrollWidth`, 요소별 `scrollWidth > clientWidth`(overflow visible = 넘침, hidden이고 말줄임 아님 = 잘림), flex/grid 형제 요소 사각형 겹침, Tab 이동 시 outline/box-shadow 유무를 측정하고 전체 페이지·포커스 스크린샷을 저장.
+  - 화면 스크립트: 각 화면·폭에서 `document.scrollWidth`, 요소별 `scrollWidth > clientWidth`(overflow visible = 넘침, hidden이고 말줄임 아님 = 잘림), flex/grid 형제 요소 사각형 겹침, 그래프 SVG 크기와 담는 상자 크기 일치, Tab 이동 시 outline/box-shadow 유무를 측정하고 스크린샷을 저장.
+  - 대시보드 기능 스크립트(D01~D13): 예시 패널, 일괄 입력·변환 수식 저장, 수식 오류 안내·저장 차단, 함수식 범위, 편집기 밖 유형 전환(마우스·키보드), 손잡이 끌기·방향키 크기 조정 저장, 복제·이동·삭제, 임계값 색, 툴팁, 취소.
+  - 주의: Playwright `fullPage: true` 캡처는 캡처 도중 재배치로 SVG 그래프가 잘려 찍히는 경우가 있었다(실제 화면은 정상). 뷰포트 높이를 문서 높이로 늘린 뒤 일반 캡처하는 방식이 안정적이다.
+  - 화면 쪽 `.ts`를 레포 밖 스크립트로 바로 실행할 때는 Node 24의 TS 실행(`node x.mts`)으로 `expr.ts`를 import 했다.
   - 다른 사용자 데이터: `manage.py shell -c "exec(open(..., encoding='utf-8').read())"`로 긴 아이디 사용자와 긴 제목·긴 단어 글·댓글을 ORM으로 생성(Windows에서 `shell < 파일`은 한글이 깨짐).
 
 ---
 
 ## 남은 작업
 
-1. **Docker가 있는 PC에서 NOT_VERIFIED 2건 확인** (이번 PC에 Docker가 있으면 먼저 수행)
-   - `docker compose exec backend pytest --ds=config.settings core/tests` → **19 passed** 기대.
+1. **Docker가 있는 PC에서 NOT_VERIFIED 항목 확인** (이번 PC에 Docker가 있으면 먼저 수행)
+   - `docker compose up --build -d` → `docker compose exec backend python manage.py migrate`(0002 대시보드 표 생성 확인)
+   - `docker compose exec backend pytest --ds=config.settings core/tests` → **46 passed** 기대(게시판 19 + 대시보드 27).
      (`pytest.ini`가 없어 `--ds` 없이 실행하면 수집 단계에서 `ImproperlyConfigured`.)
    - 실제 nginx에서 1MB 넘는 이미지(예: 5MB 이상 PNG)를 화면으로 올렸을 때 자동 축소돼 201이 나는지.
-   - 간단한 화면 확인: 768px·390px에서 사이드바 탭 3개가 모두 보이는지, 로그아웃 아이콘이 깨지지 않는지.
+   - 대시보드 스모크: 예시 패널 4개 생성 → 손잡이로 크기 조정 후 새로고침해도 유지 → 머리글 유형 버튼으로 표·게이지 전환 → 편집기에서 변환 수식 `x * y` 입력 시 오류 안내.
    - 결과는 PASS/FAIL/NOT_VERIFIED로 보고. FAIL이면 고치고 재검증.
-2. **다음 기능은 사용자에게 확인 후 착수**: 슬라이스2(패널 대시보드)와 유저관리는 범위·완료 조건·API가 아직 합의되지 않았다(AGENTS.md "아직 정해진 것으로 취급하지 않는다" 항목).
-3. **main PR은 사용자가 요청할 때만**. 요청을 받으면: 이 파일 삭제 커밋 → push → `gh pr create`(본문: 변경 요약, 검증 결과, settings.py 변경 사유, 아래 합의 항목).
+2. **대시보드 후속 후보(사용자에게 확인 후 착수)**: 공유(팀) 대시보드 여부, 패널 자유 위치 드래그, 여러 계열(시리즈) 한 그래프, 실시간/외부 데이터 연동, 대시보드 여러 개.
+3. **유저관리**는 범위·완료 조건·API가 아직 합의되지 않았다(AGENTS.md "아직 정해진 것으로 취급하지 않는다" 항목). 사용자 확인 후 착수.
+4. **main PR은 사용자가 요청할 때만**. 요청을 받으면: 이 파일 삭제 커밋 → push → `gh pr create`(본문: 변경 요약, 검증 결과, settings.py 변경 사유, 아래 합의 항목).
 
 ## 로컬 실행 방법 (Docker)
 
@@ -123,6 +146,7 @@ services:
 - `backend/config/settings.py` 변경(auth/sessions/contenttypes 앱, 미들웨어, SessionAuthentication, MEDIA 설정, `DJANGO_CSRF_TRUSTED_ORIGINS`) 사유.
 - 테스트 도구: `pytest`, `pytest-django`, 이미지 검사용 `Pillow==11.3.0`을 `requirements.txt`에 추가. `pytest.ini`(`DJANGO_SETTINGS_MODULE`) 추가 여부, Windows 파일 잠금 테스트 처리.
 - 화면 검증 자동화(Playwright 스크립트)를 레포에 둘지 여부.
+- 대시보드: 패널을 사용자별로 둘지 팀 공유로 둘지, 수식을 화면에서 계산하고 서버는 문법만 검사하는 구조, 차트를 라이브러리 없이 SVG로 그린 선택(`package.json` 보호 규칙 때문).
 
 ---
 
@@ -137,7 +161,7 @@ PPJINHONG/coc_dashboard 레포의 feat/prototype-harness 브랜치에서 작업�
 1. 브랜치 가져오기
    - 레포가 없으면: git clone https://github.com/PPJINHONG/coc_dashboard.git → cd coc_dashboard → git switch feat/prototype-harness
    - 레포가 있으면: git status(커밋 안 한 변경이 있으면 멈추고 보고) → git fetch origin → git switch feat/prototype-harness → git pull origin feat/prototype-harness
-   - git log --oneline -3 에 3599b02(fix(ui))와 그 뒤의 인계 문서 갱신 커밋이 보이는지 확인합니다.
+   - git log --oneline -3 에 41782f7(feat(dashboard))과 그 뒤의 인계 문서 갱신 커밋이 보이는지 확인합니다.
 
 2. AGENTS.md, README.md, docs/README.md, 레포 루트의 HANDOFF-TEMP.md를 읽고, HANDOFF-TEMP.md의
    "사용자 작업 방침", "보호 규칙", "남은 작업"을 기준으로 진행합니다.
@@ -148,9 +172,12 @@ PPJINHONG/coc_dashboard 레포의 feat/prototype-harness 브랜치에서 작업�
    - 승인이 필요한 결정은 권장안으로 진행하고 끝에 결정 목록으로 보고합니다. 단, 새 기능(대시보드·유저관리)의 범위는 저에게 먼저 확인합니다.
    - .env·비밀번호·토큰은 Git·문서·보고에 넣지 않습니다. main 직접 push·force push는 하지 않습니다.
 
-4. 이번 할 일: HANDOFF-TEMP.md "남은 작업" 1번(Docker에서 pytest 19 passed, 실제 nginx 1MB 한도에서 이미지 자동 축소,
-   768/390px 사이드바 탭·로그아웃 아이콘 확인)을 PASS/FAIL/NOT_VERIFIED로 검증하고, FAIL이면 고쳐서 재검증합니다.
+4. 이번 할 일: HANDOFF-TEMP.md "남은 작업" 1번(Docker에서 migrate → pytest 46 passed, 실제 nginx 1MB 한도에서 이미지 자동 축소,
+   대시보드 스모크)을 PASS/FAIL/NOT_VERIFIED로 검증하고, FAIL이면 고쳐서 재검증합니다.
    Docker가 없으면 그 사실을 보고하고, 다음으로 무엇을 할지 저에게 물어봐 주세요.
+   대시보드를 고치거나 늘릴 때는 HANDOFF-TEMP.md "대시보드 요약"을 먼저 읽고, 수식 문법은 expr.ts와 dashboard_expr.py를 함께 바꿉니다.
 
-5. 최종 보고: 검증 결과표, 커밋·push 내역, 권장안으로 결정한 사항 목록, 다음 에이전트용 프롬프트.
+5. 저는 화면을 직접 열어 보기 어려우니, 작업을 마치면 주요 화면을 캡처해서 보내 주세요.
+
+6. 최종 보고: 검증 결과표, 커밋·push 내역, 권장안으로 결정한 사항 목록, 다음 에이전트용 프롬프트.
 ```
