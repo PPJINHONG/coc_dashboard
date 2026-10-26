@@ -82,7 +82,7 @@ DB 데이터는 `coc-dashboard_postgres_data`라는 Docker 볼륨에 보관됩�
 
 ## 8. 프로토타입 기능이 쓰는 표 (Django 마이그레이션)
 
-로그인·게시판 프로토타입은 **Django 마이그레이션**으로 표를 만들도록 제안해 구현했습니다. 이 방식을 계속 쓸지는 PR 리뷰에서 함께 정합니다. `db/init`의 SQL 파일은 바꾸지 않았습니다.
+로그인·게시판·대시보드 프로토타입은 **Django 마이그레이션**으로 표를 만들도록 제안해 구현했습니다. 이 방식을 계속 쓸지는 PR 리뷰에서 함께 정합니다. `db/init`의 SQL 파일은 바꾸지 않았습니다.
 
 | 표 | 만드는 곳 | 내용 |
 | --- | --- | --- |
@@ -90,6 +90,7 @@ DB 데이터는 `coc-dashboard_postgres_data`라는 Docker 볼륨에 보관됩�
 | `core_post` | `backend/core/migrations/0001_initial.py` | 게시글 (작성자, 제목, 내용, 작성·수정 시각) |
 | `core_comment` | 위와 같음 | 댓글 (글, 작성자, 내용) |
 | `core_postimage` | 위와 같음 | 첨부 이미지 (올린 사람, 글, 파일 경로). 실제 파일은 `backend/media/`에 저장 |
+| `core_dashboardpanel` | `backend/core/migrations/0002_dashboardpanel.py` | 대시보드 패널 (소유자, 제목, 시각화 유형, 입력 값·함수식·변환 수식, 표시 옵션, 크기, 순서). 값·옵션은 JSON 열에 저장 |
 
 코드를 받은 뒤 서버를 다시 빌드하고, 프로젝트 최상위에서 표를 만듭니다.
 

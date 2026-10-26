@@ -24,4 +24,16 @@ urlpatterns = [
     ),
     path("board/images/", views.ImageUploadView.as_view(), name="board-image-upload"),
     path("board/images/<int:pk>/", views.ImageServeView.as_view(), name="board-image-serve"),
+    # 대시보드 슬라이스
+    path("dashboard/panels/", views.DashboardPanelListCreateView.as_view(), name="dashboard-panel-list"),
+    path(
+        "dashboard/panels/reorder/",
+        views.DashboardPanelReorderView.as_view(),
+        name="dashboard-panel-reorder",
+    ),
+    path(
+        "dashboard/panels/<int:pk>/",
+        views.DashboardPanelDetailView.as_view(),
+        name="dashboard-panel-detail",
+    ),
 ]

@@ -5,6 +5,8 @@ import PostDetailPage from './PostDetailPage';
 import PostEditorPage from './PostEditorPage';
 import ProfilePage from './ProfilePage';
 import PlaceholderPage from './PlaceholderPage';
+import DashboardPage from './DashboardPage';
+import PanelEditorPage from './PanelEditorPage';
 
 // react-router 없이 상태 기반으로 화면을 전환한다.
 type View =
@@ -12,6 +14,7 @@ type View =
   | { kind: 'detail'; id: number }
   | { kind: 'editor'; postId?: number }
   | { kind: 'dashboard' }
+  | { kind: 'panelEditor'; panelId?: number }
   | { kind: 'users' }
   | { kind: 'profile' };
 
@@ -25,7 +28,7 @@ export default function AuthedApp() {
 
   // 글 상세/에디터는 모두 '게시판' 탭에 속한 것으로 본다.
   const activeTab: Tab =
-    view.kind === 'dashboard'
+    view.kind === 'dashboard' || view.kind === 'panelEditor'
       ? 'dashboard'
       : view.kind === 'users'
         ? 'users'
@@ -72,13 +75,13 @@ export default function AuthedApp() {
         );
       case 'dashboard':
         return (
-          <PlaceholderPage
-            icon="📊"
-            title="대시보드"
-            subtitle="Operations Dashboard · 지표·현황 통합 뷰"
-            message="대시보드 기능은 준비 중입니다. 운영 지표와 현황 패널이 이 영역에 표시될 예정입니다."
+          <DashboardPage
+            onAddPanel={() => setView({ kind: 'panelEditor' })}
+            onEditPanel={(id) => setView({ kind: 'panelEditor', panelId: id })}
           />
         );
+      case 'panelEditor':
+        return <PanelEditorPage panelId={view.panelId} onDone={() => setView({ kind: 'dashboard' })} />;
       case 'users':
         return (
           <PlaceholderPage
