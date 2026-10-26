@@ -100,9 +100,11 @@ export default function PostDetailPage({ postId, onBack, onEdit, onDeleted }: Pr
   if (!post) {
     return (
       <section className="board">
-        <button type="button" className="secondary back-link" onClick={onBack}>
-          ← 목록으로
-        </button>
+        <div className="back-link">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
+            ← 목록으로
+          </button>
+        </div>
         <ErrorMessage message={error} />
         {!error && (
           <p role="status" className="loading-inline">
@@ -115,25 +117,30 @@ export default function PostDetailPage({ postId, onBack, onEdit, onDeleted }: Pr
 
   return (
     <section className="board">
-      <button type="button" className="secondary back-link" onClick={onBack}>
-        ← 목록으로
-      </button>
+      <div className="back-link">
+        <button type="button" className="btn btn-secondary btn-sm" onClick={onBack}>
+          ← 목록으로
+        </button>
+      </div>
 
       <ErrorMessage message={error} />
 
       <article className="post-detail">
-        <h1>{post.title}</h1>
+        <div className="post-detail-head">
+          <span className="badge badge-author">{post.author}</span>
+          <h1>{post.title}</h1>
+        </div>
         <div className="post-detail-meta">
-          <span>{post.author}</span>
+          <span>작성자 {post.author}</span>
           <span>{formatDate(post.created_at)}</span>
         </div>
 
         {post.is_mine && (
           <div className="actions">
-            <button type="button" className="secondary" onClick={() => onEdit(post.id)}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => onEdit(post.id)}>
               수정
             </button>
-            <button type="button" className="danger" onClick={onDeletePost} disabled={deleting}>
+            <button type="button" className="btn btn-danger btn-sm" onClick={onDeletePost} disabled={deleting}>
               {deleting ? '삭제 중…' : '삭제'}
             </button>
           </div>
@@ -153,7 +160,9 @@ export default function PostDetailPage({ postId, onBack, onEdit, onDeleted }: Pr
       </article>
 
       <section className="comments">
-        <h2>댓글 {post.comments.length}</h2>
+        <h2>
+          <span aria-hidden="true">💬</span> 댓글 {post.comments.length}
+        </h2>
         {post.comments.length === 0 ? (
           <p className="empty">아직 댓글이 없습니다.</p>
         ) : (
@@ -183,7 +192,7 @@ export default function PostDetailPage({ postId, onBack, onEdit, onDeleted }: Pr
           />
           <ErrorMessage id="comment-content-error" message={commentError} />
           <div className="actions">
-            <button type="submit" disabled={addingComment}>
+            <button type="submit" className="btn btn-primary" disabled={addingComment}>
               {addingComment ? '등록 중…' : '댓글 등록'}
             </button>
           </div>

@@ -18,7 +18,7 @@ interface Props {
   onDeleted: (id: number) => void;
 }
 
-// 댓글 한 건: 본인 댓글이면 수정/삭제 가능.
+// 댓글 한 건: 본인 댓글이면 수정/삭제 가능. (예시 Audit Log 스타일)
 export default function CommentItem({ comment, onUpdated, onDeleted }: Props) {
   const { handleAuthError } = useAuth();
   const [editing, setEditing] = useState(false);
@@ -64,8 +64,8 @@ export default function CommentItem({ comment, onUpdated, onDeleted }: Props) {
   return (
     <li className="comment">
       <div className="comment-meta">
-        <span className="comment-author">{comment.author}</span>
         <span className="comment-date">{formatDate(comment.created_at)}</span>
+        <span className="comment-author">{comment.author}</span>
       </div>
 
       {editing ? (
@@ -91,12 +91,12 @@ export default function CommentItem({ comment, onUpdated, onDeleted }: Props) {
         <div className="comment-actions">
           {editing ? (
             <>
-              <button type="button" onClick={onSave} disabled={busy}>
+              <button type="button" className="btn btn-primary btn-sm" onClick={onSave} disabled={busy}>
                 {busy ? '저장 중…' : '저장'}
               </button>
               <button
                 type="button"
-                className="secondary"
+                className="btn btn-secondary btn-sm"
                 onClick={() => {
                   setEditing(false);
                   setDraft(comment.content);
@@ -109,10 +109,10 @@ export default function CommentItem({ comment, onUpdated, onDeleted }: Props) {
             </>
           ) : (
             <>
-              <button type="button" className="secondary" onClick={() => setEditing(true)}>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>
                 수정
               </button>
-              <button type="button" className="danger" onClick={onDelete} disabled={busy}>
+              <button type="button" className="btn btn-danger btn-sm" onClick={onDelete} disabled={busy}>
                 삭제
               </button>
             </>

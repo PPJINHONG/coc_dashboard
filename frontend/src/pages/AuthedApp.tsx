@@ -4,23 +4,34 @@ import BoardListPage from './BoardListPage';
 import PostDetailPage from './PostDetailPage';
 import PostEditorPage from './PostEditorPage';
 import ProfilePage from './ProfilePage';
+import PlaceholderPage from './PlaceholderPage';
 
 // react-router 없이 상태 기반으로 화면을 전환한다.
 type View =
   | { kind: 'board' }
   | { kind: 'detail'; id: number }
   | { kind: 'editor'; postId?: number }
+  | { kind: 'dashboard' }
+  | { kind: 'users' }
   | { kind: 'profile' };
 
-type Tab = 'board' | 'profile';
+// 사이드바에서 강조할 상위 탭
+type Tab = 'board' | 'dashboard' | 'users' | 'profile';
 
 export default function AuthedApp() {
   const { user, logout } = useAuth();
   const [view, setView] = useState<View>({ kind: 'board' });
   const [loggingOut, setLoggingOut] = useState(false);
 
-  // 내비 탭 활성 표시는 큰 분류(게시판/프로필) 기준
-  const activeTab: Tab = view.kind === 'profile' ? 'profile' : 'board';
+  // 글 상세/에디터는 모두 '게시판' 탭에 속한 것으로 본다.
+  const activeTab: Tab =
+    view.kind === 'dashboard'
+      ? 'dashboard'
+      : view.kind === 'users'
+        ? 'users'
+        : view.kind === 'profile'
+          ? 'profile'
+          : 'board';
 
   async function onLogout() {
     if (loggingOut) return;
@@ -33,6 +44,7 @@ export default function AuthedApp() {
       case 'board':
         return (
           <BoardListPage
+            currentUsername={user?.username ?? null}
             onOpenPost={(id) => setView({ kind: 'detail', id })}
             onNewPost={() => setView({ kind: 'editor' })}
           />
@@ -58,38 +70,97 @@ export default function AuthedApp() {
             }
           />
         );
+      case 'dashboard':
+        return (
+          <PlaceholderPage
+            icon="📊"
+            title="대시보드"
+            subtitle="Operations Dashboard · 지표·현황 통합 뷰"
+            message="대시보드 기능은 준비 중입니다. 운영 지표와 현황 패널이 이 영역에 표시될 예정입니다."
+          />
+        );
+      case 'users':
+        return (
+          <PlaceholderPage
+            icon="👥"
+            title="유저관리"
+            subtitle="User Management · 인력·권한 관리"
+            message="유저관리 기능은 준비 중입니다. 사용자 목록과 권한·변경 이력이 이 영역에 표시될 예정입니다."
+          />
+        );
       case 'profile':
         return user ? <ProfilePage user={user} /> : null;
     }
   }
 
+  const initial = (user?.username ?? '?').charAt(0).toUpperCase();
+
   return (
     <div className="app-shell">
-      <nav className="top-nav" aria-label="주요 메뉴">
-        <div className="nav-links">
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <div className="sidebar-logo" aria-hidden="true">◆</div>
+          <div className="sidebar-title">
+            <span className="name">COC Dashboard</span>
+            <span className="sub">OPERATIONS CONSOLE</span>
+          </div>
+        </div>
+
+        <nav className="sidebar-nav" aria-label="주요 메뉴">
           <button
             type="button"
             className={activeTab === 'board' ? 'nav-item active' : 'nav-item'}
             aria-current={activeTab === 'board' ? 'page' : undefined}
             onClick={() => setView({ kind: 'board' })}
           >
-            게시판
+            <span className="nav-ico" aria-hidden="true">📋</span>
+            <span>게시판</span>
           </button>
           <button
             type="button"
-            className={activeTab === 'profile' ? 'nav-item active' : 'nav-item'}
+            className={activeTab === 'dashboard' ? 'nav-item active' : 'nav-item'}
+            aria-current={activeTab === 'dashboard' ? 'page' : undefined}
+            onClick={() => setView({ kind: 'dashboard' })}
+          >
+            <span className="nav-ico" aria-hidden="true">📊</span>
+            <span>대시보드</span>
+          </button>
+          <button
+            type="button"
+            className={activeTab === 'users' ? 'nav-item active' : 'nav-item'}
+            aria-current={activeTab === 'users' ? 'page' : undefined}
+            onClick={() => setView({ kind: 'users' })}
+          >
+            <span className="nav-ico" aria-hidden="true">👥</span>
+            <span>유저관리</span>
+          </button>
+        </nav>
+
+        <div className="sidebar-foot">
+          <div className="sidebar-user">
+            <span className="avatar" aria-hidden="true">{initial}</span>
+            <span className="uname" title={user?.username}>{user?.username}</span>
+          </div>
+          <button
+            type="button"
+            className={activeTab === 'profile' ? 'foot-btn active' : 'foot-btn'}
             aria-current={activeTab === 'profile' ? 'page' : undefined}
+            aria-label="내 프로필"
             onClick={() => setView({ kind: 'profile' })}
           >
-            내 프로필
+            <span className="nav-ico" aria-hidden="true">⚙️</span>
+            <span>내 프로필</span>
+          </button>
+          <button type="button" className="foot-btn" onClick={onLogout} disabled={loggingOut} aria-label="로그아웃">
+            <span className="nav-ico" aria-hidden="true">⏻</span>
+            <span>{loggingOut ? '로그아웃 중…' : '로그아웃'}</span>
           </button>
         </div>
-        <button type="button" className="nav-logout" onClick={onLogout} disabled={loggingOut}>
-          {loggingOut ? '로그아웃 중…' : '로그아웃'}
-        </button>
-      </nav>
+      </aside>
 
-      <main className="app-main">{renderView()}</main>
+      <main className="app-main">
+        <div className="app-main-inner">{renderView()}</div>
+      </main>
     </div>
   );
 }

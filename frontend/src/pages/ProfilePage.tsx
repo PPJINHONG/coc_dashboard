@@ -69,7 +69,14 @@ export default function ProfilePage({ user }: { user: User }) {
 
   return (
     <main className="card">
-      <h1>내 프로필</h1>
+      <div className="auth-brand">
+        <div className="sidebar-logo" aria-hidden="true">⚙️</div>
+        <div className="sidebar-title">
+          <span className="name">내 프로필</span>
+          <span className="sub">USER PROFILE</span>
+        </div>
+      </div>
+
       <ErrorMessage message={error} />
       {success && (
         <p role="status" className="success">
@@ -101,7 +108,7 @@ export default function ProfilePage({ user }: { user: User }) {
           </div>
         ))}
         <div className="actions">
-          <button type="submit" disabled={saving}>
+          <button type="submit" className="btn btn-primary" disabled={saving}>
             {saving ? '저장 중…' : '저장'}
           </button>
         </div>

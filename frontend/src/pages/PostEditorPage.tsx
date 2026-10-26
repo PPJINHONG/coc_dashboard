@@ -118,45 +118,61 @@ export default function PostEditorPage({ postId, onSaved, onCancel }: Props) {
 
   return (
     <section className="board">
-      <h1>{isEdit ? '글 수정' : '글쓰기'}</h1>
+      <header className="section-head">
+        <div className="section-title">
+          <div className="section-ico" aria-hidden="true">✎</div>
+          <div>
+            <h1>{isEdit ? '글 수정' : '새 글 작성'}</h1>
+            <p className="section-sub">
+              {isEdit ? 'Edit Post · 제목·내용·이미지 수정' : 'New Post · 제목·내용·이미지 입력'}
+            </p>
+          </div>
+        </div>
+      </header>
+
       <ErrorMessage message={error} />
+
       <form onSubmit={onSubmit} noValidate className="post-form">
-        <div className="field">
-          <label htmlFor="post-title">제목</label>
-          <input
-            id="post-title"
-            name="post-title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            aria-invalid={titleError ? true : undefined}
-            aria-describedby={titleError ? 'post-title-error' : undefined}
-            disabled={busy}
-          />
-          <ErrorMessage id="post-title-error" message={titleError} />
-        </div>
+        <div className="post-form-panel">
+          <div className="field">
+            <label htmlFor="post-title">제목</label>
+            <input
+              id="post-title"
+              name="post-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              aria-invalid={titleError ? true : undefined}
+              aria-describedby={titleError ? 'post-title-error' : undefined}
+              disabled={busy}
+            />
+            <ErrorMessage id="post-title-error" message={titleError} />
+          </div>
 
-        <div className="field">
-          <label htmlFor="post-content">내용</label>
-          <textarea
-            id="post-content"
-            name="post-content"
-            rows={10}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            aria-invalid={contentError ? true : undefined}
-            aria-describedby={contentError ? 'post-content-error' : undefined}
-            disabled={busy}
-          />
-          <ErrorMessage id="post-content-error" message={contentError} />
-        </div>
+          <div className="field" style={{ marginTop: 16 }}>
+            <label htmlFor="post-content">내용</label>
+            <textarea
+              id="post-content"
+              name="post-content"
+              rows={10}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              aria-invalid={contentError ? true : undefined}
+              aria-describedby={contentError ? 'post-content-error' : undefined}
+              disabled={busy}
+            />
+            <ErrorMessage id="post-content-error" message={contentError} />
+          </div>
 
-        <ImageUploader images={images} onChange={setImages} onBusyChange={setUploadBusy} />
+          <div style={{ marginTop: 16 }}>
+            <ImageUploader images={images} onChange={setImages} onBusyChange={setUploadBusy} />
+          </div>
+        </div>
 
         <div className="actions">
-          <button type="submit" disabled={busy}>
+          <button type="submit" className="btn btn-primary" disabled={busy}>
             {saving ? '저장 중…' : '저장'}
           </button>
-          <button type="button" className="secondary" onClick={onCancel} disabled={busy}>
+          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={busy}>
             취소
           </button>
         </div>

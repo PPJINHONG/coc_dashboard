@@ -39,29 +39,41 @@ export default function LoginPage() {
 
   return (
     <main className="card">
+      <div className="auth-brand">
+        <div className="sidebar-logo" aria-hidden="true">◆</div>
+        <div className="sidebar-title">
+          <span className="name">COC Dashboard</span>
+          <span className="sub">OPERATIONS CONSOLE</span>
+        </div>
+      </div>
+
       <h1>로그인</h1>
       <ErrorMessage message={error ?? notice} />
       <form onSubmit={onSubmit} noValidate>
-        <label htmlFor="username">아이디</label>
-        <input
-          id="username"
-          name="username"
-          autoComplete="username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          disabled={submitting}
-        />
-        <label htmlFor="password">비밀번호</label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          disabled={submitting}
-        />
-        <button type="submit" disabled={submitting}>
+        <div className="field">
+          <label htmlFor="username">아이디</label>
+          <input
+            id="username"
+            name="username"
+            autoComplete="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            disabled={submitting}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="password">비밀번호</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={submitting}
+          />
+        </div>
+        <button type="submit" className="btn btn-primary" disabled={submitting}>
           {submitting ? '로그인 중…' : '로그인'}
         </button>
       </form>

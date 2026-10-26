@@ -1,14 +1,73 @@
+/* === 디자인 토큰 (예시 글로벌 대시보드 다크 테마 기준) === */
 :root {
-  font-family: system-ui, sans-serif;
-  color: #24362d;
-  background: #f5f7f6;
+  /* 배경·패널·테두리 */
+  --bg: #0e171c;          /* 아주 어두운 청록/네이비 */
+  --bg-soft: #111c22;     /* 섹션 보조 배경 */
+  --panel: #161f25;       /* 기본 패널 */
+  --panel-2: #1a242b;     /* 보조 패널/카드 */
+  --panel-3: #1f2a31;     /* 입력창·세그먼트 선택 */
+  --border: #26333b;      /* 패널 테두리 1px */
+  --border-soft: #1e2a31; /* 옅은 구분선 */
+
+  /* 글자 */
+  --text: #e6edf2;        /* 본문 */
+  --text-strong: #f3f8fb; /* 제목 */
+  --muted: #8aa0ac;       /* 보조 설명 */
+  --muted-2: #6c818d;     /* 더 흐린 메타 */
+
+  /* 강조색 */
+  --accent: #7dd3fc;      /* 하늘 (주 강조, KR) */
+  --accent-ink: #06141c;  /* 하늘 버튼 위 글자 */
+  --success: #4ade80;     /* 민트 (성공/EU/완료) */
+  --lavender: #c4b5fd;    /* 라벤더 (NA) */
+  --warn: #fdba74;        /* 경고 주황 */
+  --danger: #f87171;      /* 치명 코랄/레드 */
+
+  /* 치수 */
+  --radius: 6px;
+  --radius-sm: 4px;
+  --gap: 16px;
+
+  /* 글꼴 (외부 폰트/CDN 금지 — 로컬 시스템 스택만) */
+  --font-sans: 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'D2Coding', 'Consolas', 'Menlo', 'Monaco', ui-monospace, monospace;
+
+  color-scheme: dark;
+  font-family: var(--font-sans);
+  color: var(--text);
+  background: var(--bg);
   font-synthesis: none;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
+
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; }
-#root { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
-.welcome { width: min(100%, 520px); background: white; border: 1px solid #e1e7e3; border-radius: 16px; padding: 40px; }
-.label { color: #49765e; font-size: 12px; letter-spacing: 2px; }
-h1 { margin: 18px 0; font-size: clamp(24px, 5vw, 28px); letter-spacing: -1px; }
-p { color: #718078; line-height: 1.8; margin-bottom: 0; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+}
+
+/* 기존 전역 중앙정렬 레이아웃 제거 — 앱 셸이 레이아웃을 전담한다. */
+#root {
+  min-height: 100vh;
+  width: 100%;
+}
+
+a { color: var(--accent); }
+
+::selection { background: rgba(125, 211, 252, 0.25); }
+
+/* 스크롤바 (선택적, 다크 톤) */
+* {
+  scrollbar-color: var(--border) transparent;
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }

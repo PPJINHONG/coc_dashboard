@@ -96,40 +96,42 @@ export default function ImageUploader({ images, onChange, onBusyChange }: Props)
       role="group"
       aria-label="이미지 첨부 (클립보드 붙여넣기 지원)"
     >
-      <div className="field">
-        <label htmlFor="post-images">이미지 첨부 (최대 {MAX_IMAGES}장)</label>
-        <input
-          ref={fileInputRef}
-          id="post-images"
-          name="post-images"
-          type="file"
-          accept="image/png,image/jpeg,image/gif,image/webp"
-          multiple
-          onChange={onFileChange}
-          disabled={atMax || uploading > 0}
-        />
-        <p className="hint">파일 선택 또는 이 영역을 클릭한 뒤 Ctrl+V로 붙여넣기할 수 있습니다.</p>
+      <div className="uploader-drop">
+        <div className="field">
+          <label htmlFor="post-images">이미지 첨부 (최대 {MAX_IMAGES}장)</label>
+          <input
+            ref={fileInputRef}
+            id="post-images"
+            name="post-images"
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            multiple
+            onChange={onFileChange}
+            disabled={atMax || uploading > 0}
+          />
+          <p className="hint">파일 선택 또는 이 영역을 클릭한 뒤 Ctrl+V로 붙여넣기할 수 있습니다.</p>
+        </div>
+
+        <ErrorMessage message={error} />
+        {uploading > 0 && (
+          <p role="status" className="loading-inline">
+            이미지 업로드 중… ({uploading}장)
+          </p>
+        )}
+
+        {images.length > 0 && (
+          <ul className="thumbs">
+            {images.map((img) => (
+              <li key={img.id} className="thumb">
+                <img src={img.url} alt="첨부 이미지 미리보기" />
+                <button type="button" className="thumb-remove" onClick={() => removeAt(img.id)}>
+                  제거
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
-
-      <ErrorMessage message={error} />
-      {uploading > 0 && (
-        <p role="status" className="loading-inline">
-          이미지 업로드 중… ({uploading}장)
-        </p>
-      )}
-
-      {images.length > 0 && (
-        <ul className="thumbs">
-          {images.map((img) => (
-            <li key={img.id} className="thumb">
-              <img src={img.url} alt="첨부 이미지 미리보기" />
-              <button type="button" className="thumb-remove" onClick={() => removeAt(img.id)}>
-                제거
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }
