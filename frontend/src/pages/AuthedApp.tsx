@@ -152,7 +152,7 @@ export default function AuthedApp() {
             <span>내 프로필</span>
           </button>
           <button type="button" className="foot-btn" onClick={onLogout} disabled={loggingOut} aria-label="로그아웃">
-            <span className="nav-ico" aria-hidden="true">⏻</span>
+            <span className="nav-ico" aria-hidden="true">🚪</span>
             <span>{loggingOut ? '로그아웃 중…' : '로그아웃'}</span>
           </button>
         </div>

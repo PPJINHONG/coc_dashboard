@@ -17,19 +17,27 @@ export default function BoardListPage({ onOpenPost, onNewPost, currentUsername }
   const [posts, setPosts] = useState<PostListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  // isActive: 화면을 떠난 뒤(예: 로그아웃) 늦게 도착한 응답은 무시한다.
+  // 그렇지 않으면 로그아웃 후 도착한 403이 "세션 만료" 안내로 바뀐다.
+  const load = useCallback(async (isActive: () => boolean) => {
     setError(null);
     try {
       const data = await listPosts();
+      if (!isActive()) return;
       setPosts(data);
     } catch (err) {
+      if (!isActive()) return;
       if (handleAuthError(err)) return;
       setError(err instanceof ApiError ? err.message : MSG_SERVER);
     }
   }, [handleAuthError]);
 
   useEffect(() => {
-    void load();
+    let active = true;
+    void load(() => active);
+    return () => {
+      active = false;
+    };
   }, [load]);
 
   const total = posts?.length ?? 0;

@@ -32,19 +32,26 @@ export default function PostDetailPage({ postId, onBack, onEdit, onDeleted }: Pr
   const [commentError, setCommentError] = useState<string | null>(null);
   const [addingComment, setAddingComment] = useState(false);
 
-  const load = useCallback(async () => {
+  // isActive: 화면을 떠난 뒤 늦게 도착한 응답(로그아웃 후 403 등)은 무시한다.
+  const load = useCallback(async (isActive: () => boolean) => {
     setError(null);
     try {
       const data = await getPost(postId);
+      if (!isActive()) return;
       setPost(data);
     } catch (err) {
+      if (!isActive()) return;
       if (handleAuthError(err)) return;
       setError(err instanceof ApiError ? err.message : MSG_SERVER);
     }
   }, [postId, handleAuthError]);
 
   useEffect(() => {
-    void load();
+    let active = true;
+    void load(() => active);
+    return () => {
+      active = false;
+    };
   }, [load]);
 
   async function onDeletePost() {
