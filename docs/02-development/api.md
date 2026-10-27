@@ -88,4 +88,48 @@ docker compose exec backend python manage.py spectacular --validate --fail-on-wa
 
 API 설명 데이터를 만들면서 형식을 검사하고 경고가 있으면 실패로 처리합니다. 성공해도 실제 조회 기능까지 검사한 것은 아니므로 1단계처럼 직접 요청해 봅니다.
 
-DB 조회 실패 시 응답에는 `error` 항목이 나오고 자세한 오류는 서버 실행 기록에 남습니다. 현재 로그인 관련 세부 설정은 `UNAUTHENTICATED_USER = None`을 사용합니다. [DRF 설정 설명](https://www.django-rest-framework.org/api-guide/settings/)
+DB 조회 실패 시 응답에는 `error` 항목이 나오고 자세한 오류는 서버 실행 기록에 남습니다. 로그인은 Django 세션 방식(`SessionAuthentication`)을 사용합니다. [DRF 설정 설명](https://www.django-rest-framework.org/api-guide/settings/)
+
+## 7. 로그인·회원 정보·게시판·대시보드 API (프로토타입)
+
+모두 `/api/` 아래에 있고 `backend/core/urls.py`에서 연결합니다. `/api/auth/csrf/`·`/api/auth/login/`·`/api/auth/logout/`을 제외한 주소는 로그인해야 쓸 수 있으며, 로그인하지 않으면 `403`을 돌려줍니다.
+
+| 경로 | 요청 방식 | 용도 |
+| --- | --- | --- |
+| `/api/auth/csrf/` | GET | 쓰기 요청에 필요한 `csrftoken` 쿠키 발급 (`204`) |
+| `/api/auth/login/` | POST | `{username, password}`로 로그인. 실패 시 `401` |
+| `/api/auth/logout/` | POST | 로그아웃 (`204`) |
+| `/api/me/` | GET, PATCH | 내 정보 조회·수정. 이름·이메일만 수정 가능 |
+| `/api/board/posts/` | GET, POST | 글 목록(최신순)·작성. 제목·내용이 비면 `400` |
+| `/api/board/posts/{id}/` | GET, PATCH, DELETE | 글 상세·수정·삭제. 수정·삭제는 작성자만 (`403`) |
+| `/api/board/posts/{id}/comments/` | POST | 댓글 작성 |
+| `/api/board/comments/{id}/` | PATCH, DELETE | 댓글 수정·삭제. 작성자만 |
+| `/api/board/images/` | POST | 이미지 업로드(파일 항목 이름 `file`). png·jpeg·gif·webp, 5MB 이하 |
+| `/api/board/images/{id}/` | GET | 업로드한 이미지 보기 |
+| `/api/dashboard/panels/` | GET, POST | 내 대시보드 패널 목록(표시 순서)·추가 |
+| `/api/dashboard/panels/{id}/` | GET, PATCH, DELETE | 패널 조회·수정·삭제. PATCH는 바꿀 항목만 보내도 됨. 남의 패널은 `404` |
+| `/api/dashboard/panels/reorder/` | POST | `{ids: [...]}`로 내 패널 순서 변경. 내 패널 id를 빠짐없이 한 번씩 보내야 함 |
+
+- 글을 쓸 때 `image_ids`에 미리 올린 이미지 번호를 넣으면 첨부됩니다. 글 하나에 5장까지이고, 내가 올린 이미지만 붙일 수 있습니다.
+- POST·PATCH·DELETE 요청은 `csrftoken` 쿠키 값을 `X-CSRFToken` 헤더에 넣어야 합니다. 화면 코드(`frontend/src/api/client.ts`)가 자동으로 처리합니다.
+- Nginx 기본 설정은 요청 크기를 1MB로 제한합니다. 그래서 화면이 이미지를 900KB 이하로 줄인 뒤 올립니다.
+- 업로드한 이미지는 서버 컨테이너 안(`backend/media/`)에 저장됩니다. 컨테이너를 다시 만들면 지워질 수 있습니다. 계속 보관하는 방법은 아직 정하지 않았습니다.
+- 브라우저 접속 주소가 `http://localhost:8080`이 아니면 로그인이 `403`으로 막힐 수 있습니다. 이때는 [설정 안내](configuration.md)의 `DJANGO_CSRF_TRUSTED_ORIGINS`를 확인합니다.
+
+### 대시보드 패널 항목
+
+패널은 로그인한 사용자별로 저장됩니다. 화면이 원본 데이터를 만들고 변환 수식을 계산해 그래프로 그리며, 서버는 저장 전에 값과 수식 문법만 검사합니다.
+
+| 항목 | 설명 |
+| --- | --- |
+| `title`, `description` | 제목(100자), 설명(300자, 선택) |
+| `viz_type` | `timeseries`(시계열), `bar`(막대), `stat`(숫자), `gauge`(게이지), `table`(표) |
+| `source` | `manual`이면 `values`, `function`이면 `func_expr`로 원본 데이터를 만듭니다 |
+| `values` | `[{label, value}]` 최대 200개. 라벨은 30자 이하, 값은 숫자 |
+| `func_expr`, `func_from`, `func_to`, `func_step` | 변수 `t`를 시작부터 끝까지 간격만큼 넣어 계산하는 함수식. 점은 최대 500개 |
+| `formula` | 변환 수식(선택). 변수 `x`(원본 값), `i`(순번), `n`(개수), `t`(라벨 숫자), `prev`(이전 값), `sum`·`avg`·`min`·`max`(원본 통계) |
+| `options` | `unit`, `unit_suffix`, `decimals`, `min`, `max`, `reduce`(숫자·게이지 대표값), `color`, `thresholds`. PATCH로 보내면 옵션 전체를 바꿉니다 |
+| `width`, `height` | 24칸 격자 기준 너비 3~24칸, 높이 3~20칸 |
+
+- 수식에는 `+ - * / % ^`, 괄호, `abs round floor ceil sqrt log log10 exp sin cos tan pow min max clamp` 함수, 상수 `pi`·`e`를 쓸 수 있습니다. 문법이 틀리면 `400`과 함께 어느 부분이 틀렸는지 한국어로 알려 줍니다.
+- 수식 문법은 `backend/core/dashboard_expr.py`(검사)와 `frontend/src/dashboard/expr.ts`(계산) 두 곳에 있습니다. 바꿀 때는 두 파일을 함께 고칩니다.

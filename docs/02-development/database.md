@@ -80,4 +80,31 @@ DB 데이터는 `coc-dashboard_postgres_data`라는 Docker 볼륨에 보관됩�
 
 새 열 추가, 표 이름 변경, 기존 데이터 이동은 단순한 코드 병합과 별개입니다. 기존 DB에 적용할 방법과 순서를 두 사람이 먼저 정해야 합니다. SQL 파일로 관리할지 Django의 구조 변경 기록 기능으로 관리할지는 아직 합의된 것으로 취급하지 않습니다.
 
+## 8. 프로토타입 기능이 쓰는 표 (Django 마이그레이션)
+
+로그인·게시판·대시보드 프로토타입은 **Django 마이그레이션**으로 표를 만들도록 제안해 구현했습니다. 이 방식을 계속 쓸지는 PR 리뷰에서 함께 정합니다. `db/init`의 SQL 파일은 바꾸지 않았습니다.
+
+| 표 | 만드는 곳 | 내용 |
+| --- | --- | --- |
+| `auth_user` 등 | Django 기본 앱 (`auth`, `sessions`, `contenttypes`) | 사용자, 로그인 세션 |
+| `core_post` | `backend/core/migrations/0001_initial.py` | 게시글 (작성자, 제목, 내용, 작성·수정 시각) |
+| `core_comment` | 위와 같음 | 댓글 (글, 작성자, 내용) |
+| `core_postimage` | 위와 같음 | 첨부 이미지 (올린 사람, 글, 파일 경로). 실제 파일은 `backend/media/`에 저장 |
+| `core_dashboardpanel` | `backend/core/migrations/0002_dashboardpanel.py` | 대시보드 패널 (소유자, 제목, 시각화 유형, 입력 값·함수식·변환 수식, 표시 옵션, 크기, 순서). 값·옵션은 JSON 열에 저장 |
+
+코드를 받은 뒤 서버를 다시 빌드하고, 프로젝트 최상위에서 표를 만듭니다.
+
+```bash
+docker compose up --build -d
+docker compose exec -T backend python manage.py migrate --noinput
+```
+
+로그인 확인용 데모 계정이 필요하면 다음을 실행합니다. 이미 있으면 다시 만들지 않습니다.
+
+```bash
+docker compose exec -T backend python manage.py seed_demo_user
+```
+
+데모 계정은 개발용입니다. 운영 환경에서는 실행하지 않습니다.
+
 API로 데이터를 요청하는 자세한 방법은 [API 사용법](api.md)을 참고하세요.

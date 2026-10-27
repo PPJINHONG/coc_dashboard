@@ -24,6 +24,7 @@
 | `POSTGRES_USER` | DB에 접속할 사용자 이름 |
 | `POSTGRES_PASSWORD` | DB 접속 비밀번호 |
 | `DJANGO_SECRET_KEY` | 서버가 서명 등에 사용하는 비밀 키 |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | (선택) 로그인 요청을 허용할 브라우저 접속 주소. 쉼표로 구분하며, 없으면 `http://localhost:8080`을 사용합니다. 접속 포트를 바꿨을 때만 설정합니다. |
 | `PYTHON_IMAGE` | 서버 실행에 쓸 Python 환경 묶음 |
 | `NODE_IMAGE` | 화면 코드를 준비할 때 쓸 Node 환경 묶음 |
 | `NGINX_IMAGE` | 준비된 화면을 브라우저에 보내는 환경 묶음 |
