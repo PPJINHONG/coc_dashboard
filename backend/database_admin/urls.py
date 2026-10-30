@@ -2,7 +2,7 @@ from django.urls import path
 
 from . import views
 from reporting.views import SectionView, MasterDataView, CommentsView
-from .feature_views import AccountsView, AccountView, AdminCommentsView
+from .feature_views import AccountActivitiesView, AccountsView, AccountView, AdminCommentsView
 
 urlpatterns = [
     path('sections/<str:section>/', SectionView.as_view()),
@@ -12,6 +12,7 @@ urlpatterns = [
     path('', views.CatalogView.as_view()),
     path('accounts/', AccountsView.as_view()),
     path('accounts/<int:pk>/', AccountView.as_view()),
+    path('accounts/<int:pk>/activities/', AccountActivitiesView.as_view()),
     path('comments/', AdminCommentsView.as_view()),
     path('comments/<int:pk>/', AdminCommentsView.as_view()),
     path('changes/', views.ChangesView.as_view()),

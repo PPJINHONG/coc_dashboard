@@ -22,11 +22,18 @@ class LoginSerializer(serializers.Serializer):
 class AccountSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source="first_name", max_length=150, allow_blank=False)
     username = serializers.CharField(max_length=150, allow_blank=False)
+    # 관리자(admin)·옵저버(observer, 읽기 전용)·사용자(user). 변경은 DB 관리의 사용자·권한에서만 합니다.
+    role = serializers.SerializerMethodField()
 
     class Meta:
         model = get_user_model()
-        fields = ("id", "name", "username", "email", "date_joined", "is_staff")
-        read_only_fields = ("id", "email", "date_joined", "is_staff")
+        fields = ("id", "name", "username", "email", "date_joined", "is_staff", "role")
+        read_only_fields = ("id", "email", "date_joined", "is_staff", "role")
+
+    def get_role(self, obj):
+        from .roles import user_role
+
+        return user_role(obj) if obj.pk else None
 
     def validate_username(self, value):
         value = value.lower()

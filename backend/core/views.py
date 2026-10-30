@@ -16,6 +16,7 @@ from rest_framework.views import APIView
 from invites.services import invite_error, redeem_invite
 
 from .models import Comment, Post, PostImage
+from .roles import CanWrite, can_modify, record_activity
 from .serializers import (
     CommentSerializer,
     CommentWriteSerializer,
@@ -155,8 +156,26 @@ def _resolve_image_ids(user, image_ids, post=None):
     return resolved
 
 
+def _post_snapshot(post):
+    return {
+        "id": post.id,
+        "title": post.title,
+        "content": post.content,
+        "author": post.author.username,
+        "image_ids": sorted(post.images.values_list("id", flat=True)),
+        "comments": [
+            {"id": c.id, "author": c.author.username, "content": c.content}
+            for c in post.comments.select_related("author").all()
+        ],
+    }
+
+
+def _comment_snapshot(comment):
+    return {"id": comment.id, "post": comment.post_id, "author": comment.author.username, "content": comment.content}
+
+
 class PostListCreateView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanWrite]
 
     def get(self, request):
         posts = (
@@ -190,12 +209,13 @@ class PostListCreateView(APIView):
                 img.post = post
             PostImage.objects.bulk_update(images, ["post"])
 
+        record_activity(request, "create", f"게시글 #{post.id} 작성: {post.title}", "post", post.id, after=_post_snapshot(post))
         detail = PostDetailSerializer(post, context={"request": request}).data
         return Response(detail, status=status.HTTP_201_CREATED)
 
 
 class PostDetailView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanWrite]
 
     def _get_post(self, pk):
         return get_object_or_404(Post.objects.select_related("author"), pk=pk)
@@ -207,18 +227,19 @@ class PostDetailView(APIView):
 
     def patch(self, request, pk):
         post = self._get_post(pk)
-        if post.author_id != request.user.id:
+        if not can_modify(request.user, post.author.username):
             return Response(
-                {"detail": "작성자만 수정할 수 있습니다."}, status=status.HTTP_403_FORBIDDEN
+                {"detail": "작성자 또는 관리자만 수정할 수 있습니다."}, status=status.HTTP_403_FORBIDDEN
             )
+        before = _post_snapshot(post)
         serializer = PostWriteSerializer(data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         validated = serializer.validated_data
 
-        # image_ids 가 들어오면 첨부 전체 교체(빠진 이미지는 삭제).
+        # image_ids 가 들어오면 첨부 전체 교체(빠진 이미지는 삭제). 이미지는 글 작성자가 올린 것만 허용합니다.
         if "image_ids" in validated:
             try:
-                images = _resolve_image_ids(request.user, validated["image_ids"], post=post)
+                images = _resolve_image_ids(post.author, validated["image_ids"], post=post)
             except ValueError as exc:
                 return Response({"image_ids": exc.args[0]}, status=status.HTTP_400_BAD_REQUEST)
             keep_ids = {img.id for img in images}
@@ -237,21 +258,24 @@ class PostDetailView(APIView):
             post.content = validated["content"]
         post.save()
 
+        record_activity(request, "update", f"게시글 #{post.id} 수정", "post", post.id, before=before, after=_post_snapshot(post))
         data = PostDetailSerializer(post, context={"request": request}).data
         return Response(data)
 
     def delete(self, request, pk):
         post = self._get_post(pk)
-        if post.author_id != request.user.id:
+        if not can_modify(request.user, post.author.username):
             return Response(
-                {"detail": "작성자만 삭제할 수 있습니다."}, status=status.HTTP_403_FORBIDDEN
+                {"detail": "작성자 또는 관리자만 삭제할 수 있습니다."}, status=status.HTTP_403_FORBIDDEN
             )
+        before = _post_snapshot(post)
         post.delete()
+        record_activity(request, "delete", f"게시글 #{pk} 삭제: {before['title']}", "post", pk, before=before)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class CommentCreateView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanWrite]
 
     def post(self, request, pk):
         post = get_object_or_404(Post, pk=pk)
@@ -262,41 +286,46 @@ class CommentCreateView(APIView):
             author=request.user,
             content=serializer.validated_data["content"],
         )
+        record_activity(request, "create", f"게시글 #{post.id} 댓글 작성", "post_comment", comment.id, after=_comment_snapshot(comment))
         data = CommentSerializer(comment, context={"request": request}).data
         return Response(data, status=status.HTTP_201_CREATED)
 
 
 class CommentDetailView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanWrite]
 
     def _get_comment(self, pk):
         return get_object_or_404(Comment.objects.select_related("author"), pk=pk)
 
     def patch(self, request, pk):
         comment = self._get_comment(pk)
-        if comment.author_id != request.user.id:
+        if not can_modify(request.user, comment.author.username):
             return Response(
-                {"detail": "작성자만 수정할 수 있습니다."}, status=status.HTTP_403_FORBIDDEN
+                {"detail": "작성자 또는 관리자만 수정할 수 있습니다."}, status=status.HTTP_403_FORBIDDEN
             )
+        before = _comment_snapshot(comment)
         serializer = CommentWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         comment.content = serializer.validated_data["content"]
         comment.save()
+        record_activity(request, "update", f"게시글 #{comment.post_id} 댓글 수정", "post_comment", comment.id, before=before, after=_comment_snapshot(comment))
         data = CommentSerializer(comment, context={"request": request}).data
         return Response(data)
 
     def delete(self, request, pk):
         comment = self._get_comment(pk)
-        if comment.author_id != request.user.id:
+        if not can_modify(request.user, comment.author.username):
             return Response(
-                {"detail": "작성자만 삭제할 수 있습니다."}, status=status.HTTP_403_FORBIDDEN
+                {"detail": "작성자 또는 관리자만 삭제할 수 있습니다."}, status=status.HTTP_403_FORBIDDEN
             )
+        before = _comment_snapshot(comment)
         comment.delete()
+        record_activity(request, "delete", f"게시글 #{before['post']} 댓글 삭제", "post_comment", pk, before=before)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ImageUploadView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanWrite]
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):

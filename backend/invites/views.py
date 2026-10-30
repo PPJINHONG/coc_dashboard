@@ -6,6 +6,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.roles import CanWrite
+
 from . import services
 from .models import Invite
 
@@ -59,9 +61,10 @@ def _visible_invites(user):
 
 
 class InviteListCreateView(APIView):
-    """로그인한 팀원은 누구나 초대 링크를 만들 수 있습니다. 관리자 승인은 필요 없습니다."""
+    """관리자·사용자는 초대 링크를 만들 수 있습니다. 관리자 승인은 필요 없습니다.
+    옵저버(읽기 전용)는 목록 조회만 되고 만들기는 403입니다."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanWrite]
 
     def get(self, request):
         return Response([invite_payload(invite) for invite in _visible_invites(request.user)[:50]])
@@ -86,7 +89,9 @@ class InviteOptionsView(APIView):
 
 
 class InviteRevokeView(APIView):
-    permission_classes = [IsAuthenticated]
+    """옵저버(읽기 전용)는 본인이 예전에 만든 초대도 취소할 수 없습니다."""
+
+    permission_classes = [IsAuthenticated, CanWrite]
 
     def post(self, request, pk):
         invite = get_object_or_404(_visible_invites(request.user), pk=pk)

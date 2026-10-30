@@ -40,9 +40,9 @@ DB 조회 실패 시 응답에는 `error` 항목이 나오고 자세한 오류�
 | `/api/auth/login/` | POST | `{username, password}`로 로그인. 실패 시 `401` |
 | `/api/auth/register/` | POST | `{name, username, password, invite}`로 회원가입 후 자동 로그인 (`201`). 유효한 초대 토큰이 없으면 `400` (`invite` 항목) |
 | `/api/auth/invites/{token}/` | GET | 비로그인 확인용. 초대가 유효하면 `{status, inviter_name, expires_at}`, 아니면 `404`와 사유(`missing`·`revoked`·`expired`·`used_up`) |
-| `/api/invites/` | GET, POST | 내가 만든 초대 링크 목록(관리자는 전체)·발급. 발급 응답에만 토큰 원문 `token`이 들어 있음 |
+| `/api/invites/` | GET, POST | 내가 만든 초대 링크 목록(관리자는 전체)·발급. 발급 응답에만 토큰 원문 `token`이 들어 있음. 옵저버의 발급은 `403` |
 | `/api/invites/options/` | GET | 내 권한으로 고를 수 있는 `expires_days`·`max_uses` 목록과 기본값 |
-| `/api/invites/{id}/revoke/` | POST | 초대 링크 취소. 만든 사람이나 관리자만 가능하며, 다른 사람의 링크는 `404` |
+| `/api/invites/{id}/revoke/` | POST | 초대 링크 취소. 만든 사람이나 관리자만 가능하며, 다른 사람의 링크는 `404`, 옵저버는 `403` |
 | `/api/auth/logout/` | POST | 로그아웃 (`204`) |
 | `/api/me/` | GET | 내 정보 조회 전용. 계정 수정은 관리자 DB 설정에서 처리 |
 | `/api/board/posts/` | GET, POST | 글 목록(최신순)·작성. 제목·내용이 비면 `400` |

@@ -53,6 +53,8 @@ export interface IssueComment {
   author_name: string;
   content: string;
   created_at: string;
+  /** 현재 사용자가 수정·삭제할 수 있는지(관리자 또는 작성자 본인) */
+  can_edit?: boolean;
 }
 export type Snapshot = Record<Section, DataRow[]> & {
   revision: number;
@@ -85,6 +87,20 @@ export const addComment = (revision: number, id: number, content: string) =>
     content,
   });
 export const getLogs = () => request<Log[]>("GET", `${root}/logs/`);
+
+// 리전 이슈 사용자 작성: 관리자는 전체, 사용자는 본인 것만, 옵저버는 조회만 가능합니다.
+export const createIssue = (values: DataRow) =>
+  request<{ revision: number; row: DataRow }>("POST", `${root}/issues/`, values);
+export const updateIssue = (id: number, values: DataRow) =>
+  request<{ revision: number; row: DataRow }>("PATCH", `${root}/issues/${id}/`, values);
+export const deleteIssue = (id: number) =>
+  request("DELETE", `${root}/issues/${id}/`);
+export const postIssueComment = (id: number, content: string) =>
+  request("POST", `${root}/issues/${id}/comments/`, { content });
+export const updateIssueComment = (id: number, content: string) =>
+  request("PATCH", `${root}/issue-comments/${id}/`, { content });
+export const deleteIssueComment = (id: number) =>
+  request("DELETE", `${root}/issue-comments/${id}/`);
 
 export interface NavigationPreference {
   hidden_tabs: Tab[];

@@ -232,3 +232,26 @@ def test_staff_invite_admits_many_signups(staff_client):
     assert _signup(token, "b@example.com").status_code == 201
     assert _signup(token, "c@example.com").status_code == 400
     assert Invite.objects.get().use_count == 50
+
+
+
+@pytest.mark.django_db
+def test_observer_cannot_create_or_revoke_invites(member, member_client):
+    """옵저버(읽기 전용)는 초대 링크를 만들거나 취소할 수 없고, 목록 조회만 됩니다."""
+    from core.roles import ROLE_OBSERVER, apply_role
+
+    issued = _issue(member_client)
+    apply_role(member, ROLE_OBSERVER)
+
+    create = member_client.post(INVITES_URL, {}, format="json")
+    assert create.status_code == 403
+    assert "읽기 전용" in str(create.data["detail"])
+
+    revoke = member_client.post(f"{INVITES_URL}{issued['id']}/revoke/", {}, format="json")
+    assert revoke.status_code == 403
+    assert Invite.objects.get(pk=issued["id"]).revoked_at is None
+
+    listing = member_client.get(INVITES_URL)
+    assert listing.status_code == 200
+    assert [item["id"] for item in listing.data] == [issued["id"]]
+    assert Invite.objects.count() == 1
