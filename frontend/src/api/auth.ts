@@ -1,15 +1,28 @@
 import { request } from './client';
 
 export interface User {
+  id: number;
+  name: string;
   username: string;
-  first_name: string;
-  last_name: string;
   email: string;
   date_joined: string;
+  is_staff: boolean;
 }
 
-// 수정 가능한 필드만 (username·date_joined는 읽기전용)
-export type UserUpdate = Partial<Pick<User, 'first_name' | 'last_name' | 'email'>>;
+export interface Registration {
+  name: string;
+  username: string;
+  password: string;
+}
+
+export type UserUpdate = Partial<Pick<User, 'name' | 'username'>> & {
+  password?: string;
+  current_password?: string;
+};
+
+export function register(data: Registration): Promise<User> {
+  return request<User>('POST', '/api/auth/register/', data);
+}
 
 export function login(username: string, password: string): Promise<User> {
   return request<User>('POST', '/api/auth/login/', { username, password });

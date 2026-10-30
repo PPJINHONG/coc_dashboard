@@ -55,7 +55,7 @@ function toApiError(status: number, data: unknown): ApiError {
       }
     }
   }
-  if (status === 403) return new ApiError(status, MSG_SESSION, fieldErrors);
+  if (status === 403) return new ApiError(status, detail ?? MSG_SESSION, fieldErrors);
   if (status === 400) return new ApiError(status, detail ?? MSG_INVALID_INPUT, fieldErrors);
   return new ApiError(status, detail ?? MSG_SERVER, fieldErrors);
 }

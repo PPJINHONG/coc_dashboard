@@ -17,6 +17,8 @@
 | 화면 문구나 색상을 바꾸고 싶다 | [어떤 파일을 수정하나요?](02-development/application.md) |
 | 비밀번호나 설정 항목을 바꿔야 한다 | [설정값 관리](02-development/configuration.md) |
 | 저장된 데이터가 있는지 보고 싶다 | [데이터 확인](02-development/database.md) |
+| 관리자 기능별 설정과 원본 테이블을 보고 싶다 | [관리자 DB 관리](02-development/database-admin.md) |
+| 최신 운영 데이터와 DB 구조·접속 방법을 보고 싶다 | [최신 운영 데이터와 DB 설계](02-development/operations.md) |
 | API를 직접 요청해 보고 싶다 | [데이터 요청과 응답](02-development/api.md) |
 | 새 브랜치를 만들고 PR까지 올리고 싶다 | [평소 Git 작업 순서](03-collaboration/git_collaboration_guide.md) |
 | 상대가 먼저 main에 합쳤다 | [상황별 Git 사용법](03-collaboration/git-scenarios.md) |
@@ -26,6 +28,7 @@
 | Push가 거절되거나 Git 명령이 막혔다 | [Git 문제 해결](03-collaboration/git-troubleshooting.md) |
 | GitHub 검사에 빨간색이 떴다 | [자동 검사 결과 보기](03-collaboration/github-actions.md) |
 | 상대 승인 없이는 main에 못 합치게 하고 싶다 | [GitHub 처음 설정하기](03-collaboration/github-settings.md) |
+| AI 지침 파일을 구분하거나 별도 검토를 맡기고 싶다 | [AI 지침 구조와 사용법](03-collaboration/agent-workflow.md) |
 
 ## 폴더별 전체 문서
 
@@ -40,8 +43,10 @@ docs/
 │  ├─ application.md                  폴더와 파일의 역할
 │  ├─ configuration.md                내 설정과 프로그램 버전
 │  ├─ database.md                     저장된 데이터 확인
+│  ├─ operations.md             최신값 사용법·DB 설계·접속
 │  └─ api.md                          데이터 요청과 결과 확인
 └─ 03-collaboration/                 두 사람이 협업하기
+   ├─ agent-workflow.md                AI 지침 파일의 역할과 사용법
    ├─ git_collaboration_guide.md       평소 작업부터 PR 병합까지
    ├─ git-scenarios.md                 상대 변경과 큰 구조 변경 반영
    ├─ git-conflicts.md                 충돌이 났을 때

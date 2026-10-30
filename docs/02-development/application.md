@@ -8,14 +8,14 @@
 
 | 바꾸려는 것 | 먼저 볼 파일 |
 | --- | --- |
-| 첫 화면 문구와 구성 | `frontend/src/App.tsx` |
-| 화면 색상·글자·간격 | `frontend/src/styles.css` |
-| 서버 기본 안내 페이지 | `backend/core/templates/core/home.html` |
+| 홈·기능 탐색 | `frontend/src/reporting/ReportingApp.tsx`, `HomePage.tsx` |
+| 화면 색상·글자·간격 | `frontend/src/styles.css`, `reporting/reporting.css`, [디자인 규칙](../../.codex/design-system.md) |
+| 인프라 조회 표 | `frontend/src/reporting/InfrastructureView.tsx` |
 | 데이터를 읽어서 돌려주는 처리 | `backend/core/views.py` |
 | 돌려주는 데이터의 항목 구성 | `backend/core/serializers.py` |
 | 서버의 접속 주소 | `backend/config/urls.py` |
 | DB 접속 같은 서버 설정 | `backend/config/settings.py`와 `.env` |
-| DB 첫 생성용 SQL | `db/init/01-test.sql` |
+| DB 첫 생성용 SQL | `db/init/02-current-operations.sql` |
 | 실행할 프로그램과 연결 방법 | `compose.yaml` |
 
 ## 2. 화면 폴더: frontend
@@ -65,7 +65,7 @@ Gunicorn은 컨테이너 안에서 Django를 실행하는 프로그램입니다.
 
 ```text
 db/
-├─ init/01-test.sql    처음에 표와 예제 데이터 만들기
+├─ init/02-current-operations.sql    새 설치용 운영 테이블 생성
 └─ queries/test.sql   예제 데이터 읽기
 ```
 
@@ -84,9 +84,9 @@ Nginx가 접속 주소를 보고 요청을 나눠 보냅니다.
 | `/api/` | API 안내 화면으로 이동 |
 | `/api/docs/` | API 목록과 실행 화면 |
 | `/api/schema/` | 다른 도구가 읽는 API 설명 데이터 |
-| `/api/test/` | 서버가 DB에서 조회한 데이터 |
+| `/api/operations/current/` | 서버가 DB에서 조회한 데이터 |
 
-화면 코드에서 `fetch('/api/test/')`를 쓰면 지금 접속한 사이트의 `/api/test/`에 요청합니다. 내부 서버 이름인 `backend:8000`을 브라우저 코드에 쓸 필요는 없습니다.
+화면 코드에서 `fetch('/api/operations/current/')`를 쓰면 지금 접속한 사이트의 `/api/operations/current/`에 요청합니다. 내부 서버 이름인 `backend:8000`을 브라우저 코드에 쓸 필요는 없습니다.
 
 ## 6. 수정한 뒤 확인
 

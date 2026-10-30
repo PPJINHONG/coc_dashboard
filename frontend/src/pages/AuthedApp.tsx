@@ -96,7 +96,8 @@ export default function AuthedApp() {
     }
   }
 
-  const initial = (user?.username ?? '?').charAt(0).toUpperCase();
+  const displayName = user?.name || user?.username || '?';
+  const initial = displayName.charAt(0).toUpperCase();
 
   return (
     <div className="app-shell">
@@ -142,7 +143,10 @@ export default function AuthedApp() {
         <div className="sidebar-foot">
           <div className="sidebar-user">
             <span className="avatar" aria-hidden="true">{initial}</span>
-            <span className="uname" title={user?.username}>{user?.username}</span>
+            <div className="sidebar-account">
+              <span className="uname" title={displayName}>{displayName}</span>
+              <span className="sidebar-email" title={user?.username}>{user?.username}</span>
+            </div>
           </div>
           <button
             type="button"

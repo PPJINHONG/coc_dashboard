@@ -1,14 +1,13 @@
-import logging
-
-from django.contrib.auth import authenticate, login, logout
-from django.db import DatabaseError, connection
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
+from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.http import FileResponse, Http404
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -18,40 +17,16 @@ from .models import Comment, Post, PostImage
 from .serializers import (
     CommentSerializer,
     CommentWriteSerializer,
-    ErrorSerializer,
     LoginSerializer,
     MeSerializer,
     PostDetailSerializer,
     PostImageSerializer,
     PostListSerializer,
     PostWriteSerializer,
-    TestListSerializer,
+    RegisterSerializer,
 )
 
-logger = logging.getLogger(__name__)
-
 LOGIN_FAIL_DETAIL = "아이디 또는 비밀번호가 올바르지 않습니다."
-
-
-def home(request):
-    return render(request, "core/home.html")
-
-
-class TestListView(APIView):
-    @extend_schema(
-        summary="test 테이블 조회",
-        description="test 테이블의 id와 message를 id 순서로 반환합니다.",
-        responses={200: TestListSerializer, 503: ErrorSerializer},
-    )
-    def get(self, request):
-        try:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT id, message FROM public.test ORDER BY id")
-                rows = [{"id": row[0], "message": row[1]} for row in cursor.fetchall()]
-        except DatabaseError:
-            logger.exception("Failed to read test table")
-            return Response({"error": "데이터를 조회할 수 없습니다."}, status=503)
-        return Response(TestListSerializer({"results": rows}).data)
 
 
 # === 슬라이스1: 세션 로그인 + 회원 정보 ===
@@ -85,6 +60,23 @@ class LoginView(APIView):
         return Response(MeSerializer(user).data, status=status.HTTP_200_OK)
 
 
+@method_decorator(csrf_protect, name="dispatch")
+class RegisterView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(request=RegisterSerializer, responses={201: MeSerializer})
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                user = serializer.save()
+        except IntegrityError:
+            return Response({"username": ["이미 사용 중인 이메일 아이디입니다."]}, status=400)
+        login(request, user)
+        return Response(MeSerializer(user).data, status=status.HTTP_201_CREATED)
+
+
 class LogoutView(APIView):
     permission_classes = [AllowAny]
 
@@ -96,10 +88,19 @@ class LogoutView(APIView):
 class MeView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = MeSerializer
-    http_method_names = ["get", "patch", "head", "options"]
+    http_method_names = ["get", "head", "options"]
 
     def get_object(self):
         return self.request.user
+
+    def perform_update(self, serializer):
+        try:
+            with transaction.atomic():
+                user = serializer.save()
+        except IntegrityError:
+            raise ValidationError({"username": ["이미 사용 중인 이메일 아이디입니다."]})
+        if "password" in serializer.validated_data:
+            update_session_auth_hash(self.request, user)
 
 
 # === 게시판 슬라이스 ===

@@ -1,82 +1,22 @@
-# 데이터를 요청하고 결과 확인하기
+# API 확인
 
-[문서 목록](../README.md) · [쉬운 용어 사전](../01-start/glossary.md)
+`http://localhost:8080/api/docs/`에서 API 문서를 열 수 있습니다. 현재 운영 데이터는 **GET /api/operations/current/**, 기준정보는 **GET /api/operations/bootstrap/**에서 확인합니다.
 
-**화면에서 사용할 데이터를 확인하거나 서버의 조회 기능을 수정할 때** 읽습니다. API는 프로그램이 서버에 데이터를 달라고 요청하는 창구입니다.
+기능별 저장 요청에는 CSRF 토큰과 최신 `revision`을 포함합니다. 운영 데이터는 로그인 후 조회하며 모든 데이터 편집과 관리자 설정에는 실제 활성 관리자 세션이 필요합니다. 현재 `DEVELOPMENT_AUTH_BYPASS=false`를 사용합니다. 상세 주소는 아래 운영 최신값 API와 [관리자 DB 관리](database-admin.md)를 참고하세요.
 
-## 1. 먼저 요청해 보기
-
-[프로젝트를 실행한 뒤](docker-compose.md) http://localhost:8080/api/docs/ 에 접속합니다. 이 화면을 Swagger UI라고 합니다. API 목록을 보고 실제 요청도 보내는 도구입니다.
-
-1. **GET /api/test/** 항목을 펼칩니다.
-2. **Try it out**을 누릅니다. 요청할 준비를 하는 버튼입니다.
-3. **Execute**를 누릅니다. 실제로 서버에 요청합니다.
-4. 아래에 나온 응답 번호와 결과를 확인합니다.
-
-`GET`은 데이터를 읽어 달라는 요청입니다. 이 화면의 일부 파일은 인터넷에서 가져오므로 브라우저에 인터넷 연결이 필요합니다.
-
-## 2. 결과 읽는 방법
-
-정상적인 조회 결과의 예입니다.
-
-```json
-{
-  "results": [
-    { "id": 1, "message": "Hello PostgreSQL" }
-  ]
-}
-```
-
-- `results`: 조회된 데이터 목록입니다.
-- `id`: 해당 데이터의 번호입니다. 실제 번호는 달라질 수 있습니다.
-- `message`: 저장된 문구입니다.
-- `results`가 빈 목록 `[]`이면 데이터가 없는 것입니다.
-
-이처럼 항목 이름과 값을 짝지어 적는 형식을 JSON이라고 합니다.
-
-| 응답 번호 | 쉬운 뜻 | 할 일 |
-| --- | --- | --- |
-| `200` | 요청을 정상 처리함 | 반환된 데이터 확인 |
-| `405` | 이 주소에서 허용하지 않는 요청 방식 | 조회는 GET으로 요청 |
-| `503` | 서버가 지금 DB 데이터를 읽을 수 없음 | [DB 안내](database.md)와 실행 기록 확인 |
-
-현재 `/api/test/`는 읽기 기능입니다. POST·PUT·DELETE처럼 추가·수정·삭제에 쓰는 요청은 거절합니다. HEAD·OPTIONS라는 확인용 요청도 지원합니다. 로그인 없이 조회하도록 구현되어 있으며, 이후 인증·권한과 쓰기 기능의 범위는 별도로 합의해야 합니다.
-
-## 3. 자주 쓰는 주소
-
-앞에 `http://localhost:8080`을 붙여 접속합니다.
-
-| 경로 | 용도 |
+| 주소 | 용도 |
 | --- | --- |
-| `/` | 기본 화면 |
-| `/backend/` | Django 기본 페이지 |
-| `/api/` | API 안내 화면으로 이동 |
-| `/api/docs/` | 사람이 읽고 실행해 보는 API 안내 화면 |
-| `/api/schema/` | 다른 프로그램이 읽는 API 설명 데이터 |
-| `/api/test/` | 현재 예제 데이터 조회 |
-
-## 4. 화면 코드에서 요청하기
-
-화면 코드에서는 `fetch('/api/test/')`로 지금 접속한 사이트에 데이터를 요청할 수 있습니다. Nginx가 이 요청을 내부 서버로 전달합니다. 브라우저 코드에 DB 비밀번호나 Docker 내부 주소를 넣지 않습니다.
-
-터미널에서 결과만 확인하려면 다음을 실행합니다.
+| `/` | 운영 현황 화면 |
+| `/api/docs/` | API 문서 |
+| `/api/schema/` | OpenAPI 설명 데이터 |
+| `/api/operations/current/` | 현재 운영 데이터·합계 |
+| `/api/operations/bootstrap/` | 공통 기준정보 |
 
 ```bash
-curl http://localhost:8080/api/test/
+curl http://localhost:8080/api/operations/current/
 ```
 
-## 5. API를 수정할 때 보는 파일
-
-| 파일 | 역할 |
-| --- | --- |
-| `backend/core/views.py` | 요청을 받고 DB를 조회한 뒤 응답하는 처리 |
-| `backend/core/serializers.py` | 응답에 어떤 항목을 넣을지 정하는 코드 |
-| `backend/config/urls.py` | 주소와 처리 코드를 연결 |
-| `backend/config/settings.py` | API 도구와 서버의 설정 |
-
-현재 `views.py`의 `TestListView`가 조회를 처리합니다. 응답 형식을 정하는 코드는 Serializer라고 부릅니다. `get` 위의 `extend_schema`는 API 안내 화면에 보여줄 설명과 응답 형식을 지정합니다. 이 정보를 설명 데이터로 만드는 도구는 `drf-spectacular`입니다.
-
-주소, 요청 항목, 응답 항목을 바꿀 때는 상대방에게 먼저 알려 화면과 서버를 함께 맞춥니다. [도구 공식 문서](https://drf-spectacular.readthedocs.io/en/stable/readme.html)
+`200`은 정상, `400`은 입력 오류, `403`은 인증·권한·CSRF 오류, `409`는 다른 저장으로 인한 동시 수정 충돌입니다. 과거 연결 확인용 API는 제거했습니다.
 
 ## 6. 설명 데이터에 오류가 없는지 검사
 
@@ -92,14 +32,15 @@ DB 조회 실패 시 응답에는 `error` 항목이 나오고 자세한 오류�
 
 ## 7. 로그인·회원 정보·게시판·대시보드 API (프로토타입)
 
-모두 `/api/` 아래에 있고 `backend/core/urls.py`에서 연결합니다. `/api/auth/csrf/`·`/api/auth/login/`·`/api/auth/logout/`을 제외한 주소는 로그인해야 쓸 수 있으며, 로그인하지 않으면 `403`을 돌려줍니다.
+모두 `/api/` 아래에 있고 `backend/core/urls.py`에서 연결합니다. `/api/auth/csrf/`·`/api/auth/login/`·`/api/auth/register/`·`/api/auth/logout/`을 제외한 아래 주소는 로그인해야 쓸 수 있으며, 로그인하지 않으면 `403`을 돌려줍니다.
 
 | 경로 | 요청 방식 | 용도 |
 | --- | --- | --- |
 | `/api/auth/csrf/` | GET | 쓰기 요청에 필요한 `csrftoken` 쿠키 발급 (`204`) |
 | `/api/auth/login/` | POST | `{username, password}`로 로그인. 실패 시 `401` |
+| `/api/auth/register/` | POST | `{name, username, password}`로 회원가입 후 자동 로그인 (`201`) |
 | `/api/auth/logout/` | POST | 로그아웃 (`204`) |
-| `/api/me/` | GET, PATCH | 내 정보 조회·수정. 이름·이메일만 수정 가능 |
+| `/api/me/` | GET | 내 정보 조회 전용. 계정 수정은 관리자 DB 설정에서 처리 |
 | `/api/board/posts/` | GET, POST | 글 목록(최신순)·작성. 제목·내용이 비면 `400` |
 | `/api/board/posts/{id}/` | GET, PATCH, DELETE | 글 상세·수정·삭제. 수정·삭제는 작성자만 (`403`) |
 | `/api/board/posts/{id}/comments/` | POST | 댓글 작성 |
@@ -115,6 +56,18 @@ DB 조회 실패 시 응답에는 `error` 항목이 나오고 자세한 오류�
 - Nginx 기본 설정은 요청 크기를 1MB로 제한합니다. 그래서 화면이 이미지를 900KB 이하로 줄인 뒤 올립니다.
 - 업로드한 이미지는 서버 컨테이너 안(`backend/media/`)에 저장됩니다. 컨테이너를 다시 만들면 지워질 수 있습니다. 계속 보관하는 방법은 아직 정하지 않았습니다.
 - 브라우저 접속 주소가 `http://localhost:8080`이 아니면 로그인이 `403`으로 막힐 수 있습니다. 이때는 [설정 안내](configuration.md)의 `DJANGO_CSRF_TRUSTED_ORIGINS`를 확인합니다.
+
+### 회원가입·회원정보 수정 항목
+
+- 가입 입력은 `name`(이름), `username`(이메일 형식 아이디), `password` 세 가지입니다. 이름과 아이디는 최대 150자입니다.
+- 아이디는 공백을 제거하고 소문자로 저장하며, 대소문자를 구분하지 않고 기존 아이디·이메일과 중복을 검사합니다. 가입 시 `auth_user.username`과 `auth_user.email`에 같은 값을 저장합니다. 기존 계정은 삭제하거나 일괄 변경하지 않습니다.
+- 비밀번호는 8~128자이며, 흔한 비밀번호·숫자만 있는 비밀번호·회원정보와 너무 비슷한 비밀번호를 거절합니다. DB에는 Django 비밀번호 해시만 저장합니다.
+- 가입·로그인·내 정보 응답은 `{id, name, username, email, date_joined, is_staff}`입니다. 비밀번호와 현재 비밀번호는 응답에 포함하지 않습니다.
+- `PATCH /api/me/`에 `name`만 보내면 이름을 수정합니다. 아이디를 바꾸려면 `username`과 `current_password`, 비밀번호를 바꾸려면 `password`와 `current_password`를 보냅니다. 두 항목을 동시에 바꿀 수도 있습니다.
+- 아이디 변경 시 이메일도 함께 변경합니다. 비밀번호 변경 후 현재 로그인은 유지하며, 다른 로그인 세션은 만료됩니다.
+- `id`, `email`, `date_joined`, `is_staff`는 읽기 전용입니다. 일반 가입·프로필 수정으로 관리자 권한을 얻을 수 없습니다.
+- `admin@admin`은 관리 명령으로 생성하는 관리자 전용 예외입니다. 일반 회원가입·아이디 변경에는 올바른 이메일 형식이 필요합니다.
+- 회원가입·로그인에도 CSRF 토큰이 필요합니다. 가입·로그인 직후 토큰이 회전하므로 후속 요청은 새 쿠키 값을 읽어 사용합니다.
 
 ### 대시보드 패널 항목
 
@@ -133,3 +86,22 @@ DB 조회 실패 시 응답에는 `error` 항목이 나오고 자세한 오류�
 
 - 수식에는 `+ - * / % ^`, 괄호, `abs round floor ceil sqrt log log10 exp sin cos tan pow min max clamp` 함수, 상수 `pi`·`e`를 쓸 수 있습니다. 문법이 틀리면 `400`과 함께 어느 부분이 틀렸는지 한국어로 알려 줍니다.
 - 수식 문법은 `backend/core/dashboard_expr.py`(검사)와 `frontend/src/dashboard/expr.ts`(계산) 두 곳에 있습니다. 바꿀 때는 두 파일을 함께 고칩니다.
+
+## 8. 운영 최신값 API
+
+일반 운영 화면은 조회 전용입니다. 개발 모드에서는 로그인 없이 조회할 수 있지만 저장할 수 없습니다. 모든 업무 데이터·댓글·공통데이터 변경은 실제 활성 관리자만 DB 관리 경로에서 수행하며 CSRF 검사를 유지합니다.
+
+| 경로 (`/api/` 아래) | 방식 | 내용 |
+| --- | --- | --- |
+| `app-config/` | GET | 개발 모드 여부 |
+| `operations/bootstrap/` | GET | 리전·서비스·인력 기준정보 |
+| `operations/current/` | GET | 현재 데이터·합계·동시 수정 버전·최근 로그 |
+| `db-admin/sections/{section}/` | PUT | `{revision, rows}`로 최신값 저장 |
+| `db-admin/issues/{id}/comments/` | POST | `{revision, content}` 댓글 등록 |
+| `db-admin/common/{collection}/` | POST | 관리자 공통데이터 추가 |
+| `db-admin/common/{collection}/{pk}/` | PATCH/DELETE | 관리자 공통데이터 수정·삭제 |
+| `operations/logs/` | GET | 최근 200건 변경 이력. `section` 필터 |
+
+`section`은 `resources`, `staff`, `work`, `issues`, `collection`은 `regions`, `services`, `staff-members`입니다. 주·월·K8s API는 제거했습니다.
+
+기능별 저장은 현재 전체 행을 보냅니다. 기존 행은 `id`를 유지하고 새 행은 생략합니다. 보낸 목록에서 빠진 행은 실제 삭제하며 참조 데이터가 있으면 거절합니다. 중복·수량 제약 오류는 400, 동시 수정 충돌은 409입니다. 기능별 관리자 설정과 읽기 전용 원본 조회는 [관리자 DB 관리](database-admin.md), 모델은 [운영 데이터 설계](operations.md)를 참고하세요.

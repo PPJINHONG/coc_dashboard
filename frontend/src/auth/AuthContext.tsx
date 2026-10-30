@@ -1,16 +1,26 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import * as authApi from '../api/auth';
-import type { User, UserUpdate } from '../api/auth';
-import { ApiError, MSG_SERVER, MSG_SESSION } from '../api/client';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import * as authApi from "../api/auth";
+import type { Registration, User, UserUpdate } from "../api/auth";
+import { ApiError, MSG_SERVER, MSG_SESSION, request } from "../api/client";
 
-export type AuthStatus = 'loading' | 'anon' | 'authed';
+export type AuthStatus = "loading" | "anon" | "authed";
 
 interface AuthContextValue {
   status: AuthStatus;
   user: User | null;
   // anon 전환 사유 안내(세션 만료, 서버 오류 등)
   notice: string | null;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<User>;
+  register: (data: Registration) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (partial: UserUpdate) => Promise<User>;
   // API 403(세션 만료) 공통 처리: 처리했으면 true. 게시판 등 AuthContext 밖 호출에서 사용.
@@ -20,13 +30,14 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [status, setStatus] = useState<AuthStatus>('loading');
+  const [status, setStatus] = useState<AuthStatus>("loading");
   const [user, setUser] = useState<User | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const developmentMode = useRef(false);
 
   const toAnon = useCallback((message: string | null) => {
     setUser(null);
-    setStatus('anon');
+    setStatus(developmentMode.current ? "authed" : "anon");
     setNotice(message);
   }, []);
 
@@ -35,13 +46,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     (async () => {
       try {
+        const config = await request<{ development_mode: boolean }>(
+          "GET",
+          "/api/app-config/",
+        );
+        if (cancelled) return;
+        developmentMode.current = config.development_mode;
         const me = await authApi.getMe();
         if (cancelled) return;
         setUser(me);
-        setStatus('authed');
+        setStatus("authed");
       } catch (err) {
         if (cancelled) return;
-        const isAuthError = err instanceof ApiError && (err.status === 401 || err.status === 403);
+        const isAuthError =
+          err instanceof ApiError && (err.status === 401 || err.status === 403);
         toAnon(isAuthError ? null : MSG_SERVER);
       }
     })();
@@ -53,7 +71,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (username: string, password: string) => {
     const me = await authApi.login(username, password);
     setUser(me);
-    setStatus('authed');
+    setStatus("authed");
+    setNotice(null);
+    return me;
+  }, []);
+
+  const register = useCallback(async (data: Registration) => {
+    const me = await authApi.register(data);
+    setUser(me);
+    setStatus("authed");
     setNotice(null);
   }, []);
 
@@ -62,7 +88,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await authApi.logout();
       toAnon(null);
     } catch (err) {
-      toAnon(err instanceof ApiError && err.status === 403 ? MSG_SESSION : null);
+      toAnon(
+        err instanceof ApiError && err.status === 403 ? MSG_SESSION : null,
+      );
     }
   }, [toAnon]);
 
@@ -93,8 +121,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, notice, login, logout, updateUser, handleAuthError }),
-    [status, user, notice, login, logout, updateUser, handleAuthError],
+    () => ({
+      status,
+      user,
+      notice,
+      login,
+      register,
+      logout,
+      updateUser,
+      handleAuthError,
+    }),
+    [
+      status,
+      user,
+      notice,
+      login,
+      register,
+      logout,
+      updateUser,
+      handleAuthError,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -102,6 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth는 AuthProvider 안에서만 사용할 수 있습니다.');
+  if (!ctx)
+    throw new Error("useAuth는 AuthProvider 안에서만 사용할 수 있습니다.");
   return ctx;
 }

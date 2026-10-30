@@ -64,7 +64,7 @@ docker compose ps
 | --- | --- |
 | 기본 화면 | http://localhost:8080 |
 | 서버 기본 화면 | http://localhost:8080/backend/ |
-| 데이터 조회 | http://localhost:8080/api/test/ |
+| 데이터 조회 | http://localhost:8080/api/operations/current/ |
 | 데이터 요청 안내 화면 | http://localhost:8080/api/docs/ |
 
 켜자마자 연결되지 않으면 잠시 후 다시 확인합니다. DB가 실제 요청을 받을 준비가 되기 전에 서버가 켜질 수 있습니다.
