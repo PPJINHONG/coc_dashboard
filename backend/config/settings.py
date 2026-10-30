@@ -15,6 +15,8 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "core",
+    "reporting",
+    "database_admin",
     "rest_framework",
     "drf_spectacular",
 ]
@@ -74,6 +76,16 @@ LANGUAGE_CODE = "ko-kr"
 TIME_ZONE = "Asia/Seoul"
 USE_TZ = True
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# 개발 중에만 로그인 없이 운영 현황을 조회합니다. 데이터 저장은 관리자만 가능합니다. false로 바꾸면 기존 로그인을 복구합니다.
+DEVELOPMENT_AUTH_BYPASS = os.environ.get("DEVELOPMENT_AUTH_BYPASS", "false").lower() == "true"
+
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
 
 # 게시판 첨부 이미지 저장 위치입니다. 파일은 /api/board/images/<id>/ 로만 제공합니다.
 MEDIA_ROOT = BASE_DIR / "media"

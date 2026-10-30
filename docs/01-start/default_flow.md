@@ -39,7 +39,7 @@ docker compose up --build -d
 | --- | --- | --- |
 | 기본 화면 | http://localhost:8080 | 프로젝트 시작 안내 |
 | 서버 기본 화면 | http://localhost:8080/backend/ | Django로 만든 안내 페이지 |
-| 데이터 조회 | http://localhost:8080/api/test/ | `results`라는 항목이 있는 데이터 |
+| 데이터 조회 | http://localhost:8080/api/operations/current/ | 최신 운영 데이터와 합계 |
 | API 안내 화면 | http://localhost:8080/api/docs/ | 데이터를 요청해 볼 수 있는 화면 |
 
 `localhost`는 내 컴퓨터를 뜻하고, `8080`은 이 프로젝트에 접속할 때 사용하는 번호입니다.

@@ -1,74 +1,136 @@
-/* === 디자인 토큰 (예시 글로벌 대시보드 다크 테마 기준) === */
+@font-face {
+  font-family: Inter;
+  src: url("/fonts/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: Pretendard;
+  src: url("/fonts/PretendardVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
 :root {
-  /* 배경·패널·테두리 */
-  --bg: #0e171c;          /* 아주 어두운 청록/네이비 */
-  --bg-soft: #111c22;     /* 섹션 보조 배경 */
-  --panel: #161f25;       /* 기본 패널 */
-  --panel-2: #1a242b;     /* 보조 패널/카드 */
-  --panel-3: #1f2a31;     /* 입력창·세그먼트 선택 */
-  --border: #26333b;      /* 패널 테두리 1px */
-  --border-soft: #1e2a31; /* 옅은 구분선 */
-
-  /* 글자 */
-  --text: #e6edf2;        /* 본문 */
-  --text-strong: #f3f8fb; /* 제목 */
-  --muted: #8aa0ac;       /* 보조 설명 */
-  --muted-2: #6c818d;     /* 더 흐린 메타 */
-
-  /* 강조색 */
-  --accent: #7dd3fc;      /* 하늘 (주 강조, KR) */
-  --accent-ink: #06141c;  /* 하늘 버튼 위 글자 */
-  --success: #4ade80;     /* 민트 (성공/EU/완료) */
-  --lavender: #c4b5fd;    /* 라벤더 (NA) */
-  --warn: #fdba74;        /* 경고 주황 */
-  --danger: #f87171;      /* 치명 코랄/레드 */
-  --yellow: #facc15;      /* 대시보드 패널 색 */
-
-  /* 치수 */
-  --radius: 6px;
-  --radius-sm: 4px;
-  --gap: 16px;
-
-  /* 글꼴 (외부 폰트/CDN 금지 — 로컬 시스템 스택만) */
-  --font-sans: 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: 'D2Coding', 'Consolas', 'Menlo', 'Monaco', ui-monospace, monospace;
-
-  color-scheme: dark;
+  --bg: #fdfdfd;
+  --bg-soft: #f5f7f9;
+  --panel: #ffffff;
+  --panel-2: #f7f9fb;
+  --panel-3: #f0f4f7;
+  --border: #c6d2de;
+  --border-soft: #d6e0e9;
+  --grid-border: #cbdbea;
+  --grid-head: #edf4f8;
+  --grid-text: #142536;
+  --grid-label: #172e46;
+  --grid-row-height: 29px;
+  --text: #142536;
+  --text-strong: #111d25;
+  --muted: #1d334a;
+  --muted-2: #1d334a;
+  --accent: #2b5fa5;
+  --accent-ink: #ffffff;
+  --success: #214882;
+  --lavender: #7d6baf;
+  --warn: #a87528;
+  --danger: #cf4b55;
+  --yellow: #e7bb54;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --gap: 20px;
+  --font-sans: Inter, Pretendard, sans-serif;
+  --font-mono: var(--font-sans);
+  color-scheme: light;
   font-family: var(--font-sans);
   color: var(--text);
   background: var(--bg);
+  font-size: 14px;
   font-synthesis: none;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  font-feature-settings: "cv11", "ss01", "calt";
 }
-
-* { box-sizing: border-box; }
-
-html, body { height: 100%; }
-
+* {
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5df transparent;
+}
+html,
 body {
+  min-height: 100%;
   margin: 0;
-  min-width: 320px;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-sans);
-  line-height: 1.6;
 }
-
-/* 기존 전역 중앙정렬 레이아웃 제거 — 앱 셸이 레이아웃을 전담한다. */
+body {
+  min-width: 360px;
+  font-family: var(--font-sans);
+  line-height: 1.55;
+  background: var(--bg);
+}
 #root {
   min-height: 100vh;
   width: 100%;
 }
-
-a { color: var(--accent); }
-
-::selection { background: rgba(125, 211, 252, 0.25); }
-
-/* 스크롤바 (선택적, 다크 톤) */
-* {
-  scrollbar-color: var(--border) transparent;
+button,
+input,
+textarea,
+select,
+table,
+code,
+pre,
+kbd,
+samp,
+svg text {
+  font-family: var(--font-sans);
 }
-*::-webkit-scrollbar { width: 10px; height: 10px; }
-*::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
-*::-webkit-scrollbar-track { background: transparent; }
+button,
+input,
+select,
+textarea {
+  font-size: inherit;
+}
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+a {
+  color: var(--accent);
+}
+svg {
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+::selection {
+  background: #d9e1ee;
+  color: var(--text);
+}
+*:focus-visible {
+  outline: 3px solid #92a7c7;
+  outline-offset: 3px;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 1;
+  color: var(--text);
+  background: #edf2f8;
+  border-color: #b5c5d7;
+}
+h1,
+h2,
+h3,
+h4 {
+  color: var(--text-strong);
+  line-height: 1.35;
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text);
+  opacity: 1;
+}
