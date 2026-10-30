@@ -10,6 +10,7 @@ urlpatterns = [
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="api-docs"),
     # 슬라이스1: 세션 로그인·회원정보 API (core/urls.py)
     path("api/", include("core.urls")),
+    path("api/", include("invites.urls")),
     path("api/", include("reporting.urls")),
     path("api/db-admin/", include("database_admin.urls")),
 ]

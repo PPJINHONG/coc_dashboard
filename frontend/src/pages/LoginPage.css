@@ -141,3 +141,18 @@
   .access-form-area { padding-block: 24px 40px; }
   .access-brand { padding-block: 20px; }
 }
+
+/* 초대 링크 안내 */
+.access-screen .invite-banner {
+  margin: -20px 0 24px;
+  padding: 11px 13px;
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.access-screen .invite-banner strong { color: var(--text-strong); font-weight: 600; }
+.access-screen .invite-banner-warn { border-color: #e5b26b; background: #fff8ec; color: #7a4a08; }
+.access-screen .invite-privacy { margin: -8px 0 0; font-size: 12px; line-height: 1.5; color: var(--text); opacity: 0.8; }

@@ -15,7 +15,23 @@ LOGOUT_URL = "/api/auth/logout/"
 ME_URL = "/api/me/"
 PASSWORD = "pass12345!"
 NEW_PASSWORD = "Updated!93827"
-PUBLIC_FIELDS = {"id", "name", "username", "email", "date_joined", "is_staff"}
+PUBLIC_FIELDS = {"id", "name", "username", "email", "date_joined", "is_staff", "role"}
+INVITE = "test-invite-token-for-registration"
+
+
+@pytest.fixture(autouse=True)
+def registration_invite(db):
+    # 회원가입은 초대 링크가 필요하므로 기간·횟수 제한 없는 테스트용 초대를 둡니다.
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from invites.models import Invite, hash_token
+
+    return Invite.objects.create(
+        token_hash=hash_token(INVITE), token_hint=INVITE[-4:],
+        expires_at=timezone.now() + timedelta(days=1), max_uses=None,
+    )
 
 
 @pytest.fixture
@@ -42,7 +58,7 @@ def _csrf_client():
 
 
 def _registration(**overrides):
-    return {"name": "홍길동", "username": "member@example.com", "password": NEW_PASSWORD, **overrides}
+    return {"name": "홍길동", "username": "member@example.com", "password": NEW_PASSWORD, "invite": INVITE, **overrides}
 
 
 @pytest.mark.django_db

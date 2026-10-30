@@ -4,6 +4,13 @@ import { errorMessage, Modal, Panel } from "../reporting/components";
 import type { Snapshot } from "../reporting/api";
 import * as api from "./api";
 import type { Collection, ManagedRecord } from "./api";
+import ActivityHistory from "./ActivityHistory";
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: "관리자",
+  observer: "옵저버(읽기 전용)",
+  user: "사용자",
+};
 
 type Field = {
   key: string;
@@ -34,7 +41,8 @@ export default function ManagedRecords({
       row?: ManagedRecord;
       copyMode?: boolean;
     } | null>(null),
-    [remove, setRemove] = useState<ManagedRecord | null>(null);
+    [remove, setRemove] = useState<ManagedRecord | null>(null),
+    [history, setHistory] = useState<ManagedRecord | null>(null);
   const [form, setForm] = useState<Record<string, unknown>>({});
   const isUsers = collection === "accounts";
   const fields: Field[] = isUsers
@@ -42,13 +50,14 @@ export default function ManagedRecords({
         { key: "name", label: "이름" },
         { key: "username", label: "이메일 아이디", type: "email" },
         {
-          key: "is_staff",
+          key: "role",
           label: "권한",
           options: [
-            ["false", "일반 사용자"],
-            ["true", "관리자"],
+            ["user", "사용자 (글 작성·본인 데이터 수정·삭제)"],
+            ["observer", "옵저버 (읽기 전용)"],
+            ["admin", "관리자 (전체 수정·삭제·이력 확인)"],
           ],
-          default: false,
+          default: "user",
         },
         {
           key: "is_active",
@@ -139,7 +148,7 @@ export default function ManagedRecords({
         ...values,
         username: "",
         password: "",
-        is_staff: false,
+        role: "user",
       }));
     setError(null);
     setEdit({ row: copyMode ? undefined : row, copyMode });
@@ -152,8 +161,10 @@ export default function ManagedRecords({
     ? [
         ["name", "이름"],
         ["username", "이메일 아이디"],
-        ["is_staff", "권한"],
+        ["role", "권한"],
         ["is_active", "상태"],
+        ["is_online", "로그인"],
+        ["last_activity", "최근 활동"],
       ]
     : [
         ["issue_title", "이슈"],
@@ -166,7 +177,7 @@ export default function ManagedRecords({
       title={isUsers ? "사용자·아이디·권한" : "이슈 댓글 관리"}
       subtitle={
         isUsers
-          ? "회원가입과 로그인에서 사용하는 계정입니다. 비밀번호는 암호화되어 저장됩니다."
+          ? "권한(관리자·옵저버·사용자)과 로그인 상태를 확인하고, ‘이력’에서 계정별 행동과 변경 전·후 값을 확인합니다."
           : "일반 이슈 화면과 같은 댓글 데이터를 추가·수정·삭제합니다."
       }
       action={
@@ -200,21 +211,34 @@ export default function ManagedRecords({
               <tr key={row.id}>
                 {columns.map(([key]) => (
                   <td key={key} className="text-cell">
-                    {key === "is_staff"
-                      ? row[key]
-                        ? "관리자"
-                        : "일반 사용자"
-                      : key === "is_active"
+                    {key === "role"
+                      ? ROLE_LABELS[String(row[key])] ?? String(row[key] ?? "")
+                      : key === "is_online"
                         ? row[key]
-                          ? "활성"
-                          : "비활성"
-                        : key === "created_at"
-                          ? new Date(String(row[key])).toLocaleString("ko-KR")
-                          : String(row[key] ?? "")}
+                          ? <span className="report-badge status-open">로그인 중 ({String(row.active_sessions)}세션)</span>
+                          : <span className="muted">로그아웃</span>
+                        : key === "is_active"
+                          ? row[key]
+                            ? "활성"
+                            : "비활성"
+                          : key === "created_at" || key === "last_activity"
+                            ? row[key]
+                              ? new Date(String(row[key])).toLocaleString("ko-KR")
+                              : "—"
+                            : String(row[key] ?? "")}
                   </td>
                 ))}
                 <td>
                   <div className="actions">
+                    {isUsers && (
+                      <button
+                        className="btn btn-sm"
+                        disabled={busy}
+                        onClick={() => setHistory(row)}
+                      >
+                        이력
+                      </button>
+                    )}
                     <button
                       className="btn btn-sm"
                       disabled={busy}
@@ -271,7 +295,6 @@ export default function ManagedRecords({
                 if (isUsers && edit.row && !values.password)
                   delete values.password;
                 if (isUsers) {
-                  values.is_staff = String(values.is_staff) === "true";
                   values.is_active = String(values.is_active) === "true";
                 }
                 await api.saveRecord(collection, values, edit.row?.id);
@@ -390,6 +413,11 @@ export default function ManagedRecords({
               {busy ? "삭제 중…" : "삭제"}
             </button>
           </div>
+        </Modal>
+      )}
+      {history && (
+        <Modal title={`${String(history.name)} (${String(history.username)}) 이력`} onClose={() => setHistory(null)}>
+          <ActivityHistory accountId={history.id} />
         </Modal>
       )}
     </Panel>

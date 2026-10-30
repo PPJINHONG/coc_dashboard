@@ -67,7 +67,7 @@ class SnapshotView(ReportingView):
         payload = {'revision': state.revision, 'updated_at': state.updated_at, 'totals': totals(),
                    'logs': ChangeLogSerializer(ChangeLog.objects.all()[:50], many=True).data if can_manage(request) else []}
         for key, (_, serializer, _) in SECTIONS.items():
-            payload[key] = serializer(section_rows(key), many=True).data
+            payload[key] = serializer(section_rows(key), many=True, context={'request': request}).data
         return Response(payload)
 
 
