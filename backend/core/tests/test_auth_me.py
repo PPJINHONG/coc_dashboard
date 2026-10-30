@@ -15,7 +15,7 @@ LOGOUT_URL = "/api/auth/logout/"
 ME_URL = "/api/me/"
 PASSWORD = "pass12345!"
 NEW_PASSWORD = "Updated!93827"
-PUBLIC_FIELDS = {"id", "name", "username", "email", "date_joined", "is_staff"}
+PUBLIC_FIELDS = {"id", "name", "username", "email", "date_joined", "is_staff", "role"}
 
 
 @pytest.fixture

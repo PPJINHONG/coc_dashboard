@@ -2,13 +2,15 @@ from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Max, Q
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
-from reporting.models import IssueComment
+from core.models import UserActivity
+from core.roles import ROLE_ADMIN, ROLES, apply_role, online_sessions, user_role
+from reporting.models import IssueComment, RegionalIssue
 from reporting.services import bump, lock_state, record_log
 from .services import log_change
 from .views import AdminView, payload
@@ -17,12 +19,38 @@ from .views import AdminView, payload
 class AccountSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source='first_name', max_length=150)
     password = serializers.CharField(write_only=True, required=False, min_length=8, max_length=128, trim_whitespace=False)
+    # 관리자·옵저버(읽기 전용)·사용자. 보내지 않으면 기존 is_staff 방식과 같이 동작합니다.
+    role = serializers.ChoiceField(choices=ROLES, required=False)
+    is_online = serializers.SerializerMethodField()
+    active_sessions = serializers.SerializerMethodField()
+    last_activity = serializers.SerializerMethodField()
 
     class Meta:
         model = get_user_model()
-        fields = ['id', 'name', 'username', 'email', 'is_staff', 'is_active', 'password', 'date_joined', 'last_login']
+        fields = ['id', 'name', 'username', 'email', 'role', 'is_staff', 'is_active', 'password', 'date_joined', 'last_login',
+                  'is_online', 'active_sessions', 'last_activity']
         read_only_fields = ['id', 'email', 'date_joined', 'last_login']
         extra_kwargs = {'username': {'validators': []}}
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['role'] = user_role(instance)
+        return data
+
+    def get_active_sessions(self, obj):
+        sessions = self.context.get('sessions')
+        return (sessions if sessions is not None else online_sessions()).get(obj.pk, 0)
+
+    def get_is_online(self, obj):
+        return self.get_active_sessions(obj) > 0
+
+    def get_last_activity(self, obj):
+        latest = self.context.get('latest_activity')
+        if latest is not None:
+            value = latest.get(obj.pk)
+        else:
+            value = UserActivity.objects.filter(user=obj).values_list('created_at', flat=True).first()
+        return value.isoformat() if value else None
 
     def validate_username(self, value):
         value = value.strip().lower()
@@ -36,6 +64,8 @@ class AccountSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        if 'role' in attrs:
+            attrs['is_staff'] = attrs['role'] == ROLE_ADMIN
         if self.instance is None and not attrs.get('password'):
             raise serializers.ValidationError({'password': '새 계정의 비밀번호를 입력하세요.'})
         if self.instance and self.instance.pk == self.context['request'].user.pk:
@@ -53,24 +83,41 @@ class AccountSerializer(serializers.ModelSerializer):
 
     def create(self, values):
         password = values.pop('password')
-        return get_user_model().objects.create_user(**values, email=values['username'], password=password)
+        role = values.pop('role', None)
+        user = get_user_model().objects.create_user(**values, email=values['username'], password=password)
+        if role:
+            apply_role(user, role)
+        return user
 
     def update(self, instance, values):
         password = values.pop('password', None)
+        role = values.pop('role', None)
+        old_username = instance.username
         for key, value in values.items():
             setattr(instance, key, value)
         instance.email = instance.username
         if password is not None:
             instance.set_password(password)
         instance.save()
+        if role:
+            apply_role(instance, role)
+        if old_username != instance.username:
+            # 본인 수정·삭제 판단이 끊기지 않도록 화면에서 작성한 이슈·댓글의 작성자 아이디도 함께 바꿉니다.
+            RegionalIssue.objects.filter(author_username__iexact=old_username).update(author_username=instance.username)
+            IssueComment.objects.filter(author_username__iexact=old_username).update(author_username=instance.username)
         if password is not None and instance.pk == self.context['request'].user.pk:
             update_session_auth_hash(self.context['request'], instance)
         return instance
 
 
+def account_context(request):
+    latest = dict(UserActivity.objects.filter(user__isnull=False).values('user').annotate(latest=Max('created_at')).values_list('user', 'latest'))
+    return {'request': request, 'sessions': online_sessions(), 'latest_activity': latest}
+
+
 class AccountsView(AdminView):
     def get(self, request):
-        return Response(AccountSerializer(get_user_model().objects.order_by('id'), many=True).data)
+        return Response(AccountSerializer(get_user_model().objects.order_by('id'), many=True, context=account_context(request)).data)
 
     @transaction.atomic
     def post(self, request):
@@ -117,6 +164,22 @@ class AccountView(AdminView):
         bump(state)
         log_change(request, 'delete', 'auth_user', {'before': before})
         return Response(status=204)
+
+
+class AccountActivitiesView(AdminView):
+    """계정별 행동 이력(최근 300건). 수정은 변경 항목의 이전 값·새 값, 삭제는 지운 원본을 포함합니다."""
+
+    def get(self, request, pk):
+        user = get_object_or_404(get_user_model(), pk=pk)
+        rows = UserActivity.objects.filter(Q(user=user) | Q(user__isnull=True, username__iexact=user.username))
+        action = request.query_params.get('action')
+        if action:
+            rows = rows.filter(action=action)
+        fields = ('id', 'action', 'target_type', 'target_id', 'summary', 'before_data', 'after_data', 'changes', 'ip_address', 'created_at')
+        return Response({
+            'account': AccountSerializer(user, context=account_context(request)).data,
+            'activities': list(rows.values(*fields)[:300]),
+        })
 
 
 class AdminCommentSerializer(serializers.ModelSerializer):

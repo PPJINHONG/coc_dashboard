@@ -232,7 +232,9 @@ export default function ReportingApp() {
             </button>
             <div>
               <strong>{user?.name || "Visitor"}</strong>
-              <small>{user?.is_staff ? "관리자" : "사용자"}</small>
+              <small>
+                {user?.is_staff ? "관리자" : user?.role === "observer" ? "옵저버(읽기 전용)" : "사용자"}
+              </small>
             </div>
             <button
               className="icon-button borderless"
@@ -363,6 +365,8 @@ export default function ReportingApp() {
                 section={section}
                 rows={snapshot[section]}
                 data={data}
+                canWrite={Boolean(user) && user?.role !== "observer"}
+                onChanged={refresh}
               />
             </>
           )}

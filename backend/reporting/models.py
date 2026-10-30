@@ -117,6 +117,9 @@ class RegionalIssue(CurrentRow):
     progress_percent = models.PositiveSmallIntegerField(default=0, db_default=0)
     owner = models.ForeignKey(StaffMember, db_column='owner_staff_id', on_delete=models.PROTECT, null=True, blank=True)
     next_action = models.TextField(blank=True, default='', db_default='')
+    # 화면에서 등록한 사용자. DB 관리에서 관리자가 입력한 행은 비어 있으며 관리자만 수정·삭제합니다.
+    author_name = models.CharField(max_length=150, blank=True, default='', db_default='')
+    author_username = models.CharField(max_length=150, blank=True, default='', db_default='')
 
     class Meta:
         db_table = 'ops_regional_issues'

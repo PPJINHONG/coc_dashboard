@@ -15,3 +15,33 @@ def delete_image_file_on_delete(sender, instance, **kwargs):
     """PostImage 레코드가 삭제되면 저장소의 파일도 삭제합니다."""
     if instance.file:
         instance.file.delete(save=False)
+
+
+# === 로그인 행동 이력 ===
+from django.contrib.auth import get_user_model  # noqa: E402
+from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed  # noqa: E402
+
+
+@receiver(user_logged_in)
+def record_login(sender, request, user, **kwargs):
+    from .roles import record_activity
+
+    record_activity(request, "login", "로그인", target_type="session", user=user)
+
+
+@receiver(user_logged_out)
+def record_logout(sender, request, user, **kwargs):
+    from .roles import record_activity
+
+    if user is not None:
+        record_activity(request, "logout", "로그아웃", target_type="session", user=user)
+
+
+@receiver(user_login_failed)
+def record_login_failed(sender, credentials, request=None, **kwargs):
+    from .roles import record_activity
+
+    username = str(credentials.get("username", ""))[:150]
+    user = get_user_model().objects.filter(username__iexact=username).first()
+    if user is not None:
+        record_activity(request, "login_failed", "로그인 실패(비밀번호 불일치)", target_type="session", user=user)
