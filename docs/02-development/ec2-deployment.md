@@ -25,7 +25,26 @@ COMPOSE_FILE=compose.yaml:compose.ec2.yaml
 
 ## A. 현재 데이터를 EC2로 처음 옮기기 — 한 번만 실행
 
-아래는 **Ubuntu EC2**, SSH 사용자 `ubuntu` 기준입니다. EC2에 Docker Engine, Docker Compose v2.17 이상, Python 3.9 이상, Git이 준비되어 있어야 합니다. `<EC2_IP>`, `<키.pem>`, `<저장소_URL>`, `<백업폴더명>`은 실제 값으로 바꿉니다. 각 명령이 성공한 뒤 다음 명령을 실행합니다.
+EC2에 Docker Engine, Docker Compose v2.17 이상, Python 3.9 이상, Git이 준비되어 있어야 합니다. SSH 예시는 사용자 `ubuntu` 기준이며 Amazon Linux는 실제 사용자(예: `ec2-user`)로 바꿉니다. 각 명령이 성공한 뒤 다음 명령을 실행합니다.
+
+아래 접속 설정은 **ALB HTTP 80 → private EC2 HTTP 8080** 기준입니다. 프로그램 실행·DB 복원은 앱이 설치된 **private EC2**에서 수행합니다. SSH에 bastion을 사용한다면 bastion 접속 후 private EC2로 들어가 진행하며, 백업도 해당 private EC2에 있어야 합니다.
+
+### 0. EC2 터미널: Docker Compose 플러그인 확인
+
+```bash
+docker compose version
+```
+
+`compose` 명령이 없거나 `docker compose config --quiet`에서 Docker 기본 도움말과 `unknown flag: --quiet`가 나오면 Compose 플러그인을 먼저 설치합니다. Docker Engine이 설치된 Linux EC2에서 다음 명령을 한 줄씩 실행합니다. 프로젝트 요구 버전을 충족하는 Compose v2.40.3을 사용자 계정에 설치하는 예시입니다.
+
+```bash
+mkdir -p "$HOME/.docker/cli-plugins"
+curl -fL "https://github.com/docker/compose/releases/download/v2.40.3/docker-compose-linux-$(uname -m)" -o "$HOME/.docker/cli-plugins/docker-compose"
+chmod +x "$HOME/.docker/cli-plugins/docker-compose"
+docker compose version
+```
+
+버전이 출력되면 앱 폴더에서 `docker compose config --quiet`를 다시 실행합니다. 이 설치는 해당 Linux 사용자 기준이므로 이후 명령도 같은 사용자로 실행합니다. [Docker 공식 플러그인 설치 안내](https://docs.docker.com/compose/install/linux/)
 
 ### 1. EC2 터미널: 폴더와 코드 준비
 
@@ -68,6 +87,8 @@ scp -i <키.pem> .env ubuntu@<EC2_IP>:/srv/coc-dashboard/app/.env
 
 이 `.env` 전송은 **새 EC2의 최초 설정 때만** 실행합니다. 이미 운영 중인 EC2의 `.env`를 로컬 설정으로 덮어쓰지 않습니다. `.env`와 백업은 Git에 올리지 않습니다.
 
+백업을 bastion의 홈 경로에 먼저 전송했다면 앱이 설치된 private EC2로 다시 옮깁니다. private EC2의 홈에 백업을 두었다면 뒤의 복원 명령에 `/srv/coc-dashboard/backups/<백업폴더명>` 대신 `"$HOME/<백업폴더명>"`을 사용합니다.
+
 ### 4. EC2 터미널: EC2에서 사용할 저장 경로와 접속 주소 설정
 
 ```bash
@@ -76,7 +97,7 @@ chmod 600 .env
 nano .env
 ```
 
-기존 DB 이름·사용자·비밀번호·이미지 버전·Django 서명 키는 유지하고, 다음 항목을 추가하거나 해당 줄의 값을 수정합니다. 같은 이름을 중복해서 추가하지 않습니다. `<EC2_IP>`는 실제 공인 IP로 바꿉니다.
+기존 DB 이름·사용자·비밀번호·이미지 버전·Django 서명 키는 유지하고, 다음 항목을 추가하거나 해당 줄의 값을 수정합니다. 같은 이름을 중복해서 추가하지 않습니다. `ALB_DNS`는 AWS 콘솔에서 확인한 실제 ALB DNS 이름(예: `coc-123.ap-northeast-2.elb.amazonaws.com`)으로 바꿉니다. 도메인을 연결했다면 브라우저에서 사용하는 실제 도메인을 넣습니다.
 
 ```dotenv
 COMPOSE_FILE=compose.yaml:compose.ec2.yaml
@@ -84,13 +105,21 @@ POSTGRES_DATA_PATH=/srv/coc-dashboard/data/postgres
 MEDIA_DATA_PATH=/srv/coc-dashboard/data/media
 
 FRONTEND_BIND_ADDRESS=0.0.0.0
-FRONTEND_PORT=80
-DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,backend,<EC2_IP>
-DJANGO_CSRF_TRUSTED_ORIGINS=http://<EC2_IP>
+FRONTEND_PORT=8080
+DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,backend,ALB_DNS
+DJANGO_CSRF_TRUSTED_ORIGINS=http://ALB_DNS
 DEVELOPMENT_AUTH_BYPASS=false
 ```
 
-도메인을 쓰면 IP 대신 실제 도메인을 넣습니다. `DJANGO_ALLOWED_HOSTS`에는 호스트명만, `DJANGO_CSRF_TRUSTED_ORIGINS`에는 프로토콜을 포함한 실제 브라우저 주소를 넣습니다. EC2 보안 그룹에는 웹 포트 `80`과 관리용 SSH를 허용합니다. DB 포트는 기존처럼 EC2 내부 `127.0.0.1`에만 연결됩니다.
+각 설정은 다음 용도입니다.
+
+- `COMPOSE_FILE`, 데이터 경로: 재배포해도 같은 EC2 데이터 폴더를 연결합니다.
+- `FRONTEND_BIND_ADDRESS=0.0.0.0`: ALB가 EC2의 사설 IP로 연결할 수 있게 합니다. EC2에 공인 IP를 할당하는 설정은 아닙니다.
+- `FRONTEND_PORT=8080`: ALB가 전달할 EC2 대상 포트입니다. ALB 대상 그룹/등록 대상 포트와 같아야 합니다. ALB 리스너 포트 `80`과는 별개입니다.
+- `DJANGO_ALLOWED_HOSTS`: Django가 받을 브라우저 접속 호스트명입니다. EC2 공인 IP는 필요하지 않습니다.
+- `DJANGO_CSRF_TRUSTED_ORIGINS`: 로그인 등의 요청을 허용할 브라우저 주소입니다. ALB에 HTTP 80으로 접속하면 `http://ALB_DNS`, HTTPS로 접속하면 `https://실제도메인`을 사용합니다. EC2 대상 포트 `8080`을 이 주소에 넣지 않습니다.
+
+EC2 보안 그룹은 **ALB 보안 그룹에서 오는 TCP 8080**을 허용합니다. ALB 대상 그룹은 HTTP 8080, 상태 확인 경로는 frontend가 제공하는 `/`로 맞춥니다. DB 포트는 기존처럼 EC2 내부 `127.0.0.1`에만 연결됩니다. [AWS 대상 그룹의 포트 설명](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html)
 
 ### 5. EC2 터미널: 현재 데이터를 복원하고 실행
 
@@ -102,6 +131,8 @@ python3 tools/deploy.py restore /srv/coc-dashboard/backups/<백업폴더명>
 docker compose up --build -d --wait --wait-timeout 180
 docker compose ps
 ```
+
+`nano`에서는 `Ctrl+O` → Enter → `Ctrl+X`로 저장하고 나옵니다. 위 명령은 한 줄씩 실행하고, 오류가 나면 다음 줄로 진행하지 않습니다. `restore`가 성공한 뒤 전체 서비스를 시작합니다.
 
 - `init-storage`: EC2에 위에서 지정한 데이터 폴더를 만듭니다. 기존 파일은 삭제하지 않습니다.
 - `up ... db`: DB만 먼저 켜서 복원할 준비를 합니다.
@@ -124,7 +155,7 @@ docker inspect "$(docker compose ps -q db)" --format '{{range .Mounts}}{{if eq .
 /srv/coc-dashboard/data/postgres
 ```
 
-브라우저에서 `http://<EC2_IP>`에 접속해 **기존 계정으로 로그인**하고 현재 데이터·댓글·첨부파일을 확인합니다. 이후 입력하는 데이터도 이 EC2 경로에 계속 저장됩니다.
+private EC2 안에서 `curl -I http://127.0.0.1:8080/`로 응답을 확인합니다. 브라우저에서는 `http://ALB_DNS` 또는 연결한 실제 도메인으로 접속해 **기존 계정으로 로그인**하고 현재 데이터·댓글·첨부파일을 확인합니다. 이후 입력하는 데이터도 이 EC2 경로에 계속 저장됩니다.
 
 ## B. 새 버전의 코드를 재배포하기 — 이후에는 이것만 실행
 

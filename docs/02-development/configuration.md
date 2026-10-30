@@ -29,10 +29,10 @@
 | `MEDIA_DATA_PATH` | EC2의 실제 첨부파일 폴더. 기본 `/srv/coc-dashboard/data/media`. 재배포 때 같은 경로 유지 |
 | `POSTGRES_VOLUME_NAME` | 로컬 DB 외부 볼륨 이름. 기본 `coc-dashboard_postgres_data`. EC2 경로 연결 모드에서는 사용하지 않음 |
 | `MEDIA_VOLUME_NAME` | 로컬 첨부파일 외부 볼륨 이름. 기본 `coc-dashboard_media_data`. EC2 경로 연결 모드에서는 사용하지 않음 |
-| `FRONTEND_BIND_ADDRESS` | 웹 공개 주소. 로컬 기본 `127.0.0.1`, EC2 직접 접속 `0.0.0.0` |
-| `FRONTEND_PORT` | 웹 접속 포트. 기본 `8080`, EC2 예시 `80` |
+| `FRONTEND_BIND_ADDRESS` | 웹 연결을 받을 주소. 로컬 기본 `127.0.0.1`, private EC2에서 ALB 연결을 받을 때 `0.0.0.0` |
+| `FRONTEND_PORT` | EC2에서 연결을 받을 포트. 기본 `8080`. ALB 대상 그룹/등록 대상 포트와 맞추며 ALB 리스너 포트와 구분 |
 | `DJANGO_SECRET_KEY` | 서버가 서명 등에 사용하는 비밀 키 |
-| `DJANGO_ALLOWED_HOSTS` | 허용할 호스트명/IP를 쉼표로 구분. 기본 `localhost,127.0.0.1,backend`. 프로토콜·포트는 제외하며 EC2 IP/도메인을 추가 |
+| `DJANGO_ALLOWED_HOSTS` | 허용할 호스트명을 쉼표로 구분. 기본 `localhost,127.0.0.1,backend`. 프로토콜·포트는 제외하며 브라우저에서 접속하는 도메인/ALB DNS 추가 |
 | `DEVELOPMENT_AUTH_BYPASS` | `true`이면 개발 중 로그인 없이 운영 데이터를 조회. `false`이면 기존 로그인 복구. 생략 시 `false` |
 | `DJANGO_CSRF_TRUSTED_ORIGINS` | 로그인 요청을 허용할 브라우저 접속 주소. 프로토콜·포트를 포함해 쉼표로 구분. 기본 localhost/127.0.0.1:8080이며 EC2 IP·도메인·포트에 맞춰 설정 |
 | `PYTHON_IMAGE` | 서버 실행에 쓸 Python 환경 묶음 |
