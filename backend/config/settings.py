@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     "core",
     "reporting",
     "database_admin",
+    "invites",
     "rest_framework",
     "drf_spectacular",
 ]

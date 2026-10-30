@@ -13,6 +13,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from invites.services import invite_error, redeem_invite
+
 from .models import Comment, Post, PostImage
 from .serializers import (
     CommentSerializer,
@@ -66,11 +68,20 @@ class RegisterView(APIView):
 
     @extend_schema(request=RegisterSerializer, responses={201: MeSerializer})
     def post(self, request):
+        # 회원가입은 팀원이 발급한 초대 링크로만 할 수 있습니다.
+        invite_token = request.data.get("invite") if hasattr(request.data, "get") else None
         serializer = RegisterSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        valid = serializer.is_valid()
+        errors = dict(serializer.errors) if not valid else {}
+        invite_problem = invite_error(invite_token)
+        if invite_problem is not None:
+            errors.update(invite_problem.detail)
+        if errors:
+            raise ValidationError(errors)
         try:
             with transaction.atomic():
                 user = serializer.save()
+                redeem_invite(invite_token, user)
         except IntegrityError:
             return Response({"username": ["이미 사용 중인 이메일 아이디입니다."]}, status=400)
         login(request, user)

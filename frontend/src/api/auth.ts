@@ -13,6 +13,7 @@ export interface Registration {
   name: string;
   username: string;
   password: string;
+  invite: string;
 }
 
 export type UserUpdate = Partial<Pick<User, 'name' | 'username'>> & {
