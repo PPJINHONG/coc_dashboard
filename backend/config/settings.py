@@ -6,7 +6,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # 실제 설정은 .env에서 Compose를 통해 전달합니다.
 SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
 DEBUG = False
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "backend"]
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,backend").split(",")
+    if host.strip()
+]
 
 # 기본 페이지를 제공하는 core 앱을 등록합니다.
 # 슬라이스1(세션 로그인·회원정보)에 필요한 Django 기본 인증/세션 앱을 추가합니다.
