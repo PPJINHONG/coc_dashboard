@@ -30,6 +30,10 @@ jobs:
       # 파일 문법, 필수 환경변수, 이미지 버전 참조가 올바른지 확인합니다.
       - name: Validate Compose configuration
         run: docker compose config --quiet
+      - name: Validate EC2 data path configuration
+        run: docker compose -f compose.yaml -f compose.ec2.yaml config --quiet
+      - name: Check deployment safety guards
+        run: python3 -m unittest tools.test_deploy
       # frontend/backend 이미지가 만들어지는지만 확인합니다.
       - name: Build application images
         run: docker compose build

@@ -16,6 +16,7 @@
 | --- | --- |
 | 화면 문구나 색상을 바꾸고 싶다 | [어떤 파일을 수정하나요?](02-development/application.md) |
 | 비밀번호나 설정 항목을 바꿔야 한다 | [설정값 관리](02-development/configuration.md) |
+| 현재 데이터를 EC2로 옮기고 버전을 배포하고 싶다 | [EC2 배포와 데이터 보존](02-development/ec2-deployment.md) |
 | 저장된 데이터가 있는지 보고 싶다 | [데이터 확인](02-development/database.md) |
 | 관리자 기능별 설정과 원본 테이블을 보고 싶다 | [관리자 DB 관리](02-development/database-admin.md) |
 | 최신 운영 데이터와 DB 구조·접속 방법을 보고 싶다 | [최신 운영 데이터와 DB 설계](02-development/operations.md) |

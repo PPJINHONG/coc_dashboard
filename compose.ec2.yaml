@@ -1,0 +1,18 @@
+# EC2 .env: COMPOSE_FILE=compose.yaml:compose.ec2.yaml
+# 코드 폴더와 별개인 EC2의 실제 디렉터리를 컨테이너에 연결합니다.
+services:
+  db:
+    volumes:
+      - type: bind
+        source: ${POSTGRES_DATA_PATH:-/srv/coc-dashboard/data/postgres}
+        target: /var/lib/postgresql/data
+        bind:
+          # 경로가 사라졌거나 잘못되었을 때 새 빈 DB를 자동 생성하지 않습니다.
+          create_host_path: false
+  backend:
+    volumes:
+      - type: bind
+        source: ${MEDIA_DATA_PATH:-/srv/coc-dashboard/data/media}
+        target: /app/media
+        bind:
+          create_host_path: false
