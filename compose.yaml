@@ -1,12 +1,13 @@
-# 최초 설치: python3 tools/deploy.py init-storage
-# 이후 배포: python3 tools/deploy.py deploy
-# EC2는 .env의 COMPOSE_FILE=compose.yaml:compose.ec2.yaml로 고정 경로를 연결합니다.
+# 로컬·EC2 공통: git pull 후 docker compose down → docker compose up --build -d
+# DB·첨부파일은 아래 Docker 볼륨에 남아 있으므로 코드만 새 버전으로 바뀝니다.
+# down -v는 볼륨(데이터)까지 지우므로 사용하지 않습니다.
 name: coc-dashboard
 
 services:
   # 기본 DB 설정만 사용하고 데이터는 볼륨에 보관합니다.
   db:
-    image: ${POSTGRES_IMAGE}
+    # PostgreSQL 17 계열 유지. 메이저 버전 변경은 별도 데이터 이전 작업이 필요합니다.
+    image: postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
     restart: unless-stopped
     stop_grace_period: 60s
     environment:
@@ -33,7 +34,8 @@ services:
     build:
       context: ./backend
       args:
-        PYTHON_IMAGE: ${PYTHON_IMAGE}
+        # Django 실행용 Python. 태그는 읽는 용도, @sha256은 정확한 이미지 고정용입니다.
+        PYTHON_IMAGE: python:3.13.16-slim-bookworm@sha256:a1165e272e578941b84abc79e4ab38a0305cd12803a5c4247979ac7655f4d641
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
       DEVELOPMENT_AUTH_BYPASS: ${DEVELOPMENT_AUTH_BYPASS:-false}
@@ -60,21 +62,19 @@ services:
     build:
       context: ./frontend
       args:
-        NODE_IMAGE: ${NODE_IMAGE}
-        NGINX_IMAGE: ${NGINX_IMAGE}
+        # React 빌드용 Node.js(실행 컨테이너에는 포함되지 않음)와 정적 파일 제공용 Nginx
+        NODE_IMAGE: node:24.21.0-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
+        NGINX_IMAGE: nginx:1.30.5-alpine3.24@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94
     ports:
       - "${FRONTEND_BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-8080}:80"
     depends_on:
       backend:
         condition: service_healthy
 
-# 릴리스 폴더·Compose 프로젝트 이름과 별개로 같은 볼륨을 계속 사용합니다.
-# 기본 DB 이름은 현재 로컬 볼륨과 동일합니다. 없는 볼륨은 자동 생성하지 않습니다.
-# 외부 볼륨은 Compose 종료/재생성의 삭제 대상에서 제외됩니다.
+# 볼륨 이름을 고정해 어느 폴더에서 실행해도 같은 데이터를 사용합니다.
+# 처음 실행할 때만 빈 볼륨을 자동으로 만들고, 이후에는 기존 볼륨을 그대로 연결합니다.
 volumes:
   postgres_data:
-    external: true
-    name: ${POSTGRES_VOLUME_NAME:-coc-dashboard_postgres_data}
+    name: coc-dashboard_postgres_data
   media_data:
-    external: true
-    name: ${MEDIA_VOLUME_NAME:-coc-dashboard_media_data}
+    name: coc-dashboard_media_data

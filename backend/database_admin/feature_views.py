@@ -54,7 +54,8 @@ class AccountSerializer(serializers.ModelSerializer):
 
     def validate_username(self, value):
         value = value.strip().lower()
-        if not (self.instance and self.instance.username == value == 'admin@admin'):
+        # 기본 관리자 admin만 @ 없는 아이디를 유지할 수 있습니다.
+        if not (self.instance and self.instance.username == value == 'admin'):
             serializers.EmailField(max_length=150).run_validation(value)
         users = get_user_model().objects.filter(Q(username__iexact=value) | Q(email__iexact=value))
         if self.instance:

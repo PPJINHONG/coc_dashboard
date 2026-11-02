@@ -13,7 +13,7 @@ GitHub Actions는 “코드를 올리면 정해 둔 작업을 실행해 주는 �
 실행 순서는 다음과 같습니다.
 
 1. GitHub의 임시 컴퓨터로 프로젝트 코드를 받습니다.
-2. `.env.example`을 사용해 검사에 필요한 설정을 준비합니다. 개인 `.env`를 보내는 방식은 아닙니다.
+2. 검사 전용 임시 값으로 `.env`를 만듭니다. 실제 `.env`는 Git에 없으므로 사용하지 않습니다.
 3. Compose 설정 파일이 올바르게 읽히는지 확인합니다.
 4. 화면과 서버의 실행 묶음을 빌드합니다. 화면의 TypeScript 코드 검사도 이 과정에 포함됩니다.
 
@@ -48,7 +48,7 @@ GitHub Actions는 “코드를 올리면 정해 둔 작업을 실행해 주는 �
 | 실패한 단계의 이름 | 뜻 | 먼저 볼 것 |
 | --- | --- | --- |
 | Checkout repository | 프로젝트 파일 받기 | GitHub 실행 기록의 다운로드·권한 오류 |
-| Prepare example environment | 검사 설정 준비 | `.env.example`이 있는지 |
+| Prepare CI environment | 검사 설정 준비 | `ci.yml`의 임시 `.env` 내용 |
 | Validate Compose configuration | 실행 설정 확인 | Compose 문법, 필요한 설정 이름 |
 | Build application images | 프로그램 묶음 만들기 | Dockerfile, package 파일, 설치 오류, 코드 검사 오류 |
 

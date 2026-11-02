@@ -5,7 +5,6 @@ import pytest
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
-from django.core.management.base import CommandError
 from rest_framework.test import APIClient
 
 CSRF_URL = "/api/auth/csrf/"
@@ -204,32 +203,38 @@ def test_logout_ends_session(auth_client):
 
 
 @pytest.mark.django_db
-def test_admin_command_creates_superuser_without_exposing_password(monkeypatch):
-    monkeypatch.setattr("core.management.commands.create_admin.getpass.getpass", lambda prompt: PASSWORD)
-    output = StringIO()
-    call_command("create_admin", stdout=output)
-    admin = get_user_model().objects.get(username="admin@admin")
-    assert admin.email == "admin@admin"
-    assert admin.first_name == "admin"
+def test_ensure_admin_creates_default_admin_that_logs_in_without_at_sign():
+    call_command("ensure_admin", stdout=StringIO())
+    admin = get_user_model().objects.get(username="admin")
     assert admin.is_superuser and admin.is_staff and admin.is_active
-    assert admin.check_password(PASSWORD)
-    assert PASSWORD not in output.getvalue()
     client = APIClient()
-    assert client.post(LOGIN_URL, {"username": "admin@admin", "password": PASSWORD}, format="json").status_code == 200
-    assert client.patch(ME_URL, {"name": "관리자", "username": "admin@admin"}, format="json").status_code == 405
-    with pytest.raises(CommandError, match="이미 존재"):
-        call_command("create_admin", stdout=output)
-    admin.refresh_from_db()
-    assert admin.check_password(PASSWORD)
+    response = client.post(LOGIN_URL, {"username": "admin", "password": "admin"}, format="json")
+    assert response.status_code == 200
+    assert response.data["is_staff"] is True
 
 
 @pytest.mark.django_db
-def test_admin_command_rejects_password_mismatch(monkeypatch):
-    values = iter([PASSWORD, NEW_PASSWORD])
-    monkeypatch.setattr("core.management.commands.create_admin.getpass.getpass", lambda prompt: next(values))
-    with pytest.raises(CommandError, match="일치하지"):
-        call_command("create_admin")
-    assert not get_user_model().objects.exists()
+def test_ensure_admin_keeps_existing_admin_password():
+    get_user_model().objects.create_user(username="admin", password=PASSWORD, is_staff=True)
+    call_command("ensure_admin", stdout=StringIO())
+    assert get_user_model().objects.count() == 1
+    assert get_user_model().objects.get(username="admin").check_password(PASSWORD)
+
+
+@pytest.mark.django_db
+def test_ensure_admin_renames_legacy_admin_and_keeps_account_id():
+    from reporting.models import IssueComment, RegionalIssue, Region
+
+    legacy = get_user_model().objects.create_superuser(username="admin@admin", email="admin@admin", password=PASSWORD)
+    issue = RegionalIssue.objects.create(region=Region.objects.create(region_name="리전"), title="이슈",
+                                         author_name="admin", author_username="admin@admin")
+    IssueComment.objects.create(issue=issue, author_name="admin", author_username="admin@admin", content="댓글")
+    call_command("ensure_admin", stdout=StringIO())
+    admin = get_user_model().objects.get(pk=legacy.pk)
+    assert admin.username == "admin" and admin.check_password("admin") and admin.is_superuser
+    assert not get_user_model().objects.filter(username="admin@admin").exists()
+    assert RegionalIssue.objects.get().author_username == "admin"
+    assert IssueComment.objects.get().author_username == "admin"
 
 
 @pytest.mark.django_db
