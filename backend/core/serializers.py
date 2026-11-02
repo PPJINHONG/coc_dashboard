@@ -41,7 +41,7 @@ class AccountSerializer(serializers.ModelSerializer):
         existing_admin = (
             self.instance is not None
             and self.instance.is_superuser
-            and self.instance.username == value == "admin@admin"
+            and self.instance.username == value == "admin"
         )
         if not existing_admin:
             serializers.EmailField(max_length=150).run_validation(value)

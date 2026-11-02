@@ -24,21 +24,24 @@ API 목록과 호출 화면은 http://localhost:8080/api/docs/ 에서 확인합�
 
 ## 시작
 
+`.env`는 Git에 없습니다. 팀원에게 받은 `.env`를 프로젝트 최상위 폴더에 둔 뒤 실행합니다.
+
 ```bash
-# .env가 없을 때만 양식을 복사합니다.
-if [ ! -f .env ]; then
-  cp .env.example .env
-fi
 docker compose config --quiet
-python3 tools/deploy.py init-storage
 docker compose up --build -d
 ```
 
-Docker Desktop이 실행 중이어야 합니다. 위 명령은 compose.yaml이 있는 프로젝트 폴더에서 한 단계씩 확인하며 실행합니다. 오류가 나면 다음 단계로 넘어가지 않습니다.
+Docker Desktop이 실행 중이어야 합니다. 처음 실행하면 빈 DB가 만들어지고 관리자 계정 `admin` / `admin`이 생깁니다. 업무 데이터는 Git에 포함하지 않습니다.
 
-코드를 수정한 뒤에는 `python3 tools/deploy.py deploy`로 백업 후 반영합니다. 처음 설정하는 경우 [프로젝트 켜고 끄기](docs/02-development/docker-compose.md)를 따라 하세요. 현재 DB를 EC2로 옮기고 이후 데이터 유실 없이 배포하는 절차는 [EC2 배포와 데이터 보존](docs/02-development/ec2-deployment.md)에 정리했습니다.
+코드를 수정하거나 새 코드를 받은 뒤에는 로컬과 EC2 모두 같은 방법으로 반영합니다. DB·첨부파일은 Docker 볼륨에 남아 있으므로 그대로 유지됩니다. `-v`는 붙이지 않습니다.
 
-EC2에서는 코드는 `/srv/coc-dashboard/app`, 실제 DB 파일은 `/srv/coc-dashboard/data/postgres`에 둡니다. EC2 `.env`의 `COMPOSE_FILE=compose.yaml:compose.ec2.yaml` 설정으로 같은 DB 경로를 계속 연결합니다. 최초 한 번 현재 데이터를 복원하고, 이후 코드 재배포 때는 운영 DB를 그대로 이어서 사용합니다.
+```bash
+git pull --ff-only origin main
+docker compose down
+docker compose up --build -d
+```
+
+자세한 내용은 [프로젝트 켜고 끄기](docs/02-development/docker-compose.md)와 [EC2 배포](docs/02-development/ec2-deployment.md)를 참고하세요.
 
 ## 협업 흐름
 

@@ -122,7 +122,7 @@ function AccessForm({
             />
           )}
           <AccountField
-            id="username" name="username" label="아이디 (이메일)" type="email"
+            id="username" name="username" label="아이디 (이메일)" type={signingUp ? 'email' : 'text'}
             autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={150}
             placeholder="name@company.com" value={username}
             onChange={(e) => setUsername(e.target.value)} error={fieldErrors.username?.join(' ')} required

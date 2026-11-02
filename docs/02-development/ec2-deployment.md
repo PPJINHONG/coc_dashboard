@@ -1,187 +1,106 @@
-# 현재 DB를 EC2에 옮기고, 같은 DB로 계속 재배포하기
+# EC2 배포
 
 [문서 목록](../README.md) · [설정값 관리](configuration.md)
 
-**처음에는 현재 DB 내용을 EC2에 한 번 복원합니다. 그다음부터는 코드만 바꾸고, EC2의 같은 DB 폴더를 계속 연결합니다.**
+**로컬과 EC2는 같은 `compose.yaml`과 같은 `.env`를 사용합니다.** 데이터(DB·첨부파일)는 Docker 볼륨에 있고, 배포할 때는 코드만 바꿉니다.
 
-## EC2에서 코드를 두는 곳과 데이터를 두는 곳
-
-| EC2의 실제 경로 | 저장하는 내용 | 재배포 때 처리 |
+| 위치 | 내용 | 배포 때 |
 | --- | --- | --- |
-| `/srv/coc-dashboard/app` | Git에서 받은 프로그램 코드와 `.env` | 코드 갱신, 기존 `.env` 유지 |
-| `/srv/coc-dashboard/data/postgres` | PostgreSQL의 실제 DB 파일 전체 | 그대로 유지·계속 연결 |
-| `/srv/coc-dashboard/data/media` | 게시판 첨부파일 | 그대로 유지·계속 연결 |
-| `/srv/coc-dashboard/backups` | 이전용 백업과 배포 전 백업 | 그대로 유지 |
+| `/srv/coc-dashboard/app` | Git에서 받은 코드와 `.env` | `git pull`로 갱신 |
+| Docker 볼륨 `coc-dashboard_postgres_data` | 운영 DB | 그대로 유지 |
+| Docker 볼륨 `coc-dashboard_media_data` | 게시판 첨부파일 | 그대로 유지 |
 
-DB 컨테이너 안의 `/var/lib/postgresql/data`는 **EC2의 `/srv/coc-dashboard/data/postgres`에 연결**됩니다. 컨테이너를 지우고 새로 만들어도 EC2의 이 폴더는 남고, 새 컨테이너가 같은 폴더를 다시 읽습니다. 운영 중 추가·수정한 데이터도 이곳에 저장됩니다.
+백업은 EC2 스냅샷으로 합니다. Docker 볼륨은 루트 디스크의 `/var/lib/docker/volumes/`에 있으므로 스냅샷에 포함됩니다.
 
-이 연결은 `compose.ec2.yaml`에 설정했습니다. EC2의 `.env`에 아래 한 줄을 넣으면 일반 `docker compose` 명령과 `tools/deploy.py` 모두 이 설정을 사용합니다.
+## 평소 배포
 
-```dotenv
-COMPOSE_FILE=compose.yaml:compose.ec2.yaml
-```
-
-로컬 컴퓨터는 `compose.yaml`만 사용하므로 현재 로컬 DB의 저장 공간은 바뀌지 않습니다.
-
-## A. 현재 데이터를 EC2로 처음 옮기기 — 한 번만 실행
-
-EC2에 Docker Engine, Docker Compose v2.17 이상, Python 3.9 이상, Git이 준비되어 있어야 합니다. SSH 예시는 사용자 `ubuntu` 기준이며 Amazon Linux는 실제 사용자(예: `ec2-user`)로 바꿉니다. 각 명령이 성공한 뒤 다음 명령을 실행합니다.
-
-아래 접속 설정은 **ALB HTTP 80 → private EC2 HTTP 8080** 기준입니다. 프로그램 실행·DB 복원은 앱이 설치된 **private EC2**에서 수행합니다. SSH에 bastion을 사용한다면 bastion 접속 후 private EC2로 들어가 진행하며, 백업도 해당 private EC2에 있어야 합니다.
-
-### 0. EC2 터미널: Docker Compose 플러그인 확인
-
-```bash
-docker compose version
-```
-
-`compose` 명령이 없거나 `docker compose config --quiet`에서 Docker 기본 도움말과 `unknown flag: --quiet`가 나오면 Compose 플러그인을 먼저 설치합니다. Docker Engine이 설치된 Linux EC2에서 다음 명령을 한 줄씩 실행합니다. 프로젝트 요구 버전을 충족하는 Compose v2.40.3을 사용자 계정에 설치하는 예시입니다.
-
-```bash
-mkdir -p "$HOME/.docker/cli-plugins"
-curl -fL "https://github.com/docker/compose/releases/download/v2.40.3/docker-compose-linux-$(uname -m)" -o "$HOME/.docker/cli-plugins/docker-compose"
-chmod +x "$HOME/.docker/cli-plugins/docker-compose"
-docker compose version
-```
-
-버전이 출력되면 앱 폴더에서 `docker compose config --quiet`를 다시 실행합니다. 이 설치는 해당 Linux 사용자 기준이므로 이후 명령도 같은 사용자로 실행합니다. [Docker 공식 플러그인 설치 안내](https://docs.docker.com/compose/install/linux/)
-
-### 1. EC2 터미널: 폴더와 코드 준비
-
-로컬 터미널에서 EC2에 접속합니다.
-
-```bash
-ssh -i <키.pem> ubuntu@<EC2_IP>
-```
-
-EC2 터미널에서 처음 한 번 폴더를 만듭니다. `/srv/coc-dashboard`가 아직 없는 새 서버 기준입니다.
-
-```bash
-sudo mkdir -p /srv/coc-dashboard
-sudo chown "$USER":"$USER" /srv/coc-dashboard
-mkdir -p /srv/coc-dashboard/backups
-chmod 700 /srv/coc-dashboard/backups
-git clone <저장소_URL> /srv/coc-dashboard/app
-```
-
-저장소에는 이번 `compose.ec2.yaml`과 `tools/deploy.py` 변경이 포함되어 있어야 합니다. 데이터 폴더는 뒤의 `init-storage` 명령이 준비합니다.
-
-### 2. 로컬 터미널: 현재 DB를 백업
-
-**현재 데이터가 들어 있는 내 컴퓨터**의 프로젝트 최상위에서 실행합니다.
-
-```bash
-python3 tools/deploy.py backup
-```
-
-현재 DB의 테이블·내용·로그인 계정·관리자 권한·댓글·개인 설정과 첨부파일을 백업합니다. 백업 중에는 backend를 잠시 멈췄다가 다시 켭니다. 로컬 DB는 그대로 남습니다.
-
-완료 메시지에 `.backups/20261030T...-...` 같은 폴더가 나옵니다. **그 폴더 이름을 아래 `<백업폴더명>`에 넣습니다.** 폴더 안에는 `database.dump`, `media.tar.gz`, `manifest.json` 세 파일이 있습니다. 이전할 최종 시점의 데이터로 백업하고, 이후 EC2로 접속을 전환할 때까지 원본에 새 데이터를 입력하지 않습니다.
-
-### 3. 로컬 터미널: 백업과 현재 `.env`를 EC2에 전송
-
-```bash
-scp -i <키.pem> -r .backups/<백업폴더명> ubuntu@<EC2_IP>:/srv/coc-dashboard/backups/
-scp -i <키.pem> .env ubuntu@<EC2_IP>:/srv/coc-dashboard/app/.env
-```
-
-이 `.env` 전송은 **새 EC2의 최초 설정 때만** 실행합니다. 이미 운영 중인 EC2의 `.env`를 로컬 설정으로 덮어쓰지 않습니다. `.env`와 백업은 Git에 올리지 않습니다.
-
-백업을 bastion의 홈 경로에 먼저 전송했다면 앱이 설치된 private EC2로 다시 옮깁니다. private EC2의 홈에 백업을 두었다면 뒤의 복원 명령에 `/srv/coc-dashboard/backups/<백업폴더명>` 대신 `"$HOME/<백업폴더명>"`을 사용합니다.
-
-### 4. EC2 터미널: EC2에서 사용할 저장 경로와 접속 주소 설정
-
-```bash
-cd /srv/coc-dashboard/app
-chmod 600 .env
-nano .env
-```
-
-기존 DB 이름·사용자·비밀번호·이미지 버전·Django 서명 키는 유지하고, 다음 항목을 추가하거나 해당 줄의 값을 수정합니다. 같은 이름을 중복해서 추가하지 않습니다. `ALB_DNS`는 AWS 콘솔에서 확인한 실제 ALB DNS 이름(예: `coc-123.ap-northeast-2.elb.amazonaws.com`)으로 바꿉니다. 도메인을 연결했다면 브라우저에서 사용하는 실제 도메인을 넣습니다.
-
-```dotenv
-COMPOSE_FILE=compose.yaml:compose.ec2.yaml
-POSTGRES_DATA_PATH=/srv/coc-dashboard/data/postgres
-MEDIA_DATA_PATH=/srv/coc-dashboard/data/media
-
-FRONTEND_BIND_ADDRESS=0.0.0.0
-FRONTEND_PORT=8080
-DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,backend,ALB_DNS
-DJANGO_CSRF_TRUSTED_ORIGINS=http://ALB_DNS
-DEVELOPMENT_AUTH_BYPASS=false
-```
-
-각 설정은 다음 용도입니다.
-
-- `COMPOSE_FILE`, 데이터 경로: 재배포해도 같은 EC2 데이터 폴더를 연결합니다.
-- `FRONTEND_BIND_ADDRESS=0.0.0.0`: ALB가 EC2의 사설 IP로 연결할 수 있게 합니다. EC2에 공인 IP를 할당하는 설정은 아닙니다.
-- `FRONTEND_PORT=8080`: ALB가 전달할 EC2 대상 포트입니다. ALB 대상 그룹/등록 대상 포트와 같아야 합니다. ALB 리스너 포트 `80`과는 별개입니다.
-- `DJANGO_ALLOWED_HOSTS`: Django가 받을 브라우저 접속 호스트명입니다. EC2 공인 IP는 필요하지 않습니다.
-- `DJANGO_CSRF_TRUSTED_ORIGINS`: 로그인 등의 요청을 허용할 브라우저 주소입니다. ALB에 HTTP 80으로 접속하면 `http://ALB_DNS`, HTTPS로 접속하면 `https://실제도메인`을 사용합니다. EC2 대상 포트 `8080`을 이 주소에 넣지 않습니다.
-
-EC2 보안 그룹은 **ALB 보안 그룹에서 오는 TCP 8080**을 허용합니다. ALB 대상 그룹은 HTTP 8080, 상태 확인 경로는 frontend가 제공하는 `/`로 맞춥니다. DB 포트는 기존처럼 EC2 내부 `127.0.0.1`에만 연결됩니다. [AWS 대상 그룹의 포트 설명](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html)
-
-### 5. EC2 터미널: 현재 데이터를 복원하고 실행
-
-```bash
-docker compose config --quiet
-python3 tools/deploy.py init-storage
-docker compose up -d --wait db
-python3 tools/deploy.py restore /srv/coc-dashboard/backups/<백업폴더명>
-docker compose up --build -d --wait --wait-timeout 180
-docker compose ps
-```
-
-`nano`에서는 `Ctrl+O` → Enter → `Ctrl+X`로 저장하고 나옵니다. 위 명령은 한 줄씩 실행하고, 오류가 나면 다음 줄로 진행하지 않습니다. `restore`가 성공한 뒤 전체 서비스를 시작합니다.
-
-- `init-storage`: EC2에 위에서 지정한 데이터 폴더를 만듭니다. 기존 파일은 삭제하지 않습니다.
-- `up ... db`: DB만 먼저 켜서 복원할 준비를 합니다.
-- `restore`: 내 컴퓨터에서 가져온 DB 내용과 첨부파일을 EC2에 넣습니다. 기존 데이터가 있는 대상에는 덮어쓰지 않으며 백업 파일과 복원한 테이블별 행 수를 검증합니다.
-- 마지막 `up`: 복원된 DB를 연결한 상태로 프로그램을 켭니다. 필요한 Django 마이그레이션을 적용하며 샘플 데이터는 만들지 않습니다.
-
-**복원이 끝나기 전에 backend를 먼저 켜지 않습니다.** 먼저 켜면 DB에 실행 기록 등이 생겨 빈 DB 보호 검사에 걸립니다.
-
-### 6. EC2 터미널과 브라우저: 실제 저장 위치와 데이터 확인
-
-아래 명령은 비밀번호 없이 DB 컨테이너가 연결한 실제 EC2 경로만 출력합니다.
-
-```bash
-docker inspect "$(docker compose ps -q db)" --format '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Source}}{{end}}{{end}}'
-```
-
-출력이 다음과 같으면 요청한 위치에 연결된 것입니다.
-
-```text
-/srv/coc-dashboard/data/postgres
-```
-
-private EC2 안에서 `curl -I http://127.0.0.1:8080/`로 응답을 확인합니다. 브라우저에서는 `http://ALB_DNS` 또는 연결한 실제 도메인으로 접속해 **기존 계정으로 로그인**하고 현재 데이터·댓글·첨부파일을 확인합니다. 이후 입력하는 데이터도 이 EC2 경로에 계속 저장됩니다.
-
-## B. 새 버전의 코드를 재배포하기 — 이후에는 이것만 실행
-
-**운영 중인 EC2 터미널**에서 실행합니다. 배포할 코드가 `main` 브랜치에 반영되어 있는 예시입니다.
+EC2에 접속해서 실행합니다.
 
 ```bash
 cd /srv/coc-dashboard/app
 git pull --ff-only origin main
-python3 tools/deploy.py deploy --backup-dir /srv/coc-dashboard/backups
+docker compose down
+docker compose up --build -d
+docker compose ps
 ```
 
-다른 브랜치로 운영한다면 `main`을 해당 브랜치로 바꿉니다. Git 업데이트가 실패하면 배포 명령을 실행하지 말고 먼저 해결합니다.
+- backend가 켜질 때 Django 마이그레이션(테이블 구조 변경)이 자동으로 적용됩니다. 데이터는 그대로 남습니다.
+- `docker compose down -v`는 쓰지 않습니다. `-v`는 DB 볼륨까지 삭제합니다.
+- 컬럼·테이블을 지우는 마이그레이션이 들어간 배포라면 배포 전에 EC2 스냅샷을 먼저 만듭니다.
+- 빌드가 오래 걸려 서비스가 꺼져 있는 시간을 줄이고 싶다면 `docker compose build`를 `down`보다 먼저 실행합니다.
 
-이 명령은 새 코드 빌드 → 기존 운영 DB·첨부파일 백업 → 컨테이너 재생성 → 상태 확인을 수행합니다. **DB는 계속 `/srv/coc-dashboard/data/postgres`를 사용합니다.** 최초에 가져온 로컬 백업을 다시 복원하지 않습니다. EC2 운영 중 새로 쌓인 데이터도 그대로 이어서 사용합니다. 재기동 동안 짧은 중단은 있습니다.
+## 관리자 계정
 
-재배포 때 유지해야 할 것은 다음과 같습니다.
+backend가 켜질 때 `admin` 계정이 없으면 `admin` / `admin` 관리자 계정을 만듭니다. 이미 있으면 비밀번호를 포함해 아무것도 바꾸지 않습니다. 관리자만 `@` 없는 아이디를 쓰고, 다른 계정은 이메일 아이디를 사용합니다.
 
-- EC2의 기존 `.env`와 `COMPOSE_FILE`, `POSTGRES_DATA_PATH`, `MEDIA_DATA_PATH` 설정.
-- `/srv/coc-dashboard/data` 전체. 코드 폴더를 새로 준비하더라도 이 폴더는 유지합니다.
-- 기존 DB 이름·사용자·비밀번호. `.env`만 바꿔도 이미 생성된 DB 계정은 자동 변경되지 않습니다.
-- PostgreSQL 17 계열. 메이저 버전 업그레이드는 별도 이전 작업으로 진행합니다.
+ALB가 외부에 열려 있으면 누구나 `admin`/`admin`을 시도할 수 있습니다. 비밀번호 변경이나 ALB 보안 그룹의 접속 IP 제한을 권장합니다.
 
-`restore`는 최초 이전 때만 사용합니다. 평소 배포에 데이터 폴더 삭제·DB 초기화·`down -v`를 넣지 않습니다. DB 구조를 바꾸는 새 마이그레이션은 적용되므로, 데이터 삭제를 포함한 마이그레이션은 배포 전에 별도로 확인해야 합니다. 배포 실패 시 기존 데이터와 사전 백업을 보존하며 자동 덮어쓰기나 자동 롤백은 하지 않습니다.
+## 한 번만: 기존 폴더 데이터를 Docker 볼륨으로 옮기기
 
-## 코드 재배포와 EC2 자체 삭제는 구분합니다
+이전 구조는 `compose.ec2.yaml`로 `/srv/coc-dashboard/data/postgres-restored`, `/srv/coc-dashboard/data/media-restored` 폴더를 연결했습니다. 새 구조로 처음 배포할 때 한 번만 아래 순서로 옮깁니다. 이 작업을 하지 않고 `up` 하면 **빈 DB로 시작합니다.**
 
-위 설정은 **같은 EC2에서 코드를 재배포할 때 같은 DB 경로를 계속 사용하는 구성**입니다. EC2 자체 삭제까지 대비하려면 해당 경로가 있는 EBS의 `종료 시 삭제`를 끄고, 백업을 서버 외부에도 보관합니다. [AWS EBS 보존 안내](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/preserving-volumes-on-termination.html)
+명령은 한 줄씩 실행하고, 오류가 나면 다음으로 넘어가지 않습니다.
 
-[Docker 경로 연결 설명](https://docs.docker.com/engine/storage/bind-mounts/) · [Compose 설정 병합](https://docs.docker.com/compose/how-tos/multiple-compose-files/merge/)
+### 1. 시작 전 EC2 스냅샷
+
+AWS 콘솔에서 EC2(루트 볼륨) 스냅샷을 먼저 만듭니다.
+
+### 2. 기존 서비스 종료와 상태 확인
+
+```bash
+cd /srv/coc-dashboard/app
+docker compose down
+docker volume ls | grep coc-dashboard
+df -h / /srv
+```
+
+`docker volume ls` 결과에 `coc-dashboard_postgres_data`나 `coc-dashboard_media_data`가 **이미 있으면 멈추고** 내용을 먼저 확인합니다. 예전에 만든 빈 볼륨이나 다른 데이터일 수 있습니다. `df -h`로 DB 폴더 크기만큼 디스크 여유가 있는지도 봅니다.
+
+### 3. 새 코드와 `.env` 받기
+
+```bash
+git pull --ff-only origin main
+```
+
+`.env`를 로컬과 같은 내용으로 바꿉니다. 로컬 터미널에서 보내거나, EC2에서 `nano .env`로 내용을 붙여 넣습니다.
+
+```bash
+# 로컬 터미널 (bastion을 거치면 private EC2까지 한 번 더 옮깁니다)
+scp -i <키.pem> .env ec2-user@<EC2_IP>:/srv/coc-dashboard/app/.env
+```
+
+EC2에서 확인합니다. `COMPOSE_FILE`, `POSTGRES_DATA_PATH`, `MEDIA_DATA_PATH` 줄이 남아 있으면 안 됩니다.
+
+```bash
+chmod 600 .env
+grep -E "COMPOSE_FILE|DATA_PATH" .env
+docker compose config --quiet
+docker compose build
+```
+
+`grep`은 아무것도 출력하지 않아야 합니다.
+
+### 4. DB와 첨부파일 복사
+
+```bash
+docker compose run --rm --no-deps -v /srv/coc-dashboard/data/postgres-restored:/from:ro --entrypoint sh db -c 'test -z "$(ls -A /var/lib/postgresql/data)" && cp -a /from/. /var/lib/postgresql/data/ && echo DB_COPY_OK'
+docker compose run --rm --no-deps -v /srv/coc-dashboard/data/media-restored:/from:ro --entrypoint sh backend -c 'test -z "$(ls -A /app/media)" && cp -a /from/. /app/media/ && echo MEDIA_COPY_OK'
+```
+
+각각 `DB_COPY_OK`, `MEDIA_COPY_OK`가 나와야 합니다. 대상 볼륨이 비어 있지 않으면 복사하지 않고 실패합니다. 원본 폴더는 읽기 전용으로 연결하므로 바뀌지 않습니다.
+
+### 5. 실행과 확인
+
+```bash
+docker compose up -d --wait --wait-timeout 180
+docker compose ps
+docker compose logs backend | grep 관리자
+```
+
+마지막 줄에 `기존 관리자 admin@admin 계정을 admin(으)로 변경했습니다.`가 나옵니다. 브라우저에서 ALB 주소로 접속해 `admin` / `admin`으로 로그인하고 기존 데이터·댓글·첨부파일이 보이는지 확인합니다.
+
+### 6. 정리
+
+며칠 운영해 문제가 없으면 예전 폴더 `/srv/coc-dashboard/data/postgres-restored`, `media-restored`는 지워도 됩니다. 지우기 전에 스냅샷이 있는지 한 번 더 확인합니다.
+
+[Docker 볼륨 설명](https://docs.docker.com/engine/storage/volumes/)

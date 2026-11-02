@@ -24,16 +24,18 @@ jobs:
       # action은 v4.2.2의 커밋으로 고정했습니다.
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      # runner는 매번 새로 생성되므로 예시 환경값으로 빌드만 확인합니다.
-      - name: Prepare example environment
-        run: cp .env.example .env
+      # 실제 .env는 Git에 없으므로 빌드 검사용 임시 값만 만듭니다.
+      - name: Prepare CI environment
+        run: |
+          cat > .env <<'EOF'
+          POSTGRES_DB=coc_dashboard
+          POSTGRES_USER=coc
+          POSTGRES_PASSWORD=ci-only-password
+          DJANGO_SECRET_KEY=ci-only-secret-key-not-used-anywhere-else
+          EOF
       # 파일 문법, 필수 환경변수, 이미지 버전 참조가 올바른지 확인합니다.
       - name: Validate Compose configuration
         run: docker compose config --quiet
-      - name: Validate EC2 data path configuration
-        run: docker compose -f compose.yaml -f compose.ec2.yaml config --quiet
-      - name: Check deployment safety guards
-        run: python3 -m unittest tools.test_deploy
       # frontend/backend 이미지가 만들어지는지만 확인합니다.
       - name: Build application images
         run: docker compose build

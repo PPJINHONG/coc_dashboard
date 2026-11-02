@@ -1,6 +1,6 @@
+# .env는 Git에 올리지 않고 팀이 직접 공유합니다. 로컬·EC2 모두 같은 내용을 사용합니다.
 .env
 .env.*
-!.env.example
 node_modules/
 dist/
 coverage/

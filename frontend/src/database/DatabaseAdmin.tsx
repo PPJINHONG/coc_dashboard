@@ -14,7 +14,7 @@ import "./database.css";
 
 export function AdminLogin({ onSuccess }: { onSuccess?: () => void }) {
   const { login } = useAuth();
-  const [username, setUsername] = useState("admin@admin"),
+  const [username, setUsername] = useState("admin"),
     [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<string | null>(null);
@@ -50,7 +50,7 @@ export function AdminLogin({ onSuccess }: { onSuccess?: () => void }) {
           <AccountField
             id="db-admin-email"
             label="관리자 아이디"
-            type="email"
+            type="text"
             autoComplete="username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}

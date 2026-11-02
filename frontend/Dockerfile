@@ -1,4 +1,4 @@
-# 공통 버전 파일에서 전달받습니다. Dockerfile에 버전 숫자를 중복하지 않습니다.
+# 이미지 버전은 compose.yaml에서 전달받습니다. Dockerfile에 버전 숫자를 중복하지 않습니다.
 ARG NODE_IMAGE
 ARG NGINX_IMAGE
 # 빌드 단계: npm lock 파일에 고정된 의존성으로 React 정적 파일을 만듭니다.

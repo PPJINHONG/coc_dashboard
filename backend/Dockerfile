@@ -1,4 +1,4 @@
-# 공통 이미지 버전은 .env에서 전달합니다.
+# 이미지 버전은 compose.yaml에서 전달합니다.
 ARG PYTHON_IMAGE
 FROM ${PYTHON_IMAGE}
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
