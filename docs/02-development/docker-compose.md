@@ -102,4 +102,4 @@ docker compose down
 
 `docker compose down -v`는 쓰지 않습니다. `-v`를 붙이면 DB·첨부파일 볼륨까지 삭제됩니다.
 
-EC2도 같은 명령으로 배포합니다. [EC2 배포](ec2-deployment.md)를 참고하세요.
+EC2는 운영 전용 `compose.prod.yaml`을 `-f`로 지정해 같은 방식으로 배포하며, 데이터는 Docker 볼륨 대신 `/srv_db`에 저장합니다. [EC2 배포](ec2-deployment.md)를 참고하세요.

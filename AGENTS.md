@@ -9,10 +9,10 @@
 
 ## 프로젝트 설정
 
-- 설정은 `.env` 하나, 실행 구성과 이미지 버전은 `compose.yaml` 하나에서 관리한다. 로컬과 EC2는 같은 `.env` 내용을 사용하며 `.env`는 Git에 올리지 않고 팀이 직접 공유한다. `.env.example`, `compose.ec2.yaml`, `tools/deploy.py`는 사용자 요청으로 제거했다.
+- 설정은 `.env` 하나, 실행 구성과 이미지 버전은 `compose.yaml`에서 관리한다. EC2 운영은 별도 전체 파일 `compose.prod.yaml`(프로젝트 이름 `coc-dashboard-prod`, 데이터 `/srv_db`)을 `docker compose -f compose.prod.yaml`로 실행한다. 서비스 설정을 바꾸면 `compose.yaml`과 `compose.prod.yaml`을 함께 맞춘다. 로컬과 EC2는 같은 `.env` 내용을 사용하며 `.env`는 Git에 올리지 않고 팀이 직접 공유한다. `.env.example`, `compose.ec2.yaml`, `tools/deploy.py`는 사용자 요청으로 제거했다.
 - 실제 비밀번호·키·토큰은 출력하거나 Git·문서·보고에 포함하지 않는다. 설정 확인에는 `docker compose config --quiet`를 사용한다.
 - 환경변수를 바꾸면 사용 코드/Compose, CI의 임시 `.env`, [설정 문서](docs/02-development/configuration.md)를 함께 맞춘다. 터미널의 환경변수가 `.env`보다 우선할 수 있다.
-- DB·첨부파일은 고정 이름 Docker 볼륨 `coc-dashboard_postgres_data`, `coc-dashboard_media_data`에 보관한다. 배포는 로컬·EC2 모두 `git pull` → `docker compose down` → `docker compose up --build -d`이며 별도 백업 도구는 쓰지 않는다(EC2 백업은 AWS 스냅샷). Git에는 업무 데이터를 넣지 않는다.
+- DB·첨부파일은 로컬은 고정 이름 Docker 볼륨 `coc-dashboard_postgres_data`, `coc-dashboard_media_data`, EC2는 `/srv_db/postgres`, `/srv_db/media`에 보관한다. 배포는 `git pull` → `down` → `up --build -d`(EC2는 `-f compose.prod.yaml`)이며 별도 백업 도구는 쓰지 않는다(EC2 백업은 AWS 스냅샷). Git에는 업무 데이터를 넣지 않는다.
 - backend 시작 시 `ensure_admin`이 `admin` 계정이 없을 때만 `admin`/`admin` 관리자를 만든다(기존 `admin@admin`은 `admin`으로 변경). `admin`만 @ 없는 아이디를 허용한다.
 
 ## 로컬 Docker 반영

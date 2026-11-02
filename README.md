@@ -33,7 +33,7 @@ docker compose up --build -d
 
 Docker Desktop이 실행 중이어야 합니다. 처음 실행하면 빈 DB가 만들어지고 관리자 계정 `admin` / `admin`이 생깁니다. 업무 데이터는 Git에 포함하지 않습니다.
 
-코드를 수정하거나 새 코드를 받은 뒤에는 로컬과 EC2 모두 같은 방법으로 반영합니다. DB·첨부파일은 Docker 볼륨에 남아 있으므로 그대로 유지됩니다. `-v`는 붙이지 않습니다.
+코드를 수정하거나 새 코드를 받은 뒤에는 아래처럼 반영합니다. DB·첨부파일은 로컬은 Docker 볼륨에 남아 있으므로 그대로 유지됩니다. `-v`는 붙이지 않습니다. EC2는 운영 전용 `compose.prod.yaml`을 `-f`로 지정하며 데이터는 `/srv_db`에 저장됩니다.
 
 ```bash
 git pull --ff-only origin main

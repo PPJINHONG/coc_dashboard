@@ -9,7 +9,10 @@
 | 파일 | 용도 | GitHub에 올리나요? |
 | --- | --- | --- |
 | `.env` | 비밀번호·키·접속 주소. 로컬과 EC2가 같은 내용을 사용 | 아니요. 팀이 직접 공유 |
-| `compose.yaml` | 실행할 프로그램, 이미지 버전, 데이터 볼륨 | 예 |
+| `compose.yaml` | 로컬(개발) 실행 파일. 이미지 버전, 데이터는 Docker 볼륨 | 예 |
+| `compose.prod.yaml` | EC2 운영 실행 파일. 데이터는 `/srv_db`. `-f compose.prod.yaml`로 사용 | 예 |
+
+서비스 설정(이미지 버전, 환경변수, 포트 등)을 바꿀 때는 `compose.yaml`과 `compose.prod.yaml`을 함께 바꿉니다.
 
 `.env`를 바꾸면 로컬과 EC2의 `.env`를 같이 바꿉니다.
 
