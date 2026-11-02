@@ -1,0 +1,81 @@
+# 운영(EC2) 전용 실행 파일입니다. 로컬은 compose.yaml을 사용합니다.
+# EC2 배포: git pull 후
+#   docker compose -f compose.prod.yaml down
+#   docker compose -f compose.prod.yaml up --build -d
+# DB·첨부파일은 EC2의 /srv_db에 저장되므로 재배포해도 그대로 남습니다.
+# compose.yaml과 다른 점: 프로젝트 이름, 데이터 저장 위치(/srv_db). 나머지를 바꿀 때는 두 파일을 함께 바꿉니다.
+# 프로젝트 이름이 달라서, 실수로 -f 없이 up 하면 포트 충돌로 실패하고 운영 컨테이너는 그대로 둡니다.
+name: coc-dashboard-prod
+
+services:
+  db:
+    # PostgreSQL 17 계열 유지. 메이저 버전 변경은 별도 데이터 이전 작업이 필요합니다.
+    image: postgres:17.11-bookworm@sha256:3645570cccdfa447589da9f57dd740faa29b30938e861289a5574b6ca6b03826
+    restart: unless-stopped
+    stop_grace_period: 60s
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      # DB 파일을 EC2의 /srv_db/postgres에 저장합니다.
+      - type: bind
+        source: /srv_db/postgres
+        target: /var/lib/postgresql/data
+        bind:
+          # 폴더가 없으면(디스크 미연결 등) 빈 DB를 새로 만들지 않고 실행을 멈춥니다.
+          create_host_path: false
+      # 빈 DB로 처음 시작할 때 테이블·뷰 구조만 생성합니다.
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+
+  backend:
+    restart: unless-stopped
+    stop_grace_period: 60s
+    build:
+      context: ./backend
+      args:
+        PYTHON_IMAGE: python:3.13.16-slim-bookworm@sha256:a1165e272e578941b84abc79e4ab38a0305cd12803a5c4247979ac7655f4d641
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DEVELOPMENT_AUTH_BYPASS: ${DEVELOPMENT_AUTH_BYPASS:-false}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      # 게시판 첨부파일을 EC2의 /srv_db/media에 저장합니다.
+      - type: bind
+        source: /srv_db/media
+        target: /app/media
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/auth/csrf/', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  frontend:
+    restart: unless-stopped
+    build:
+      context: ./frontend
+      args:
+        NODE_IMAGE: node:24.21.0-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
+        NGINX_IMAGE: nginx:1.30.5-alpine3.24@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94
+    ports:
+      - "${FRONTEND_BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
