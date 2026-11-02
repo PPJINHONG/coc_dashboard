@@ -37,7 +37,7 @@ def test_anonymous_and_non_admin_cannot_access_even_in_development(path):
 @pytest.mark.django_db
 def test_catalog_only_lists_website_tables_and_raw_data_is_readonly(client):
     names = {table['name'] for table in client.get(ROOT).data['tables']}
-    assert names == {'auth_user', 'ops_regions', 'ops_services', 'ops_staff_members', 'infra_resources', 'ops_staff_assignments', 'ops_work_summaries', 'ops_regional_issues', 'ops_issue_comments'}
+    assert names == {'auth_user', 'ops_regions', 'ops_services', 'ops_staff_members', 'infra_resources', 'ops_staff_assignments', 'ops_work_summaries', 'ops_regional_issues', 'ops_issue_comments', 'user_activity_logs'}
     for name in ('django_session', 'django_migrations', 'auth_permission', 'core_post', 'ops_data_state'):
         assert client.get(ROOT + f'tables/{name}/').status_code == 404
     meta = client.get(ROOT + 'tables/ops_regions/').data

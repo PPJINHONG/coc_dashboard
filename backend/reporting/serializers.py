@@ -77,21 +77,38 @@ class WorkSerializer(RowSerializer):
         return data
 
 
+def _can_edit(serializer, author_username):
+    # 아이디는 응답에 넣지 않고, 요청한 사용자가 수정·삭제할 수 있는지만 알려 줍니다.
+    from core.roles import can_modify
+
+    request = serializer.context.get('request')
+    return bool(request and can_modify(request.user, author_username))
+
+
 class CommentSerializer(serializers.ModelSerializer):
+    can_edit = serializers.SerializerMethodField()
+
     class Meta:
         model = IssueComment
-        fields = ['id', 'author_name', 'content', 'created_at']
+        fields = ['id', 'author_name', 'content', 'created_at', 'can_edit']
         read_only_fields = fields
+
+    def get_can_edit(self, obj):
+        return _can_edit(self, obj.author_username)
 
 
 class IssueSerializer(RowSerializer):
     owner_name = serializers.CharField(source='owner.staff_name', read_only=True, default='')
     comments = CommentSerializer(many=True, read_only=True)
+    can_edit = serializers.SerializerMethodField()
 
     class Meta(RowSerializer.Meta):
         model = RegionalIssue
-        fields = ['id', 'region', 'title', 'description', 'severity', 'status', 'progress_percent', 'owner', 'owner_name', 'next_action', 'comments', 'updated_at']
-        read_only_fields = ['updated_at']
+        fields = ['id', 'region', 'title', 'description', 'severity', 'status', 'progress_percent', 'owner', 'owner_name', 'next_action', 'author_name', 'comments', 'updated_at', 'can_edit']
+        read_only_fields = ['updated_at', 'author_name']
+
+    def get_can_edit(self, obj):
+        return _can_edit(self, obj.author_username)
 
     def validate(self, data):
         progress = data.get('progress_percent', 0)

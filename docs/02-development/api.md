@@ -38,7 +38,11 @@ DB 조회 실패 시 응답에는 `error` 항목이 나오고 자세한 오류�
 | --- | --- | --- |
 | `/api/auth/csrf/` | GET | 쓰기 요청에 필요한 `csrftoken` 쿠키 발급 (`204`) |
 | `/api/auth/login/` | POST | `{username, password}`로 로그인. 실패 시 `401` |
-| `/api/auth/register/` | POST | `{name, username, password}`로 회원가입 후 자동 로그인 (`201`) |
+| `/api/auth/register/` | POST | `{name, username, password, invite}`로 회원가입 후 자동 로그인 (`201`). 유효한 초대 토큰이 없으면 `400` (`invite` 항목) |
+| `/api/auth/invites/{token}/` | GET | 비로그인 확인용. 초대가 유효하면 `{status, inviter_name, expires_at}`, 아니면 `404`와 사유(`missing`·`revoked`·`expired`·`used_up`) |
+| `/api/invites/` | GET, POST | 내가 만든 초대 링크 목록(관리자는 전체)·발급. 발급 응답에만 토큰 원문 `token`이 들어 있음. 옵저버의 발급은 `403` |
+| `/api/invites/options/` | GET | 내 권한으로 고를 수 있는 `expires_days`·`max_uses` 목록과 기본값 |
+| `/api/invites/{id}/revoke/` | POST | 초대 링크 취소. 만든 사람이나 관리자만 가능하며, 다른 사람의 링크는 `404`, 옵저버는 `403` |
 | `/api/auth/logout/` | POST | 로그아웃 (`204`) |
 | `/api/me/` | GET | 내 정보 조회 전용. 계정 수정은 관리자 DB 설정에서 처리 |
 | `/api/board/posts/` | GET, POST | 글 목록(최신순)·작성. 제목·내용이 비면 `400` |
@@ -59,7 +63,12 @@ DB 조회 실패 시 응답에는 `error` 항목이 나오고 자세한 오류�
 
 ### 회원가입·회원정보 수정 항목
 
-- 가입 입력은 `name`(이름), `username`(이메일 형식 아이디), `password` 세 가지입니다. 이름과 아이디는 최대 150자입니다.
+- 회원가입은 초대 링크로만 할 수 있습니다. 로그인한 팀원은 누구나 화면 왼쪽의 "팀원 초대"에서 링크를 만들 수 있고, 관리자 승인은 필요 없습니다. 링크 형식은 `https://<사이트>/?invite=<토큰>`입니다.
+- 초대 기간과 가입 인원은 권한에 따라 다릅니다. 일반 팀원은 1일·10명 링크만 만들 수 있고, 관리자는 기간 1·7·30일과 인원 50·100·200명 중에서 고릅니다(기본 7일·50명). 한 번에 많은 인원이 가입해야 할 때는 관리자가 최대 200명 링크를 만듭니다. 선택지는 `GET /api/invites/options/`가 알려 주며, 권한 밖 값으로 발급하면 `400`입니다. 기간이 지나거나 인원이 차거나 취소된 링크로는 가입할 수 없습니다.
+- 토큰은 SHA-256 해시로만 저장하므로(`auth_invites.token_hash`) 링크는 만들 때 한 번만 복사할 수 있습니다. 목록에는 토큰 끝 4자리만 표시합니다. 누가 어떤 링크로 가입했는지는 `auth_invite_uses`에 남습니다.
+- 가입 입력이 틀려 실패하면 초대 사용 횟수는 줄지 않습니다. 가입과 사용 횟수 증가는 한 트랜잭션에서 초대 행을 잠근 채 처리합니다.
+- `auth_invites`·`auth_invite_uses`는 `auth_user`를 참조하므로 init SQL 대신 backend 시작 시 Django `invites/0001_initial`로 생성합니다.
+- 가입 입력은 `name`(이름), `username`(이메일 형식 아이디), `password`, `invite`(초대 토큰) 네 가지입니다. 이름과 아이디는 최대 150자입니다.
 - 아이디는 공백을 제거하고 소문자로 저장하며, 대소문자를 구분하지 않고 기존 아이디·이메일과 중복을 검사합니다. 가입 시 `auth_user.username`과 `auth_user.email`에 같은 값을 저장합니다. 기존 계정은 삭제하거나 일괄 변경하지 않습니다.
 - 비밀번호는 8~128자이며, 흔한 비밀번호·숫자만 있는 비밀번호·회원정보와 너무 비슷한 비밀번호를 거절합니다. DB에는 Django 비밀번호 해시만 저장합니다.
 - 가입·로그인·내 정보 응답은 `{id, name, username, email, date_joined, is_staff}`입니다. 비밀번호와 현재 비밀번호는 응답에 포함하지 않습니다.

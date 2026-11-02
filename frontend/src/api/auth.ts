@@ -7,12 +7,15 @@ export interface User {
   email: string;
   date_joined: string;
   is_staff: boolean;
+  /** admin: 관리자, observer: 옵저버(읽기 전용), user: 사용자 */
+  role?: 'admin' | 'observer' | 'user' | null;
 }
 
 export interface Registration {
   name: string;
   username: string;
   password: string;
+  invite: string;
 }
 
 export type UserUpdate = Partial<Pick<User, 'name' | 'username'>> & {

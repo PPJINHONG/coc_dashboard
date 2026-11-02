@@ -10,6 +10,7 @@ TABLE_LABELS = {
     'ops_staff_members': '인력 기준정보', 'infra_resources': '인프라 자원·호스트 수량',
     'ops_staff_assignments': '운영 인력 배치', 'ops_work_summaries': '운영 작업',
     'ops_regional_issues': '리전 이슈·조치', 'ops_issue_comments': '이슈 댓글',
+    'user_activity_logs': '사용자 행동 이력',
 }
 SENSITIVE = re.compile(r'password|passwd|secret|token|session|api_key|credential', re.I)
 

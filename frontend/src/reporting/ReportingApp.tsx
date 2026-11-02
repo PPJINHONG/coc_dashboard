@@ -16,6 +16,7 @@ import { errorMessage, LogList, Modal } from "./components";
 import HomePage, { FEATURES } from "./HomePage";
 import InfrastructureView from "./InfrastructureView";
 import TabPreferences from "./TabPreferences";
+import InviteDialog from "./InviteDialog";
 import SectionView from "./SectionView";
 import Report from "./Report";
 import "./reporting.css";
@@ -42,6 +43,7 @@ export default function ReportingApp() {
     [error, setError] = useState<string | null>(null);
   const [adminLogin, setAdminLogin] = useState(false),
     [manageTabs, setManageTabs] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [confirm, setConfirm] = useState<(() => void) | null>(null);
   const refresh = useCallback(async () => {
     const [bootstrap, current] = await Promise.all([
@@ -199,6 +201,17 @@ export default function ReportingApp() {
           </nav>
         )}
         <div className="sidebar-utilities">
+          {user && user.role !== "observer" && (
+            <button
+              className="nav-item"
+              disabled={busy}
+              onClick={() => setInviteOpen(true)}
+              title={collapsed ? "팀원 초대" : undefined}
+            >
+              <Icon name="users" size={18} />
+              <span>팀원 초대</span>
+            </button>
+          )}
           <button
             className="nav-item"
             disabled={busy || dirty}
@@ -232,7 +245,9 @@ export default function ReportingApp() {
             </button>
             <div>
               <strong>{user?.name || "Visitor"}</strong>
-              <small>{user?.is_staff ? "관리자" : "사용자"}</small>
+              <small>
+                {user?.is_staff ? "관리자" : user?.role === "observer" ? "옵저버(읽기 전용)" : "사용자"}
+              </small>
             </div>
             <button
               className="icon-button borderless"
@@ -363,6 +378,8 @@ export default function ReportingApp() {
                 section={section}
                 rows={snapshot[section]}
                 data={data}
+                canWrite={Boolean(user) && user?.role !== "observer"}
+                onChanged={refresh}
               />
             </>
           )}
@@ -394,6 +411,7 @@ export default function ReportingApp() {
           )}
         </main>
       </div>
+      {inviteOpen && <InviteDialog onClose={() => setInviteOpen(false)} />}
       {manageTabs && (
         <TabPreferences
           preference={preference}
