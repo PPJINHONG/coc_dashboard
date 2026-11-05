@@ -28,7 +28,7 @@ def base(db):
 
 
 def resource(**values):
-    return {'region': 101, 'service': 'TEST', 'environment_name': 'Core', 'host_count': 12, 'vm_count': None, **values}
+    return {'region': 101, 'service': 'TEST', 'host_count': 12, 'vm_count': None, **values}
 
 
 def save(client, section, rows, revision=0):
@@ -196,16 +196,32 @@ def test_old_non_db_write_routes_removed_for_admin_as_well(client, base):
 
 
 @pytest.mark.django_db
-def test_storage_rack_is_only_rack_field_and_aggregate(client, base):
+def test_compute_and_storage_rack_fields(client, base):
     assert save(client, 'resources', [resource(storage_count=7)]).status_code == 200
     snapshot = client.get(ROOT + 'current/').data
     assert snapshot['totals']['storage'] == 7
     assert snapshot['totals']['missing_storage_rows'] == 0
-    assert 'compute_racks' not in snapshot['totals']
-    assert 'compute_rack_count' not in snapshot['resources'][0]
+    assert snapshot['resources'][0]['compute_rack_count'] is None
+    row = {key: value for key, value in snapshot['resources'][0].items() if key != 'updated_at'}
+    assert save(client, 'resources', [{**row, 'compute_rack_count': 4}], 1).status_code == 200
+    assert client.get(ROOT + 'current/').data['resources'][0]['compute_rack_count'] == 4
+    assert save(client, 'resources', [{**row, 'compute_rack_count': -1}], 2).status_code == 400
     with connection.cursor() as cursor:
         columns = connection.introspection.get_table_description(cursor, 'infra_resources')
-    assert 'compute_rack_count' not in {column.name for column in columns}
+    assert {'compute_rack_count', 'storage_count'} <= {column.name for column in columns}
+
+
+@pytest.mark.django_db
+def test_region_global_region_is_derived_from_country(base):
+    for name, code in [('국내', 'KR'), ('중국', 'CN'), ('유럽 리전', 'EU'), ('북미 리전', 'NA'), ('기타', 'JP')]:
+        Region.objects.create(region_name=name, country_code=code)
+    values = dict(Region.objects.values_list('country_code', 'global_region'))
+    assert values == {'KR': '내수', 'CN': '내수', 'EU': '유럽', 'NA': '북미', 'JP': None}
+    region = Region.objects.get(country_code='JP')
+    region.country_code = 'EU'
+    region.save()
+    region.refresh_from_db()
+    assert region.global_region == '유럽'
 
 
 @pytest.mark.django_db
@@ -225,25 +241,32 @@ def test_current_columns_and_staff_job_fields(client, base):
     assert not {'region_code', 'role', 'status', 'work_mode', 'remarks'} & staff_columns
     assert 'country_code' in staff_columns
     assert 'display_order' not in region_columns
-    assert {'environment_name', 'storage_count'} <= infra_columns
-    assert not {'zone_name', 'storage_rack_count'} & infra_columns
+    assert 'storage_count' in infra_columns
+    assert not {'zone_name', 'storage_rack_count', 'environment_name'} & infra_columns
+    with connection.cursor() as cursor:
+        constraints = connection.introspection.get_constraints(cursor, 'infra_resources')
+    assert constraints['unique_current_resource_service']['columns'] == ['region_id', 'service_code']
+    assert 'unique_current_resource_environment' not in constraints
 
 
 @pytest.mark.django_db
-def test_old_client_resource_columns_are_rejected_without_mutation(client, base):
-    response = save(client, 'resources', [{'region': 101, 'service': 'TEST', 'zone_name': 'Old', 'storage_rack_count': 7}])
+@pytest.mark.parametrize('retired', [{'zone_name': 'Old', 'storage_rack_count': 7}, {'environment_name': '운영'}])
+def test_old_client_resource_columns_are_rejected_without_mutation(client, base, retired):
+    response = save(client, 'resources', [{'region': 101, 'service': 'TEST', **retired}])
     assert response.status_code == 400
     assert not InfrastructureResource.objects.exists()
 
 
 @pytest.mark.django_db
-def test_copied_resource_can_save_as_new_environment_and_duplicates_are_atomic(client, base):
+def test_copied_resource_can_save_as_new_service_and_duplicates_are_atomic(client, base):
+    Service.objects.create(service_code='SECOND', service_name='두 번째 서비스')
     assert save(client, 'resources', [resource(storage_count=3)]).status_code == 200
     original = client.get(ROOT + 'current/').data['resources'][0]
+    assert 'environment_name' not in original
     copy = {key: value for key, value in original.items() if key not in ('id', 'updated_at')}
     assert save(client, 'resources', [original, copy], 1).status_code == 400
     assert InfrastructureResource.objects.count() == 1
-    copy['environment_name'] = '검증'
+    copy['service'] = 'SECOND'
     assert save(client, 'resources', [original, copy], 1).status_code == 200
     assert InfrastructureResource.objects.count() == 2
     assert client.get(ROOT + 'current/').data['totals']['storage'] == 6

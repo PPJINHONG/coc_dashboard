@@ -4,7 +4,7 @@ from .models import ChangeLog, DataState, InfrastructureResource, RegionalIssue,
 from .serializers import IssueSerializer, ResourceSerializer, StaffSerializer, WorkSerializer
 
 SECTIONS = {
-    'resources': (InfrastructureResource, ResourceSerializer, ('region', 'service', 'environment_name')),
+    'resources': (InfrastructureResource, ResourceSerializer, ('region', 'service')),
     'staff': (StaffAssignment, StaffSerializer, ('staff',)),
     'work': (WorkSummary, WorkSerializer, ('region', 'work_type', 'scope')),
     'issues': (RegionalIssue, IssueSerializer, ()),

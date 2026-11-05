@@ -7,22 +7,23 @@ import { exportCsv } from "./config";
 type SortKey =
   | "region"
   | "service"
-  | "environment_name"
   | "host_count"
   | "vm_count"
+  | "compute_rack_count"
   | "storage_count"
   | "remarks"
   | "updated_at";
 const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
   { key: "region", label: "리전" },
   { key: "service", label: "서비스" },
-  { key: "environment_name", label: "환경" },
   { key: "host_count", label: "Host", numeric: true },
   { key: "vm_count", label: "VM", numeric: true },
-  { key: "storage_count", label: "Storage", numeric: true },
+  { key: "compute_rack_count", label: "Compute Rack", numeric: true },
+  { key: "storage_count", label: "Storage Rack", numeric: true },
   { key: "remarks", label: "비고" },
   { key: "updated_at", label: "업데이트" },
 ];
+const QUANTITY_KEYS = ["host_count", "vm_count", "compute_rack_count", "storage_count"] as const;
 const number = (value: unknown) =>
   value === null || value === undefined
     ? "—"
@@ -65,16 +66,23 @@ export default function InfrastructureView({
       rows.map((row) => regionInfo(row.region)?.country_code).filter(Boolean),
     ),
   ] as string[];
+  // 국가 탭은 상단 그래프와 자원 목록에 함께 적용합니다.
+  const countryRows = useMemo(
+    () =>
+      country
+        ? rows.filter((row) => regionInfo(row.region)?.country_code === country)
+        : rows,
+    [rows, data, country],
+  );
   const filtered = useMemo(
     () =>
-      rows
+      countryRows
         .filter(
           (row) =>
-            (!country || regionInfo(row.region)?.country_code === country) &&
             (!region || String(row.region) === region) &&
             (!service || row.service === service) &&
             (!query ||
-              `${regionName(row.region)} ${serviceName(row.service)} ${String(row.environment_name)} ${String(row.remarks)}`
+              `${regionName(row.region)} ${serviceName(row.service)} ${String(row.remarks)}`
                 .toLowerCase()
                 .includes(query.toLowerCase())),
         )
@@ -101,7 +109,7 @@ export default function InfrastructureView({
                 })) * direction
           );
         }),
-    [rows, data, country, region, service, query, sort, direction],
+    [countryRows, data, region, service, query, sort, direction],
   );
   const pages = Math.max(1, Math.ceil(filtered.length / limit));
   const currentPage = Math.min(page, pages - 1);
@@ -129,7 +137,7 @@ export default function InfrastructureView({
         <div>
           <span className="eyebrow">INFRASTRUCTURE</span>
           <h1>인프라 자원</h1>
-          <p>리전과 서비스별 컴퓨팅·스토리지 자원의 현재 현황입니다.</p>
+          <p>리전과 서비스별 컴퓨팅·Rack 자원의 현재 현황입니다.</p>
         </div>
         <button
           className="btn"
@@ -139,7 +147,45 @@ export default function InfrastructureView({
           CSV 내보내기
         </button>
       </header>
-      <InfrastructureSummary rows={rows} data={data} />
+      <div
+        className="inventory-country-tabs resource-country-tabs"
+        role="group"
+        aria-label="국가별 자원"
+      >
+        <button
+          type="button"
+          aria-pressed={!country}
+          onClick={() => {
+            setCountry("");
+            setRegion("");
+            setPage(0);
+          }}
+        >
+          전체 자원 <span>{rows.length}</span>
+        </button>
+        {countries.map((code) => (
+          <button
+            type="button"
+            key={code}
+            aria-pressed={country === code}
+            onClick={() => {
+              setCountry(code);
+              setRegion("");
+              setPage(0);
+            }}
+          >
+            {code}{" "}
+            <span>
+              {
+                rows.filter(
+                  (row) => regionInfo(row.region)?.country_code === code,
+                ).length
+              }
+            </span>
+          </button>
+        ))}
+      </div>
+      <InfrastructureSummary rows={countryRows} data={data} country={country} />
       <section className="inventory-panel panel">
         <header className="inventory-panel-heading">
           <div className="inventory-title">
@@ -211,52 +257,16 @@ export default function InfrastructureView({
             </div>
           </div>
         </header>
-        <div
-          className="inventory-country-tabs"
-          role="group"
-          aria-label="국가별 자원"
-        >
-          <button
-            aria-pressed={!country}
-            onClick={() => {
-              setCountry("");
-              setRegion("");
-              setPage(0);
-            }}
-          >
-            전체 자원 <span>{rows.length}</span>
-          </button>
-          {countries.map((code) => (
-            <button
-              key={code}
-              aria-pressed={country === code}
-              onClick={() => {
-                setCountry(code);
-                setRegion("");
-                setPage(0);
-              }}
-            >
-              {code}{" "}
-              <span>
-                {
-                  rows.filter(
-                    (row) => regionInfo(row.region)?.country_code === code,
-                  ).length
-                }
-              </span>
-            </button>
-          ))}
-        </div>
         <div className="inventory-grid-scroll">
           <table className="inventory-grid">
             <colgroup>
               <col className="gutter-col" />
               <col className="region-col" />
               <col className="service-col" />
-              <col className="zone-col" />
               <col className="number-col" />
               <col className="number-col" />
-              <col className="number-col" />
+              <col className="rack-col" />
+              <col className="rack-col" />
               <col className="remarks-col" />
               <col className="date-col" />
             </colgroup>
@@ -265,13 +275,15 @@ export default function InfrastructureView({
                 <th rowSpan={2} scope="col" className="grid-gutter">
                   #
                 </th>
-                <th colSpan={3} scope="colgroup">
+                <th colSpan={2} scope="colgroup">
                   리소스 위치
                 </th>
                 <th colSpan={2} scope="colgroup">
                   컴퓨팅
                 </th>
-                <th scope="colgroup">스토리지</th>
+                <th colSpan={2} scope="colgroup">
+                  Rack
+                </th>
                 <th colSpan={2} scope="colgroup">
                   운영 정보
                 </th>
@@ -325,8 +337,7 @@ export default function InfrastructureView({
                       {serviceName(row.service)}
                     </span>
                   </td>
-                  <td className="zone-cell">{String(row.environment_name)}</td>
-                  {["host_count", "vm_count", "storage_count"].map((key) => (
+                  {QUANTITY_KEYS.map((key) => (
                     <td
                       key={key}
                       className={`numeric ${row[key] == null ? "is-null" : ""}`}
@@ -362,10 +373,14 @@ export default function InfrastructureView({
               <tfoot>
                 <tr>
                   <th className="grid-gutter">합계</th>
-                  <td colSpan={3}>표시된 {filtered.length}개 자원 합계</td>
-                  <td className="numeric">{number(sum("host_count"))}</td>
-                  <td className="numeric">{number(sum("vm_count"))}</td>
-                  <td className="numeric">{number(sum("storage_count"))}</td>
+                  <td colSpan={2}>표시된 {filtered.length}개 자원 합계</td>
+                  {QUANTITY_KEYS.map((key) => (
+                    <td key={key} className="numeric">
+                      {filtered.some((row) => row[key] != null)
+                        ? number(sum(key))
+                        : "—"}
+                    </td>
+                  ))}
                   <td colSpan={2} className="total-note">
                     미입력 수량은 합계에서 제외
                   </td>

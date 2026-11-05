@@ -188,7 +188,7 @@ def test_region_generated_id_preserves_all_feature_links_when_renamed(client):
     assert isinstance(pk, int) and set(created.data) == {'id', 'region_name', 'country_code'}
     Service.objects.create(service_code='CCS', service_name='CCS')
     for revision, section, values in [
-        (1, 'resources', {'service': 'CCS', 'environment_name': '운영', 'host_count': 10}),
+        (1, 'resources', {'service': 'CCS', 'host_count': 10}),
         (2, 'work', {'work_type': 'request', 'scope': 'infra', 'total_count': 3}),
         (3, 'issues', {'title': '지역 이슈'}),
     ]:
@@ -201,7 +201,7 @@ def test_region_generated_id_preserves_all_feature_links_when_renamed(client):
     assert all(snapshot[section][0]['region'] == pk for section in ['resources', 'work', 'issues'])
     assert client.delete(ROOT + f'common/regions/{pk}/').status_code == 400
     meta = client.get(ROOT + 'tables/ops_regions/').data
-    assert {column['name'] for column in meta['columns']} == {'id', 'region_name', 'country_code'}
+    assert {column['name'] for column in meta['columns']} == {'id', 'region_name', 'country_code', 'global_region'}
     for table in ['infra_resources', 'ops_work_summaries', 'ops_regional_issues']:
         columns = {column['name'] for column in client.get(ROOT + f'tables/{table}/').data['columns']}
         assert 'region_id' in columns and 'region_code' not in columns

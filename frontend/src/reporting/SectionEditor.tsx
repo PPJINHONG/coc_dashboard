@@ -208,7 +208,7 @@ export default function SectionEditor({
           title={`${SECTION_LABELS[section]} 편집`}
           subtitle={
             section === "resources"
-              ? "VM·Storage의 빈 값은 미입력, 0은 실제 0개를 뜻합니다. 합계는 자동 계산합니다. 복사 후 리전·서비스·환경 조합을 변경해 주세요."
+              ? "VM·Compute Rack·Storage Rack의 빈 값은 미입력, 0은 실제 0개를 뜻합니다. 합계는 자동 계산합니다. 복사 후 리전·서비스 조합을 변경해 주세요."
               : "복사한 인력은 성명을, 작업은 리전·구분·대상을 선택하세요. 삭제한 행은 저장 시 반영됩니다."
           }
           action={

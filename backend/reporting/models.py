@@ -1,10 +1,23 @@
 from django.db import models
-from django.db.models import F, Q
+from django.db.models import Case, F, Q, Value, When
+
+# 전체 리전(내수·유럽·북미)은 국가 코드에서 DB가 자동 계산합니다. 아직 화면·API에서는 사용하지 않습니다.
+GLOBAL_REGION_EXPRESSION = Case(
+    When(country_code__in=['KR', 'CN'], then=Value('내수')),
+    When(country_code='EU', then=Value('유럽')),
+    When(country_code='NA', then=Value('북미')),
+    default=None,
+)
 
 
 class Region(models.Model):
     region_name = models.CharField(max_length=80, unique=True)
     country_code = models.CharField(max_length=10, default='KR', db_default='KR')
+    global_region = models.GeneratedField(
+        expression=GLOBAL_REGION_EXPRESSION,
+        output_field=models.CharField(max_length=10, null=True),
+        db_persist=True,
+    )
 
     class Meta:
         db_table = 'ops_regions'
@@ -52,17 +65,17 @@ class CurrentRow(models.Model):
 
 class InfrastructureResource(CurrentRow):
     service = models.ForeignKey(Service, db_column='service_code', on_delete=models.PROTECT)
-    environment_name = models.CharField(max_length=80, default='운영', db_default='운영')
     host_count = models.PositiveIntegerField(default=0, db_default=0)
     vm_count = models.PositiveIntegerField(null=True, blank=True)
-    storage_count = models.PositiveIntegerField(null=True, blank=True)
+    compute_rack_count = models.PositiveIntegerField(null=True, blank=True)
+    storage_count = models.PositiveIntegerField(null=True, blank=True)  # Storage Rack 수량
     remarks = models.TextField(blank=True, default='', db_default='')
 
     class Meta:
         db_table = 'infra_resources'
-        db_table_comment = '현재 인프라 자원: 리전·서비스·환경별 Host·VM·Storage 수량'
-        ordering = ['region_id', 'service_id', 'environment_name', 'id']
-        constraints = [models.UniqueConstraint(fields=['region', 'service', 'environment_name'], name='unique_current_resource_environment')]
+        db_table_comment = '현재 인프라 자원: 리전·서비스별 Host·VM·Compute Rack·Storage Rack 수량'
+        ordering = ['region_id', 'service_id', 'id']
+        constraints = [models.UniqueConstraint(fields=['region', 'service'], name='unique_current_resource_service')]
 
 
 class StaffAssignment(models.Model):
