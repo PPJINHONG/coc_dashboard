@@ -34,32 +34,53 @@ function ChartScroll({ label, children }: { label: string; children: ReactNode }
   );
 }
 
-const METRICS = [
-  { key: "host_count", label: "Host", tone: "host", unit: "대" },
-  { key: "vm_count", label: "VM", tone: "vm", unit: "대" },
+type Count = number | null;
+const field = (key: string) => (row: DataRow): Count =>
+  row[key] == null ? null : Number(row[key]);
+const computeRack = field("compute_rack_count");
+const storageRack = field("storage_count");
+// Rack은 Compute Rack + Storage Rack입니다. 둘 다 비어 있을 때만 미입력이며 한쪽만 비면 입력된 값만 더합니다.
+const rack = (row: DataRow): Count => {
+  const compute = computeRack(row);
+  const storage = storageRack(row);
+  return compute == null && storage == null ? null : (compute ?? 0) + (storage ?? 0);
+};
+const METRICS: {
+  key: string;
+  label: string;
+  tone: string;
+  unit: string;
+  value: (row: DataRow) => Count;
+  missing: (row: DataRow) => boolean;
+}[] = [
+  { key: "host", label: "Host", tone: "host", unit: "대", value: field("host_count"), missing: (row) => row.host_count == null },
+  { key: "vm", label: "VM", tone: "vm", unit: "대", value: field("vm_count"), missing: (row) => row.vm_count == null },
   {
-    key: "storage_count",
-    label: "Storage",
-    tone: "storage",
+    key: "rack",
+    label: "Rack",
+    tone: "rack",
     unit: "개",
+    value: rack,
+    missing: (row) => computeRack(row) == null || storageRack(row) == null,
   },
-] as const;
+];
 const number = (value: number) => value.toLocaleString("ko-KR");
 
 export default function InfrastructureSummary({
   rows,
   data,
+  country = "",
 }: {
   rows: DataRow[];
   data: Bootstrap;
+  country?: string;
 }) {
-  const sum = (items: DataRow[], key: string) =>
-    items.reduce((total, row) => total + Number(row[key] ?? 0), 0);
+  const sum = (items: DataRow[], value: (row: DataRow) => Count) =>
+    items.reduce((total, row) => total + (value(row) ?? 0), 0);
   const regions = [
-    ...data.regions.map((region) => ({
-      id: region.id,
-      name: region.region_name,
-    })),
+    ...data.regions
+      .filter((region) => !country || region.country_code === country)
+      .map((region) => ({ id: region.id, name: region.region_name })),
     ...[...new Set(rows.map((row) => row.region))]
       .filter(
         (id): id is number => id != null && !data.regions.some((region) => region.id === id),
@@ -73,17 +94,15 @@ export default function InfrastructureSummary({
           {METRICS.map((metric) => {
             const distribution = regions.map((region) => {
               const items = rows.filter((row) => row.region === region.id);
-              const known = items.filter((row) => row[metric.key] != null);
+              const known = items.filter((row) => metric.value(row) != null);
               return {
                 ...region,
                 count: items.length,
-                missing: items.length - known.length,
-                value: known.length ? sum(known, metric.key) : null,
+                missing: items.filter(metric.missing).length,
+                value: known.length ? sum(known, metric.value) : null,
               };
             });
-            const missing = rows.filter(
-              (row) => row[metric.key] == null,
-            ).length;
+            const missing = rows.filter(metric.missing).length;
             distribution.sort((a, b) => {
               if (a.value == null || b.value == null)
                 return a.value == null
@@ -98,9 +117,9 @@ export default function InfrastructureSummary({
               ...distribution.map((region) => region.value ?? 0),
             );
             const total =
-              rows.length > 0 && missing === rows.length
+              rows.length > 0 && rows.every((row) => metric.value(row) == null)
                 ? "—"
-                : number(sum(rows, metric.key));
+                : number(sum(rows, metric.value));
             return (
               <article
                 className={`resource-metric resource-metric-${metric.tone}`}

@@ -613,7 +613,7 @@
   --resource-cap: #347cc4;
   --resource-outline: #215c98;
 }
-.resource-metric-storage {
+.resource-metric-rack {
   --resource-cap: #7275bf;
   --resource-outline: #50549a;
 }
@@ -824,6 +824,27 @@
   border-radius: 3px;
   color: var(--muted);
 }
+.inventory-country-tabs button:hover {
+  color: var(--text);
+}
+.inventory-country-tabs button:focus-visible {
+  outline: 2px solid #496794;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+/* 국가 탭은 상단 그래프와 자원 목록을 함께 거르므로 그래프 위 페이지 폭에 둡니다. */
+.resource-country-tabs {
+  gap: 24px;
+  padding: 0;
+  margin: -12px 0 12px;
+}
+.resource-country-tabs button {
+  font-size: 12px;
+  padding: 6px 0 10px;
+}
+.resource-country-tabs button > span {
+  font-size: 9px;
+}
 .inventory-toolbar {
   display: flex;
   align-items: center;
@@ -887,8 +908,8 @@
 .inventory-grid .service-col {
   width: 100px;
 }
-.inventory-grid .zone-col {
-  width: 105px;
+.inventory-grid .rack-col {
+  width: 125px;
 }
 .inventory-grid .number-col {
   width: 95px;
@@ -1028,9 +1049,6 @@
 }
 .service-ccs i {
   background: #ac9bbf;
-}
-.zone-cell {
-  color: var(--grid-text);
 }
 .resource-remarks {
   color: var(--grid-text);
@@ -2027,6 +2045,9 @@
   .inventory-country-tabs {
     padding-inline: 15px;
     gap: 17px;
+  }
+  .resource-country-tabs {
+    padding-inline: 0;
   }
   .inventory-toolbar {
     padding: 0;

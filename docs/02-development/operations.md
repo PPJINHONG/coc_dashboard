@@ -6,10 +6,10 @@
 
 | 테이블 | 데이터 |
 | --- | --- |
-| `ops_regions` | 리전 이름·국가 (내부 숫자 ID로 연결) |
+| `ops_regions` | 리전 이름·국가·전체 리전(내수·유럽·북미, 자동 계산) (내부 숫자 ID로 연결) |
 | `ops_services` | 서비스 코드·이름 |
 | `ops_staff_members` | 인력 이름 (내부 ID로 연결) |
-| `infra_resources` | 리전·서비스·환경별 Host·VM·Storage 수량 |
+| `infra_resources` | 리전·서비스별 Host·VM·Compute Rack·Storage Rack 수량 |
 | `ops_staff_assignments` | 인력의 국가(KR·EU·NA)·직책·소속사·업무·근무지 |
 | `ops_work_summaries` | 현재 요청·변경·장애 작업 수량과 복구 시간 |
 | `ops_regional_issues` | 리전별 이슈·중요도·상태·담당자·조치 |
@@ -44,7 +44,7 @@
 
 로컬 VS Code PostgreSQL 확장: Host `127.0.0.1`, Port `.env`의 `POSTGRES_PORT`(기본 `5433`), Database/User/Password는 각각 `POSTGRES_DB`/`POSTGRES_USER`/`POSTGRES_PASSWORD`, Schema `public`, SSL 끄기. 웹 관리자 계정과 DB 접속 계정은 별개입니다. Docker 내부 주소는 `db:5432`입니다.
 
-Compute 랙은 화면·API·합계·실제 DB 열에서 제거했습니다. `0007_remove_compute_rack`은 기존 설치의 열과 값을 삭제하며 최신 init에 열이 없는 경우에도 안전하게 적용됩니다. 계정 조회 `/api/me/`는 GET만 제공하며 변경은 관리자 계정 설정에서 처리합니다.
+Compute 랙은 `0007_remove_compute_rack`으로 한 번 제거했다가 사용자 요청으로 `0016_rack_columns_global_region`에서 빈 `compute_rack_count` 열로 다시 추가했습니다. 이전에 삭제한 값은 복원하지 않습니다. 신규 설치에서는 0007이 init의 열을 지운 뒤 0016이 다시 만들어 최종 구조가 같아집니다. 계정 조회 `/api/me/`는 GET만 제공하며 변경은 관리자 계정 설정에서 처리합니다.
 
 리전·서비스·인력 공통데이터의 사용 상태(`is_active`)는 UI·API·DB에서 제거했습니다. 등록된 공통데이터는 그대로 선택 목록에 표시합니다. 로그인 계정의 `auth_user.is_active`는 인증을 위해 유지하며 인력 배치·이슈의 업무 진행 상태도 별도로 유지합니다.
 
@@ -79,6 +79,14 @@ Compute 랙은 화면·API·합계·실제 DB 열에서 제거했습니다. `000
 리전·인력의 내부 ID는 DB 원본 탭에서만 표시합니다. 일반 화면과 공통데이터에서는 이름으로 선택하며, API의 ID는 내부 연결에 사용합니다. 리전 이름을 수정해도 연결된 기능 데이터는 유지됩니다. 서비스 코드와 국가(KR·EU·NA 등) 코드는 별개로 유지합니다.
 
 변경 이력의 화면에서도 리전·인력 연결은 이름으로 표시하고 내부 ID와 폐기된 코드는 숨깁니다. 원본 감사 이력 JSON은 DB에서 변경하지 않습니다.
+
+## Rack 열과 전체 리전
+
+`0016_rack_columns_global_region`은 `infra_resources.compute_rack_count`(Compute Rack)를 빈 값으로 추가하고, 기존 `storage_count`는 값을 그대로 둔 채 Storage Rack으로 표시합니다. 인프라 화면은 두 값을 Rack 그룹의 두 열로 보여 주고, 상단 Rack 카드는 둘의 합계를 표시합니다. 둘 다 비어 있는 행만 미입력이며 한쪽만 비면 입력된 값만 더합니다.
+
+`0017_remove_resource_environment`는 사용자 요청으로 `infra_resources.environment_name`(환경) 열과 값을 삭제하고, 고유 조합을 `unique_current_resource_service`(리전·서비스)로 바꿉니다. 리전·서비스가 겹치는 행이 있으면 아무것도 지우지 않고 중단합니다. 데이터 버전을 올려 환경 열이 있던 편집 초안의 저장을 막고, 서버는 `environment_name`을 보내는 요청을 거절합니다. 신규 설치 init은 과거 마이그레이션 0011이 이 열을 참조하므로 열을 만든 뒤 0017에서 지웁니다. 로컬 삭제 전 백업은 `.artifacts/backups/`에 비공개로 보관합니다.
+
+`ops_regions.global_region`(전체 리전)은 `country_code`로 DB가 자동 계산하는 읽기 전용 생성 열입니다. KR·CN은 `내수`, EU는 `유럽`, NA는 `북미`이며 그 외 코드는 빈 값(NULL)입니다. 아직 화면·API에서는 사용하지 않고 DB 원본 탭에서만 보입니다. 새 국가 코드를 분류하려면 모델·마이그레이션·init의 계산식을 함께 바꿉니다.
 
 ## 관리자 변경 이력과 공통 글꼴
 

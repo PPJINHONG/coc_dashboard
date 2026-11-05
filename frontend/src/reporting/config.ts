@@ -83,12 +83,17 @@ export function fields(section: Section, data: Bootstrap): Field[] {
       return [
         region,
         service,
-        { key: "environment_name", label: "환경", default: "운영" },
         { key: "host_count", label: "Host", type: "number" },
         { key: "vm_count", label: "VM", type: "number", nullable: true },
         {
+          key: "compute_rack_count",
+          label: "Compute Rack",
+          type: "number",
+          nullable: true,
+        },
+        {
           key: "storage_count",
-          label: "Storage",
+          label: "Storage Rack",
           type: "number",
           nullable: true,
         },
