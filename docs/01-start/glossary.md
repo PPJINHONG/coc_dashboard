@@ -14,17 +14,22 @@
 | 프론트엔드 | 사용자가 보는 화면 부분 | `frontend/` |
 | 백엔드 | 화면 뒤에서 요청을 처리하는 서버 부분 | `backend/` |
 | DB, 데이터베이스 | 데이터를 저장하고 찾는 보관소 | PostgreSQL |
-| 테이블 / 행 / 열 | 데이터 표 / 한 건 / 항목 | `test` 표의 `id`, `message` |
+| 테이블 / 행 / 열 | 데이터 표 / 한 건 / 항목 | `ops_regions` 표의 `id`, `region_name` |
 | API | 프로그램이 데이터나 작업을 요청하는 창구 | `/api/operations/current/`에 조회 요청 |
 | 요청 / 응답 | 보내는 질문 / 돌아오는 결과 | 데이터 달라고 요청 → 목록 응답 |
 | GET | 데이터를 읽어 달라는 요청 방식 | 현재 조회 API에서 사용 |
-| JSON | 항목 이름과 값을 짝지어 적는 데이터 형식 | `{"message": "Hello"}` |
+| JSON | 항목 이름과 값을 짝지어 적는 데이터 형식 | `{"region_name": "KR가산"}` |
 | SQL | DB에 조회·생성 등을 요청하는 언어 | `SELECT`로 데이터 읽기 |
 | 포트 | 같은 컴퓨터에서 접속 대상을 구분하는 번호 | `localhost:8080`의 `8080` |
 | 환경변수 | 코드 밖에서 정해 주는 설정값 | DB 이름, 비밀번호 |
 | 패키지 / 의존성 | 프로젝트가 가져다 쓰는 다른 프로그램 | React, Django |
 | 빌드 | 코드를 실행할 수 있는 형태로 준비하는 과정 | 화면 파일과 Docker 이미지 만들기 |
 | 로그 | 실행 중 남긴 기록 | 실행 실패 이유 확인 |
+| 기능 폴더 | 기능 탭 하나의 화면·서버 코드를 모아 둔 폴더 | `frontend/src/features/resources/`, `backend/features/resources/` |
+| 공통 코드 | 여러 기능이 함께 쓰는 코드 | `frontend/src/app/`, `frontend/src/shared/`, `backend/core/`, `backend/reporting/` |
+| Django 앱 | 서버 코드를 나누는 단위. 앱마다 테이블과 마이그레이션을 따로 가짐 | `backend/features/issues/` |
+| 마이그레이션 | 테이블 구조 변경을 순서대로 적은 파일. 서버가 켜질 때 자동 적용 | `backend/features/issues/migrations/0001_initial.py` |
+| 테스트 | 기능이 예상대로 동작하는지 자동으로 확인하는 코드 | `docker compose exec backend pytest` |
 
 ## Docker에 나오는 말
 

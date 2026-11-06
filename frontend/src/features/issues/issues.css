@@ -1,0 +1,170 @@
+/* 리전 이슈: 이슈 카드·댓글·편집 카드. */
+.report-issue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 18px;
+}
+.report-sections > .report-issue-list {
+  padding: 0;
+}
+.report-issue {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-left: 3px solid #b8c3d4;
+  padding: 20px 22px;
+  border-radius: 8px;
+}
+.report-issue.severity-critical {
+  border-left-color: #d8b3b3;
+}
+.issue-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.report-issue h3 {
+  font-size: 14px;
+  font-weight: 550;
+  margin: 15px 0 9px;
+}
+.issue-description {
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  line-height: 1.9;
+}
+.issue-bottom {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 19px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.issue-bottom strong {
+  color: var(--muted);
+  font-weight: 550;
+}
+.issue-next {
+  background: #f6f9fb;
+  padding: 11px 13px;
+  font-size: 11px;
+  border-radius: 5px;
+  color: var(--muted);
+}
+.issue-next strong {
+  font-weight: 550;
+  color: var(--muted);
+  margin-right: 6px;
+}
+.issue-comments {
+  border-top: 1px solid var(--border);
+  margin-top: 18px;
+  padding-top: 12px;
+  font-size: 11px;
+}
+.issue-comments summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+.issue-comments article {
+  padding: 13px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.issue-comments time {
+  margin-left: 10px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.issue-comments article p {
+  margin: 7px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+}
+.issue-comments form {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 15px;
+}
+.issue-comments form button {
+  align-self: flex-end;
+}
+.issue-edit-list {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.issue-edit-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+}
+.issue-edit-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 17px;
+}
+.issue-edit-card h3 {
+  font-size: 13px;
+  margin: 0;
+  font-weight: 550;
+}
+.issue-edit-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 17px;
+}
+.issue-edit-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.issue-edit-fields .wide {
+  grid-column: 1/-1;
+}
+@media (max-width: 600px) {
+  .issue-edit-fields {
+    grid-template-columns: 1fr;
+  }
+}
+@media print {
+  .issue-comments form {
+    display: none !important;
+  }
+}
+
+/* 리전 이슈: 작성자 본인·관리자 수정·삭제 버튼 */
+.issue-card-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+.issue-comment-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 8px;
+}
+.issue-comments .issue-comment-edit {
+  margin-top: 8px;
+}
+.issue-comments .issue-comment-edit .actions {
+  justify-content: flex-end;
+}
+@media (max-width: 640px) {
+  .issue-card-actions {
+    margin-left: 0;
+  }
+}

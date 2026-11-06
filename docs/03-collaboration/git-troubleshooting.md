@@ -18,7 +18,7 @@ Merged여도 내 파일은 자동으로 바뀌지 않습니다. [내 브랜치�
 git restore --staged 파일경로
 ```
 
-편집한 파일 내용은 그대로 남습니다. 처음부터 일부 파일만 준비하려면 `git add frontend/src/App.tsx`처럼 경로를 지정할 수 있습니다.
+편집한 파일 내용은 그대로 남습니다. 처음부터 일부 파일만 준비하려면 `git add frontend/src/features/resources`처럼 경로를 지정할 수 있습니다.
 
 ## 3. `nothing to commit`이 나와요
 

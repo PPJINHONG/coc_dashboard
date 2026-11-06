@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+from features import discover as discover_features
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # 실제 설정은 .env에서 Compose를 통해 전달합니다.
@@ -12,16 +14,17 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
-# 기본 페이지를 제공하는 core 앱을 등록합니다.
-# 슬라이스1(세션 로그인·회원정보)에 필요한 Django 기본 인증/세션 앱을 추가합니다.
 INSTALLED_APPS = [
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
+    # 공통 앱: 로그인·권한(core), 운영 공통데이터(reporting), DB 관리(database_admin), 초대(invites)
     "core",
     "reporting",
     "database_admin",
     "invites",
+    # 기능 앱: backend/features/<이름>/apps.py가 있으면 자동으로 등록합니다.
+    *discover_features(),
     "rest_framework",
     "drf_spectacular",
 ]
@@ -58,7 +61,7 @@ CSRF_TRUSTED_ORIGINS = [
 ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
 
-# core/templates/ 안의 HTML 파일을 읽습니다.
+# Swagger 화면(/api/docs/) 템플릿을 읽습니다.
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -82,7 +85,7 @@ TIME_ZONE = "Asia/Seoul"
 USE_TZ = True
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# 개발 중에만 로그인 없이 운영 현황을 조회합니다. 데이터 저장은 관리자만 가능합니다. false로 바꾸면 기존 로그인을 복구합니다.
+# true면 로그인 없이 운영 현황을 조회합니다(개발용). 데이터 저장은 항상 실제 관리자만 가능합니다.
 DEVELOPMENT_AUTH_BYPASS = os.environ.get("DEVELOPMENT_AUTH_BYPASS", "false").lower() == "true"
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -92,5 +95,5 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-# 게시판 첨부 이미지 저장 위치입니다. 파일은 /api/board/images/<id>/ 로만 제공합니다.
+# 게시판(features/board) 첨부 이미지 저장 위치입니다. 파일은 /api/board/images/<id>/ 로만 제공합니다.
 MEDIA_ROOT = BASE_DIR / "media"

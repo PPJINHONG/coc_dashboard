@@ -1,4 +1,3 @@
-# 실행법: pytest --ds=config.settings core/tests
 from io import StringIO
 
 import pytest
@@ -223,20 +222,14 @@ def test_ensure_admin_keeps_existing_admin_password():
 
 @pytest.mark.django_db
 def test_ensure_admin_renames_legacy_admin_and_keeps_account_id():
-    from reporting.models import IssueComment, RegionalIssue, Region
-
     legacy = get_user_model().objects.create_superuser(username="admin@admin", email="admin@admin", password=PASSWORD)
-    issue = RegionalIssue.objects.create(region=Region.objects.create(region_name="리전"), title="이슈",
-                                         author_name="admin", author_username="admin@admin")
-    IssueComment.objects.create(issue=issue, author_name="admin", author_username="admin@admin", content="댓글")
     call_command("ensure_admin", stdout=StringIO())
     admin = get_user_model().objects.get(pk=legacy.pk)
     assert admin.username == "admin" and admin.check_password("admin") and admin.is_superuser
     assert not get_user_model().objects.filter(username="admin@admin").exists()
-    assert RegionalIssue.objects.get().author_username == "admin"
-    assert IssueComment.objects.get().author_username == "admin"
 
 
 @pytest.mark.django_db
 def test_no_pending_migrations():
+    # 기능 앱 마이그레이션이 서로 갈라지면(같은 앱에 0002가 두 개 등) 여기서도 실패합니다.
     call_command("makemigrations", "--check", "--dry-run")

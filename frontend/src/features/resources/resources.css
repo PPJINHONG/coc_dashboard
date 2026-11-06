@@ -1,0 +1,617 @@
+/* 인프라 자원: 국가 탭·리전별 지표 카드·자원 목록 표. */
+.resource-summary {
+  margin-bottom: 10px;
+}
+.resource-summary-scroll {
+  overflow-x: auto;
+  border: 1px solid #d5dce4;
+  border-radius: 10px;
+  background: #fff;
+}
+.resource-summary-charts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(310px, 1fr));
+}
+.resource-metric {
+  display: grid;
+  grid-template-columns: minmax(82px, 0.6fr) minmax(0, 1.4fr);
+  grid-template-rows: auto 1fr;
+  column-gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border-right: 1px solid #e0e5eb;
+}
+.resource-metric:last-child {
+  border-right: 0;
+}
+.resource-metric-host {
+  --resource-cap: #1e3857;
+  --resource-outline: #142c48;
+}
+.resource-metric-vm {
+  --resource-cap: #347cc4;
+  --resource-outline: #215c98;
+}
+.resource-metric-rack {
+  --resource-cap: #7275bf;
+  --resource-outline: #50549a;
+}
+.resource-metric-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 9px;
+  grid-column: 1;
+  grid-row: 1;
+}
+.resource-metric-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text);
+}
+.resource-metric-heading h2 i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--resource-cap);
+}
+.resource-summary-total {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  color: var(--text);
+}
+.resource-summary-total strong {
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.resource-summary-total > span {
+  font-size: 11px;
+}
+.resource-metric-note {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: end;
+  font-size: 11px;
+  color: var(--text);
+  margin: 8px 0 0;
+  line-height: 17px;
+}
+.resource-metric > .resource-chart-scroll {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: end;
+}
+.resource-chart-scroll {
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #9eb4cc #edf4f8;
+  padding-bottom: 3px;
+}
+.resource-chart-scroll:focus-visible {
+  outline: 2px solid var(--resource-cap);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.resource-location-chart {
+  display: grid;
+  gap: 6px;
+  padding: 0 2px;
+}
+.resource-location {
+  min-width: 52px;
+  padding-inline: 3px;
+}
+.resource-bar-track {
+  height: 78px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  padding-top: 18px;
+}
+.resource-bar {
+  position: relative;
+  width: 17px;
+  border: 1px solid var(--resource-outline);
+  border-bottom: 0;
+  border-radius: 4px 4px 2px 2px;
+  background: var(--resource-cap);
+  flex-shrink: 0;
+}
+.resource-bar-unknown {
+  width: 17px;
+  border: 0;
+  border-top: 1px dashed var(--resource-outline);
+  background: transparent;
+}
+.resource-bar-value {
+  display: block;
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 14px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.resource-bar-unknown .resource-bar-value {
+  font-size: 10px;
+}
+.resource-location-name {
+  display: block;
+  text-align: center;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--text);
+  padding-top: 6px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.resource-chart-empty {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: center;
+  margin: 12px 0;
+  font-size: 11px;
+  color: var(--text);
+}
+.inventory-panel {
+  overflow: hidden;
+  border-radius: 4px;
+}
+.inventory-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  padding: 10px 16px;
+}
+.inventory-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.inventory-panel-heading h2 {
+  font-size: 13px;
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.inventory-country-tabs {
+  display: flex;
+  gap: 23px;
+  padding: 0 16px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  border-bottom: 1px solid var(--border);
+}
+.inventory-country-tabs button {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 0 11px;
+  position: relative;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.inventory-country-tabs button[aria-pressed="true"] {
+  color: var(--text);
+  font-weight: 550;
+}
+.inventory-country-tabs button[aria-pressed="true"]:after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #496794;
+  border-radius: 2px;
+}
+.inventory-country-tabs button > span {
+  font-size: 8px;
+  min-width: 15px;
+  padding: 1px 4px;
+  background: #f1f4f6;
+  border-radius: 3px;
+  color: var(--muted);
+}
+.inventory-country-tabs button:hover {
+  color: var(--text);
+}
+.inventory-country-tabs button:focus-visible {
+  outline: 2px solid #496794;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+/* 국가 탭은 상단 그래프와 자원 목록을 함께 거르므로 그래프 위 페이지 폭에 둡니다. */
+.resource-country-tabs {
+  gap: 24px;
+  padding: 0;
+  margin: -12px 0 12px;
+}
+.resource-country-tabs button {
+  font-size: 12px;
+  padding: 6px 0 10px;
+}
+.resource-country-tabs button > span {
+  font-size: 9px;
+}
+.inventory-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  flex: 1 1 460px;
+  min-width: 0;
+  gap: 8px;
+  padding: 0;
+}
+.inventory-toolbar .search-control {
+  width: 310px;
+}
+.inventory-selects {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.inventory-selects > label {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  padding-left: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+}
+.inventory-selects select {
+  border: 0;
+  width: auto;
+  min-width: 100px;
+  max-width: 180px;
+  padding: 7px 24px 7px 0;
+  font-size: 11px;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+}
+.inventory-grid-scroll {
+  overflow: auto;
+  width: 100%;
+  max-height: none;
+}
+.inventory-grid {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  table-layout: fixed;
+  font-size: 13px;
+  color: var(--grid-text);
+  line-height: 18px;
+}
+.inventory-grid .gutter-col {
+  width: 40px;
+}
+.inventory-grid .region-col {
+  width: 145px;
+}
+.inventory-grid .service-col {
+  width: 100px;
+}
+.inventory-grid .rack-col {
+  width: 125px;
+}
+.inventory-grid .number-col {
+  width: 95px;
+}
+.inventory-grid .remarks-col {
+  width: 220px;
+}
+.inventory-grid .date-col {
+  width: 120px;
+}
+.inventory-grid th,
+.inventory-grid td {
+  border-right: 1px solid var(--grid-border);
+  border-bottom: 1px solid var(--grid-border);
+  padding: 5px 8px;
+  white-space: nowrap;
+  font-weight: 400;
+  height: var(--grid-row-height);
+}
+.inventory-grid th:last-child,
+.inventory-grid td:last-child {
+  border-right: 0;
+}
+.inventory-grid thead th {
+  position: sticky;
+  background: var(--grid-head);
+  color: var(--grid-label);
+  z-index: 2;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+}
+.inventory-grid .grid-groups th {
+  top: 0;
+  padding: 1px 8px;
+  border-top: 1px solid var(--grid-border);
+  color: var(--grid-label);
+  height: 22px;
+}
+.inventory-grid thead tr:nth-child(2) th {
+  top: 22px;
+}
+.inventory-grid thead th button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  width: 100%;
+  padding: 5px 8px;
+  color: inherit;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  line-height: 18px;
+}
+.inventory-grid thead th button:hover {
+  background: #e2edf4;
+}
+.inventory-grid thead th svg {
+  color: var(--text);
+}
+.inventory-grid thead th .sort-active {
+  color: var(--text);
+}
+.inventory-grid .grid-gutter {
+  color: var(--grid-label);
+  text-align: center;
+  background: var(--grid-head);
+  font-size: 12px;
+  padding: 0 8px;
+  width: 40px;
+  font-weight: 400;
+}
+.inventory-grid tbody tr:hover td,
+.inventory-grid tbody tr:hover th {
+  background: #f7fbfd;
+}
+.inventory-grid .numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--grid-text);
+}
+.inventory-grid .is-null {
+  color: var(--muted-2);
+}
+.resource-region {
+  height: var(--grid-row-height);
+}
+.resource-region .country-tag {
+  margin-right: 7px;
+  vertical-align: middle;
+}
+.country-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 23px;
+  height: 17px;
+  font-size: 9px;
+  font-weight: 600;
+  border-radius: 3px;
+  color: var(--text);
+  background: #eff4f9;
+  border: 1px solid var(--border);
+  border-color: #b9cbdd;
+}
+.country-cn {
+  background: #fcf4ed;
+  border-color: #d5c0a6;
+  color: var(--text);
+}
+.service-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: var(--grid-text);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  border-radius: 0;
+}
+.service-tag i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #81a6c2;
+  display: none;
+}
+.service-ccs {
+  color: var(--grid-text);
+  background: transparent;
+  border-color: var(--border);
+}
+.service-ccs i {
+  background: #ac9bbf;
+}
+.resource-remarks {
+  color: var(--grid-text);
+  font-size: 12px;
+}
+.resource-remarks > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.resource-date {
+  font-size: 12px;
+  color: var(--grid-label);
+  font-variant-numeric: tabular-nums;
+}
+.inventory-grid tfoot td,
+.inventory-grid tfoot th {
+  background: #f7fafc;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  font-size: 12px;
+  color: var(--grid-label);
+  border-bottom: 0;
+}
+.inventory-grid tfoot .numeric {
+  font-weight: 600;
+  color: var(--grid-text);
+  font-size: 13px;
+}
+.inventory-grid .total-note {
+  font-size: 11px;
+  color: var(--muted);
+}
+.inventory-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--muted);
+}
+.inventory-pagination strong {
+  font-weight: 500;
+  color: var(--muted);
+}
+.inventory-pagination > div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.inventory-pagination label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--muted);
+  margin-right: 10px;
+}
+.inventory-pagination select {
+  width: 63px;
+  padding: 4px 5px;
+  font-size: 10px;
+  min-height: 26px;
+  color: var(--muted);
+}
+.inventory-pagination .icon-button {
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  color: var(--muted);
+  border-color: var(--border);
+  border-radius: 5px;
+}
+.page-position {
+  min-width: 38px;
+  text-align: center;
+  font-size: 9px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.table-empty {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 10px;
+  padding: 40px 20px;
+  color: var(--muted);
+}
+.table-empty strong {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.table-empty span {
+  font-size: 11px;
+}
+@media (max-width: 1000px) {
+  .inventory-toolbar .search-control {
+    width: 250px;
+  }
+  .inventory-selects select {
+    min-width: 80px;
+  }
+}
+@media (max-width: 800px) {
+  .inventory-toolbar {
+    flex-wrap: wrap;
+  }
+  .inventory-toolbar .search-control {
+    width: 100%;
+  }
+  .inventory-selects {
+    margin-left: auto;
+  }
+}
+@media (max-width: 600px) {
+  .inventory-panel-heading {
+    padding-inline: 15px;
+  }
+  .inventory-country-tabs {
+    padding-inline: 15px;
+    gap: 17px;
+  }
+  .resource-country-tabs {
+    padding-inline: 0;
+  }
+  .inventory-toolbar {
+    padding: 0;
+  }
+  .inventory-selects {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .inventory-pagination {
+    flex-wrap: wrap;
+    padding: 13px;
+  }
+  .inventory-pagination > div {
+    margin-left: auto;
+  }
+}
+@media print {
+  .inventory-toolbar,
+  .inventory-country-tabs {
+    display: none !important;
+  }
+  .inventory-grid-scroll {
+    overflow: visible;
+    max-height: none;
+  }
+}

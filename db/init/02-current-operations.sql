@@ -1,3 +1,6 @@
+-- 신규 설치용 기준선(고정). reporting 0017까지의 구조이며 이 파일은 더 이상 수정하지 않습니다.
+-- 이후 구조 변경은 각 앱(backend/features/<기능>/migrations 등)의 Django 마이그레이션으로만 합니다.
+-- 빈 DB에서 이 파일을 실행한 뒤 backend가 migrate --fake-initial로 이후 마이그레이션을 이어서 적용합니다.
 -- 업무 테이블만 초기 생성합니다. 공통데이터·샘플 행은 자동 등록하지 않습니다.
 -- auth_user 및 이를 참조하는 ui_navigation_preferences는 인증 마이그레이션 이후
 -- backend 시작 시 Django reporting/0010_navigation_preferences로 생성합니다.

@@ -4,18 +4,14 @@ from django.db import connection
 from psycopg import sql
 from rest_framework.exceptions import NotFound
 
-TABLE_LABELS = {
-    'auth_user': '사용자·아이디·권한',
-    'ops_regions': '공통 리전', 'ops_services': '인프라 서비스',
-    'ops_staff_members': '인력 기준정보', 'infra_resources': '인프라 자원·호스트 수량',
-    'ops_staff_assignments': '운영 인력 배치', 'ops_work_summaries': '운영 작업',
-    'ops_regional_issues': '리전 이슈·조치', 'ops_issue_comments': '이슈 댓글',
-    'user_activity_logs': '사용자 행동 이력',
-}
+from reporting.registry import table_labels
+
 SENSITIVE = re.compile(r'password|passwd|secret|token|session|api_key|credential', re.I)
 
 
 def table_list():
+    """웹에서 쓰는 테이블만 보여 줍니다. 허용 목록은 각 앱 feature.py의 tables에서 모읍니다."""
+    labels = table_labels()
     with connection.cursor() as cursor:
         cursor.execute("""
             SELECT c.relname, c.relkind, obj_description(c.oid, 'pg_class'),
@@ -23,8 +19,8 @@ def table_list():
             FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname = ANY(%s)
             ORDER BY c.relname
-        """, [list(TABLE_LABELS)])
-        return [dict(label=TABLE_LABELS[name], name=name, kind='table' if kind in ('r', 'p') else 'view', comment=comment or '', column_count=count,
+        """, [list(labels)])
+        return [dict(label=labels[name], name=name, kind='table' if kind in ('r', 'p') else 'view', comment=comment or '', column_count=count,
                      protected=True) for name, kind, comment, count in cursor.fetchall()]
 
 

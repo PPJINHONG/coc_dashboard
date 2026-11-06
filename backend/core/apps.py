@@ -6,5 +6,5 @@ class CoreConfig(AppConfig):
     name = "core"
 
     def ready(self):
-        # 파일 삭제 시그널을 등록합니다.
+        # 로그인 행동 이력 신호를 등록합니다.
         from . import signals  # noqa: F401

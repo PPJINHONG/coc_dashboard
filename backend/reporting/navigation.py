@@ -10,18 +10,23 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import NavigationPreference
+from .registry import hideable_tabs
 
-HIDEABLE_TABS = ('report', 'resources', 'staff', 'work', 'issues', 'logs')
 COOKIE = 'coc_navigation'
 COOKIE_SALT = 'coc-navigation-browser'
 
 
 class PreferenceSerializer(serializers.ModelSerializer):
-    hidden_tabs = serializers.ListField(child=serializers.ChoiceField(choices=HIDEABLE_TABS), max_length=len(HIDEABLE_TABS), required=False)
-
     class Meta:
         model = NavigationPreference
         fields = ['hidden_tabs', 'sidebar_collapsed']
+
+    def get_fields(self):
+        # 숨길 수 있는 탭은 각 앱의 feature.py(tabs)에서 모읍니다. 홈·DB 관리는 숨길 수 없습니다.
+        fields = super().get_fields()
+        tabs = hideable_tabs()
+        fields['hidden_tabs'] = serializers.ListField(child=serializers.ChoiceField(choices=tabs), max_length=len(tabs), required=False)
+        return fields
 
     def validate_hidden_tabs(self, values):
         return list(dict.fromkeys(values))

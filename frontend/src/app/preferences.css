@@ -1,0 +1,82 @@
+/* 탭 관리(개인 탭 숨김) 창. */
+.preferences-description {
+  margin-bottom: 22px;
+}
+.preference-options {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.preference-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  cursor: pointer;
+}
+.preference-option:hover {
+  background: #fafcfd;
+  border-color: var(--border);
+}
+.preference-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  display: grid;
+  place-items: center;
+}
+.preference-option > span:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.preference-option strong {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.preference-option small {
+  font-size: 8px;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+.preference-option input {
+  margin-left: auto;
+}
+.preference-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 17px 0;
+  font-size: 10px;
+}
+.preference-hint svg {
+  margin-top: 2px;
+}
+.preferences-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 23px;
+}
+.preferences-actions .actions {
+  margin-top: 0;
+}
+@media (max-width: 600px) {
+  .preferences-actions {
+    align-items: flex-start;
+  }
+  .preferences-actions > .actions {
+    gap: 6px;
+  }
+  .preferences-actions .btn {
+    font-size: 11px;
+  }
+}

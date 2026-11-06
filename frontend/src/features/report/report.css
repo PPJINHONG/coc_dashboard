@@ -1,0 +1,12 @@
+/* 리포트: 각 기능의 조회 화면을 한 열로 이어 보여 줍니다. */
+.updated-label {
+  font-size: 10px;
+  color: var(--muted);
+}
+.report-feature-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; }
+.report-feature-section { min-width: 0; padding-bottom: 24px; border-bottom: 1px solid var(--border-soft); }
+.report-feature-section:last-child { padding-bottom: 0; border-bottom: 0; }
+.report-feature-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
+.report-feature-section .page-heading h1,
+.report-feature-section .section-head h1 { font-size: 21px; }
+@media (max-width: 600px) { .report-feature-list { gap: 24px; } }

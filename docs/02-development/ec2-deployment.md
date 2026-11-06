@@ -23,7 +23,7 @@ docker compose -f compose.prod.yaml ps
 - EC2에서는 모든 `docker compose` 명령에 `-f compose.prod.yaml`을 붙입니다. 실수로 빼고 `up` 하면 포트가 이미 사용 중이라 실패하고, 운영 컨테이너는 그대로 둡니다.
 - backend가 켜질 때 Django 마이그레이션(테이블 구조 변경)이 자동으로 적용됩니다. `/srv_db`의 데이터는 그대로 남습니다.
 - `/srv_db/postgres` 폴더가 없으면(디스크가 연결되지 않은 경우 등) 빈 DB를 만들지 않고 실행을 멈춥니다.
-- 컬럼·테이블을 지우는 마이그레이션이 들어간 배포라면 배포 전에 스냅샷을 먼저 만듭니다.
+- 컬럼·테이블을 지우는 마이그레이션이 들어간 배포라면 배포 전에 스냅샷을 먼저 만듭니다. 들어가는 마이그레이션은 PR 설명에서 확인하고, 배포 후 `docker compose -f compose.prod.yaml logs backend`의 `Applying` 줄에서 적용 결과를 봅니다.
 
 로그 확인 같은 다른 명령도 같은 형식입니다. 예: `docker compose -f compose.prod.yaml logs --tail=100 backend`
 
@@ -88,7 +88,7 @@ docker compose -f compose.prod.yaml exec -T db sh -c 'psql -U "$POSTGRES_USER" -
 
 - `docker inspect` 결과에 `/srv_db/postgres -> /var/lib/postgresql/data`가 나와야 합니다.
 - 계정 목록과 리전 개수가 2단계 결과와 같아야 합니다.
-- 브라우저에서 ALB 주소로 로그인해 데이터를 확인합니다.
+- 브라우저에서 운영 도메인(`https://coc-portal.solomontech-cloud.kr`)으로 로그인해 데이터를 확인합니다.
 
 ### 6. 정리 (며칠 운영 후)
 

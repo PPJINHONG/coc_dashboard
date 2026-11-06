@@ -1,0 +1,289 @@
+/* 기능 화면 공통: 제목·필터·패널·데이터 표·배지·편집 표·모달. shared/components·shared/sections가 사용합니다. */
+.report-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 3px;
+}
+.section-head h1 {
+  font-size: 25px;
+  font-weight: 650;
+  letter-spacing: -0.04em;
+  margin: 0;
+}
+.section-sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 8px 0 0;
+}
+.report-panel {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 4px;
+}
+.report-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.report-panel-head h2 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+.report-panel-head p {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 4px 0 0;
+}
+.report-table-scroll {
+  width: 100%;
+  overflow: auto;
+}
+.report-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  text-align: left;
+  font-size: 13px;
+  color: var(--grid-text);
+  line-height: 18px;
+}
+.report-table th,
+.report-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--grid-border);
+  border-right: 1px solid var(--grid-border);
+  white-space: nowrap;
+  height: var(--grid-row-height);
+}
+.report-table th:last-child,
+.report-table td:last-child {
+  border-right: 0;
+}
+.report-table thead th {
+  background: var(--grid-head);
+  color: var(--grid-label);
+  font-weight: 500;
+  font-size: 13px;
+}
+.report-table tbody tr:last-child td {
+  border-bottom: 1px solid var(--grid-border);
+}
+.report-table tbody tr:hover td {
+  background: #f8fbfd;
+}
+.report-table .numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.report-table .text-cell {
+  white-space: pre-wrap;
+  max-width: 360px;
+  min-width: 160px;
+  overflow-wrap: anywhere;
+  line-height: 18px;
+}
+.report-table .row-number {
+  width: 40px;
+  min-width: 40px;
+  padding-inline: 8px;
+  text-align: center;
+  background: var(--grid-head);
+  color: var(--grid-label);
+  font-size: 12px;
+  font-weight: 400;
+}
+.report-table tfoot td {
+  background: #f8fafc;
+  color: var(--grid-text);
+  font-weight: 550;
+  border-top: 1px solid var(--grid-border);
+  padding: 5px 8px;
+}
+.report-table small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.report-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.status-resolved {
+  background: #f1f4f8;
+  color: var(--muted);
+  border-color: var(--border);
+}
+.status-open {
+  background: #f1f6fb;
+  color: var(--text);
+  border-color: var(--border);
+}
+.status-blocked,
+.severity-major {
+  background: #fcf8ef;
+  color: var(--text);
+  border-color: var(--border);
+}
+.severity-critical {
+  background: #fff5f4;
+  color: var(--text);
+  border-color: var(--border);
+}
+.report-empty {
+  padding: 38px 20px !important;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+.report-notice {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.8;
+  background: #f6f9fb;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin: 0;
+}
+.report-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: flex-end;
+}
+.report-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 145px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.report-filters .report-search {
+  flex: 1;
+  max-width: 360px;
+}
+.report-filters > span {
+  margin-left: auto;
+  padding-bottom: 10px;
+}
+.report-editor-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.report-edit-table td {
+  padding: 7px;
+  vertical-align: top;
+}
+.report-edit-table input,
+.report-edit-table select,
+.report-edit-table textarea {
+  min-width: 110px;
+  padding: 7px 8px;
+  font-size: 11px;
+  background: #fff;
+}
+.report-edit-table input[type="number"] {
+  min-width: 80px;
+  width: 88px;
+}
+.report-edit-table textarea {
+  min-width: 180px;
+}
+.report-editor-foot {
+  padding: 15px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  border-top: 1px solid var(--border);
+}
+.report-modal {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(530px, calc(100% - 32px));
+  max-height: calc(100svh - 40px);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--text);
+  padding: 26px;
+  box-shadow: 0 20px 100px #1c2a3a20;
+}
+.report-modal::backdrop {
+  background: #14243138;
+  backdrop-filter: blur(3px);
+}
+.report-modal > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 23px;
+}
+.report-modal > header h2 {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.025em;
+}
+.report-modal > p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.9;
+}
+.report-modal .actions {
+  justify-content: flex-end;
+  margin-top: 21px;
+}
+@media (max-width: 600px) {
+  .section-head {
+    flex-direction: column;
+  }
+  .report-filters label {
+    min-width: 120px;
+    flex: 1;
+  }
+  .report-filters > span {
+    width: 100%;
+    padding-bottom: 0;
+  }
+  .report-modal {
+    padding: 22px;
+  }
+}
+@media print {
+  .report-panel-head button {
+    display: none !important;
+  }
+  .report-table-scroll {
+    overflow: visible;
+    max-height: none;
+  }
+  .panel {
+    break-inside: avoid;
+  }
+}

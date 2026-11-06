@@ -4,7 +4,7 @@
 
 **PR에서 초록색·빨간색 검사 결과를 보거나 실패 이유를 확인할 때** 읽습니다.
 
-GitHub Actions는 “코드를 올리면 정해 둔 작업을 실행해 주는 기능”입니다. 여기서는 설정과 빌드 검사를 자동으로 실행합니다. 이런 자동 검사를 CI라고 부릅니다.
+GitHub Actions는 “코드를 올리면 정해 둔 작업을 실행해 주는 기능”입니다. 여기서는 설정·빌드·서버 테스트를 자동으로 실행합니다. 이런 자동 검사를 CI라고 부릅니다.
 
 ## 1. 지금 무엇을 검사하나요?
 
@@ -14,10 +14,11 @@ GitHub Actions는 “코드를 올리면 정해 둔 작업을 실행해 주는 �
 
 1. GitHub의 임시 컴퓨터로 프로젝트 코드를 받습니다.
 2. 검사 전용 임시 값으로 `.env`를 만듭니다. 실제 `.env`는 Git에 없으므로 사용하지 않습니다.
-3. Compose 설정 파일이 올바르게 읽히는지 확인합니다.
+3. Compose 설정 파일(`compose.yaml`, `compose.prod.yaml`)이 올바르게 읽히는지 확인합니다.
 4. 화면과 서버의 실행 묶음을 빌드합니다. 화면의 TypeScript 코드 검사도 이 과정에 포함됩니다.
+5. 임시 DB를 켜고 서버 테스트(`pytest`)를 실행합니다. 기능 앱 테스트와 함께 **마이그레이션 누락·충돌**도 검사하므로, 합친 뒤 서버가 켜지지 않는 변경을 미리 막습니다.
 
-앞 단계가 실패하면 뒤 단계는 진행하지 않습니다. **현재는 화면을 열거나 실제 API·DB 연결까지 검사하지 않습니다.** 빌드가 성공해도 로컬에서 기능을 확인해야 합니다.
+앞 단계가 실패하면 뒤 단계는 진행하지 않습니다. **화면을 실제로 열어 보는 검사는 없습니다.** 검사가 성공해도 로컬에서 화면을 확인합니다.
 
 ## 2. 언제 실행되나요?
 
@@ -50,13 +51,15 @@ GitHub Actions는 “코드를 올리면 정해 둔 작업을 실행해 주는 �
 | Checkout repository | 프로젝트 파일 받기 | GitHub 실행 기록의 다운로드·권한 오류 |
 | Prepare CI environment | 검사 설정 준비 | `ci.yml`의 임시 `.env` 내용 |
 | Validate Compose configuration | 실행 설정 확인 | Compose 문법, 필요한 설정 이름 |
-| Build application images | 프로그램 묶음 만들기 | Dockerfile, package 파일, 설치 오류, 코드 검사 오류 |
+| Build application images | 프로그램 묶음 만들기 | Dockerfile, package 파일, 설치 오류, TypeScript 오류 |
+| Run backend tests | 서버 테스트 | 실패한 테스트 이름. `test_no_pending_migrations`면 [마이그레이션 규칙](parallel-development.md#3-db-구조-변경마이그레이션) |
 
 내 컴퓨터에서도 비슷한 범위를 확인할 수 있습니다. 프로젝트 최상위에서 실행합니다.
 
 ```bash
 docker compose config --quiet
 docker compose build
+docker compose exec backend pytest
 ```
 
 오류를 고쳐 같은 PR 브랜치에 커밋하고 Push하면 검사가 다시 실행됩니다. 다운로드 연결처럼 일시적인 문제라면 **Re-run jobs**로 재실행할 수 있지만 코드 오류라면 수정부터 해야 합니다.

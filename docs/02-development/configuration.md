@@ -12,9 +12,10 @@
 | `compose.yaml` | 로컬(개발) 실행 파일. 이미지 버전, 데이터는 Docker 볼륨 | 예 |
 | `compose.prod.yaml` | EC2 운영 실행 파일. 데이터는 `/srv_db`. `-f compose.prod.yaml`로 사용 | 예 |
 
-서비스 설정(이미지 버전, 환경변수, 포트 등)을 바꿀 때는 `compose.yaml`과 `compose.prod.yaml`을 함께 바꿉니다.
-
-`.env`를 바꾸면 로컬과 EC2의 `.env`를 같이 바꿉니다.
+- 서비스 설정(이미지 버전, 환경변수, 포트 등)을 바꿀 때는 `compose.yaml`과 `compose.prod.yaml`을 함께 바꿉니다.
+- `.env`를 바꾸면 로컬과 EC2의 `.env`를 같이 바꿉니다.
+- 환경변수를 추가·변경하면 사용하는 코드(`backend/config/settings.py` 등)와 두 Compose 파일, CI의 임시 `.env`(`.github/workflows/ci.yml`), 이 문서를 함께 맞춥니다.
+- 설정 확인은 비밀값을 출력하지 않는 `docker compose config --quiet`로 합니다.
 
 ## 2. `.env` 설정 이름
 
@@ -29,20 +30,22 @@
 | `DJANGO_SECRET_KEY` | 서버가 로그인 세션 서명에 쓰는 키. 바꾸면 모두 다시 로그인해야 합니다 |
 | `FRONTEND_BIND_ADDRESS` | 웹 연결을 받을 주소. ALB가 EC2로 연결하려면 `0.0.0.0` |
 | `FRONTEND_PORT` | 웹 포트. 기본 `8080`. ALB 대상 그룹 포트와 같아야 합니다 |
-| `DJANGO_ALLOWED_HOSTS` | 브라우저 접속 호스트명(쉼표 구분, `http://`·포트 제외). localhost와 ALB DNS를 함께 넣습니다 |
-| `DJANGO_CSRF_TRUSTED_ORIGINS` | 로그인 요청을 허용할 접속 주소(쉼표 구분, `http://` 포함). `http://localhost:8080`과 `http://ALB_DNS`를 함께 넣습니다 |
-| `DEVELOPMENT_AUTH_BYPASS` | `true`면 로그인 없이 조회. 기본 `false` |
+| `DJANGO_ALLOWED_HOSTS` | 브라우저 접속 호스트명(쉼표 구분, `http://`·포트 제외). localhost와 운영 도메인 `coc-portal.solomontech-cloud.kr`을 함께 넣습니다 |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | 로그인 요청을 허용할 접속 주소(쉼표 구분, 주소창과 같은 `http://`·`https://` 포함). `http://localhost:8080`과 `https://coc-portal.solomontech-cloud.kr`을 함께 넣습니다 |
+| `DEVELOPMENT_AUTH_BYPASS` | `true`면 로그인 없이 조회(개발용). 현재 `false`를 유지합니다 |
+
+운영 접속은 Route 53 도메인 `https://coc-portal.solomontech-cloud.kr` → ALB(HTTPS 인증서) → EC2 `8080`입니다. ALB DNS로는 직접 접속하지 않으므로 `DJANGO_ALLOWED_HOSTS`·`DJANGO_CSRF_TRUSTED_ORIGINS`에 넣지 않습니다. 접속 도메인이 바뀌면 두 줄을 함께 바꾸고 다시 시작합니다.
 
 `POSTGRES_DB`·`POSTGRES_USER`·`POSTGRES_PASSWORD`는 DB를 처음 만들 때만 적용됩니다. 이미 있는 DB의 비밀번호는 `.env`를 바꿔도 자동으로 바뀌지 않습니다.
 
-`FRONTEND_BIND_ADDRESS=0.0.0.0`이면 로컬 PC에서도 같은 네트워크의 다른 기기가 8080으로 접속할 수 있습니다.
+`FRONTEND_BIND_ADDRESS=0.0.0.0`이면 로컬 PC에서도 같은 네트워크의 다른 기기가 8080으로 접속할 수 있습니다. 터미널에서 같은 이름으로 설정한 환경변수는 `.env`보다 우선합니다.
 
 ## 3. 이미지 버전
 
-Python·Node.js·Nginx·PostgreSQL 이미지 버전은 `compose.yaml`에 적혀 있습니다. 태그는 사람이 읽는 버전이고 `@sha256:`은 정확한 이미지 내용을 고정합니다. 업데이트할 때는 태그와 digest를 함께 바꿉니다. PostgreSQL은 17 계열을 유지합니다. 메이저 버전 변경은 별도 데이터 이전 작업이 필요합니다.
+Python·Node.js·Nginx·PostgreSQL 이미지 버전은 `compose.yaml`·`compose.prod.yaml`에 적혀 있습니다. 태그는 사람이 읽는 버전이고 `@sha256:`은 정확한 이미지 내용을 고정합니다. 업데이트할 때는 태그와 digest를 함께 바꿉니다. PostgreSQL은 17 계열을 유지합니다. 메이저 버전 변경은 별도 데이터 이전 작업이 필요합니다.
+
+Python 패키지 버전은 `backend/requirements.txt`, 화면 패키지 버전은 `frontend/package.json`·`package-lock.json`에 고정합니다.
 
 ## 4. 참고
 
-현재 환경은 `DEVELOPMENT_AUTH_BYPASS=false`로 로그인·회원가입을 사용합니다. 데이터 수정은 실제 관리자의 DB 탭에서만 가능합니다. 운영 데이터의 DB 접속·init 구조는 [운영 데이터 설계](operations.md), 관리자 화면은 [관리자 DB 관리](database-admin.md)를 참고하세요. 배포는 [EC2 배포](ec2-deployment.md)를 따릅니다.
-
-터미널에서 같은 이름으로 설정한 환경변수는 `.env`보다 우선합니다.
+데이터 수정은 실제 관리자의 DB 관리 탭에서만 가능합니다. DB 접속·구조 변경은 [데이터 확인과 DB 구조 변경](database.md), 관리자 화면은 [관리자 DB 관리](database-admin.md), 배포는 [EC2 배포](ec2-deployment.md)를 따릅니다.

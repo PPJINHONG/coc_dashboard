@@ -1,0 +1,89 @@
+/* Staff directory: airy rows, horizontal dividers and country accents. */
+.staff-table-scroll {
+  overflow-x: auto;
+  padding: 0 20px 4px;
+  border-radius: inherit;
+}
+.staff-table-scroll:focus-visible { outline-offset: -3px; }
+.staff-table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+  table-layout: auto;
+  color: var(--text);
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.staff-table th,
+.staff-table td {
+  border: 0;
+  border-bottom: 1px solid #e4e9f0;
+  padding: 9px 14px;
+  vertical-align: middle;
+}
+.staff-table thead th {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  background: #fff;
+  white-space: nowrap;
+}
+.staff-table tbody tr { --staff-color: #356eb0; --staff-tint: #eef5ff; }
+.staff-table tbody tr.staff-country-eu { --staff-color: #6557a5; --staff-tint: #f2effb; }
+.staff-table tbody tr.staff-country-na { --staff-color: #486384; --staff-tint: #eef2f7; }
+.staff-table tbody tr.staff-country-unknown { --staff-color: #34465e; --staff-tint: #f2f4f7; }
+.staff-table tbody tr:hover { background: #fafcff; }
+.staff-table tbody tr:last-child > * { border-bottom: 0; }
+.staff-table .staff-row-number {
+  width: 54px;
+  padding-left: 4px;
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.staff-country-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 66px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  background: var(--staff-tint);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.staff-country-badge i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--staff-color);
+}
+.staff-person { display: inline-flex; align-items: center; gap: 11px; white-space: nowrap; font-weight: 550; }
+.staff-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--staff-tint);
+  color: var(--staff-color);
+  flex-shrink: 0;
+}
+.staff-job-title { display: inline-block; padding: 3px 10px; border-radius: 4px; background: #f3f5f8; white-space: nowrap; font-size: 12px; }
+.staff-cell-staff { min-width: 155px; }
+.staff-cell-company_name { min-width: 125px; }
+.staff-cell-job_description { min-width: 180px; max-width: 380px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.staff-cell-work_location { min-width: 110px; max-width: 240px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.staff-table .staff-empty { padding: 44px 16px; text-align: center; }
+.staff-page .report-panel-head { border-bottom: 0; padding-bottom: 8px; }
+@media (max-width: 600px) {
+  .staff-table-scroll { padding-inline: 12px; }
+  .staff-table th, .staff-table td { padding: 8px 10px; }
+}

@@ -1,0 +1,56 @@
+/* 운영 작업: 구분별 완료율 카드. */
+.report-work-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 15px;
+  padding: 18px;
+}
+.report-sections > .report-work-grid {
+  padding: 0;
+}
+.report-work-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  background: #fff;
+}
+.report-work-card h3 {
+  font-size: 12px;
+  font-weight: 550;
+  margin: 0 0 14px;
+  color: var(--muted);
+}
+.work-rate {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 25px;
+  font-weight: 550;
+  color: var(--text);
+}
+.work-rate small {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.report-work-card dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  border-top: 1px solid var(--border-soft);
+  padding-top: 14px;
+  margin: 15px 0 0;
+  font-size: 10px;
+}
+.report-work-card dt {
+  color: var(--muted);
+}
+.report-work-card dd {
+  margin: 0;
+  color: var(--muted);
+}
+@media (max-width: 800px) {
+  .report-work-grid {
+    grid-template-columns: 1fr;
+  }
+}

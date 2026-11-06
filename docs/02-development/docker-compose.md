@@ -55,9 +55,8 @@ docker compose ps
 | 확인할 것 | 주소 |
 | --- | --- |
 | 기본 화면 | http://localhost:8080 |
-| 서버 기본 화면 | http://localhost:8080/backend/ |
-| 데이터 조회 | http://localhost:8080/api/operations/current/ |
-| 데이터 요청 안내 화면 | http://localhost:8080/api/docs/ |
+| 데이터 조회(로그인 후) | http://localhost:8080/api/operations/current/ |
+| API 안내 화면 | http://localhost:8080/api/docs/ |
 
 켜자마자 연결되지 않으면 잠시 후 다시 확인합니다. DB가 실제 요청을 받을 준비가 되기 전에 서버가 켜질 수 있습니다.
 
@@ -71,6 +70,14 @@ docker compose up --build -d
 ```
 
 상대방의 새 코드를 Git으로 가져온 뒤에도 같은 방법으로 반영합니다. DB·첨부파일은 볼륨에 남아 있고, backend가 켜질 때 새 마이그레이션(테이블 구조 변경)이 자동으로 적용됩니다.
+
+서버 코드를 바꿨다면 테스트도 실행합니다. 테스트는 임시 DB를 따로 만들어 쓰므로 실제 데이터는 바뀌지 않습니다.
+
+```bash
+docker compose exec backend pytest
+```
+
+특정 기능만 보려면 `docker compose exec backend pytest features/resources`처럼 폴더를 지정합니다. 어떤 파일을 고치는지는 [폴더 구조와 기능 추가 방법](structure.md)을 봅니다.
 
 ## 6. 안 켜지거나 오류가 생겼을 때
 

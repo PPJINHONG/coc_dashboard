@@ -3,7 +3,7 @@ from django.contrib.auth.hashers import make_password
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from reporting.models import IssueComment, RegionalIssue
+from core.signals import username_changed
 
 ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "admin"
@@ -26,8 +26,8 @@ class Command(BaseCommand):
                 legacy.password = make_password(ADMIN_PASSWORD)
                 legacy.is_staff = legacy.is_superuser = legacy.is_active = True
                 legacy.save(update_fields=["username", "password", "is_staff", "is_superuser", "is_active"])
-                RegionalIssue.objects.filter(author_username=old).update(author_username=ADMIN_USERNAME)
-                IssueComment.objects.filter(author_username=old).update(author_username=ADMIN_USERNAME)
+                # 작성자 아이디를 저장하는 기능(리전 이슈 등)이 새 아이디로 바꿉니다.
+                username_changed.send(sender=User, old_username=old, new_username=ADMIN_USERNAME)
                 self.stdout.write(f"기존 관리자 {old} 계정을 {ADMIN_USERNAME}(으)로 변경했습니다.")
                 return
             User.objects.create(
