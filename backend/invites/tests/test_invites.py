@@ -1,4 +1,3 @@
-# 실행법: pytest --ds=config.settings invites/tests
 from datetime import timedelta
 
 import pytest

@@ -1,25 +1,12 @@
-"""모델 삭제 시 디스크의 실제 이미지 파일을 정리하는 시그널.
+"""계정 공통 신호: 로그인 행동 이력 기록, 아이디 변경 알림."""
 
-Post 가 삭제되면 cascade 로 PostImage 도 삭제되고, 각 PostImage 의 post_delete
-가 호출되어 파일이 지워집니다. 이미지만 단독 삭제(첨부 교체)해도 동일하게 동작합니다.
-"""
+from django.contrib.auth import get_user_model
+from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
+from django.dispatch import Signal, receiver
 
-from django.db.models.signals import post_delete
-from django.dispatch import receiver
-
-from .models import PostImage
-
-
-@receiver(post_delete, sender=PostImage)
-def delete_image_file_on_delete(sender, instance, **kwargs):
-    """PostImage 레코드가 삭제되면 저장소의 파일도 삭제합니다."""
-    if instance.file:
-        instance.file.delete(save=False)
-
-
-# === 로그인 행동 이력 ===
-from django.contrib.auth import get_user_model  # noqa: E402
-from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed  # noqa: E402
+# 계정 아이디가 바뀌면 보냅니다(old_username, new_username).
+# 작성자 아이디를 저장하는 기능 앱이 받아서 자기 데이터를 새 아이디로 바꿉니다. 예: features/issues/signals.py
+username_changed = Signal()
 
 
 @receiver(user_logged_in)

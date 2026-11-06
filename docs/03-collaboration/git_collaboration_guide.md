@@ -4,7 +4,7 @@
 
 **새 기능을 만들고 상대방 검토를 거쳐 공용 코드에 합칠 때** 읽습니다. 두 사람이 각자 자기 브랜치에서 개발하는 상황을 기준으로 합니다.
 
-아래는 두 사람이 함께 검토해 사용할 권장 방법입니다. GitHub 보호 설정을 실제로 적용한 것은 아닙니다.
+아래는 두 사람이 함께 검토해 사용할 권장 방법입니다. GitHub 보호 설정을 실제로 적용한 것은 아닙니다. 어떤 폴더를 누가 고치는지는 [기능별로 나눠 개발하기](parallel-development.md)를 따릅니다.
 
 ## 1. 먼저 이것만 구분하기
 
@@ -108,7 +108,7 @@ git push
 
 최종 리뷰 전에 [작업 중 최신 코드 가져오기](git-scenarios.md)에 따라 최신 main을 내 브랜치에 합칩니다. 새로 반영할 내용이 없다면 Git이 알려줍니다.
 
-그다음 [프로젝트를 다시 실행](../02-development/docker-compose.md)해서 내 기능과 상대 기능을 확인합니다. PR의 `Compose build`가 성공했는지도 확인합니다. [자동 검사 보는 방법](github-actions.md)
+그다음 [프로젝트를 다시 실행](../02-development/docker-compose.md)하고 `docker compose exec backend pytest`로 테스트한 뒤 내 기능과 상대 기능을 확인합니다. PR의 `Compose build`가 성공했는지도 확인합니다. [자동 검사 보는 방법](github-actions.md)
 
 상대방은 다음 순서로 리뷰합니다.
 

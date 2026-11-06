@@ -1,3 +1,4 @@
+-- 신규 설치용 기준선(고정). 이 파일은 수정하지 않습니다. 구조 변경은 각 앱의 Django 마이그레이션으로만 합니다.
 BEGIN;
 --
 -- Create model DatabaseChangeLog

@@ -5,24 +5,15 @@ from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.permissions import AllowAny, BasePermission, SAFE_METHODS
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import ChangeLog, IssueComment, Region, Service, StaffMember, RegionalIssue
-from .serializers import ChangeLogSerializer, CommentSerializer, RegionSerializer, ServiceSerializer, StaffMemberSerializer
-from .services import SECTIONS, actor, bump, check_revision, lock_state, record_log, section_rows, totals
-
-
-def can_manage(request):
-    return bool(request.user.is_authenticated and request.user.is_active and request.user.is_staff)
-
-
-class ReportingPermission(BasePermission):
-    def has_permission(self, request, view):
-        if request.method not in SAFE_METHODS:
-            return can_manage(request)
-        return settings.DEVELOPMENT_AUTH_BYPASS or request.user.is_authenticated
+from . import registry
+from .models import ChangeLog, Region, Service, StaffMember
+from .permissions import OperationsAdministrator, ReportingPermission, can_manage
+from .serializers import ChangeLogSerializer, RegionSerializer, ServiceSerializer, StaffMemberSerializer
+from .services import bump, check_revision, lock_state, record_log
 
 
 @method_decorator(csrf_protect, name='dispatch')
@@ -30,14 +21,9 @@ class ReportingView(APIView):
     permission_classes = [ReportingPermission]
 
 
-class OperationsAdministrator(BasePermission):
-    message = '데이터 변경은 DB 관리에서 로그인한 관리자만 할 수 있습니다.'
-
-    def has_permission(self, request, view):
-        return can_manage(request)
-
-
 class AdminDataView(ReportingView):
+    """DB 관리(/api/db-admin/)의 운영 데이터 변경 API 기반 클래스. 실제 활성 관리자만 사용합니다."""
+
     permission_classes = [OperationsAdministrator]
 
 
@@ -61,27 +47,40 @@ class BootstrapView(ReportingView):
 
 
 class SnapshotView(ReportingView):
+    """모든 기능의 현재값을 한 번에 돌려줍니다. 기능 목록은 각 앱의 feature.py에서 모읍니다."""
+
     @transaction.atomic
     def get(self, request):
         state = lock_state()
-        payload = {'revision': state.revision, 'updated_at': state.updated_at, 'totals': totals(),
+        payload = {'revision': state.revision, 'updated_at': state.updated_at, 'totals': registry.totals(),
                    'logs': ChangeLogSerializer(ChangeLog.objects.all()[:50], many=True).data if can_manage(request) else []}
-        for key, (_, serializer, _) in SECTIONS.items():
-            payload[key] = serializer(section_rows(key), many=True, context={'request': request}).data
+        for key, section in registry.sections().items():
+            payload[key] = section.serializer(section.rows(), many=True, context={'request': request}).data
         return Response(payload)
 
 
+class LogsView(AdminDataView):
+    def get(self, request):
+        logs = ChangeLog.objects.all()
+        if request.query_params.get('section'):
+            logs = logs.filter(section=request.query_params['section'])
+        return Response(ChangeLogSerializer(logs[:200], many=True).data)
+
+
 class SectionView(AdminDataView):
+    """기능별 현재값 전체를 한 번에 저장합니다. 보낸 목록에서 빠진 행은 삭제합니다."""
+
     @transaction.atomic
     def put(self, request, section):
-        if section not in SECTIONS:
+        definition = registry.sections().get(section)
+        if definition is None:
             raise ValidationError('알 수 없는 기능입니다.')
         state = lock_state()
         check_revision(state, request.data.get('revision'))
         rows = request.data.get('rows')
         if not isinstance(rows, list) or len(rows) > 500:
             raise ValidationError({'rows': ['행은 500개 이하의 목록으로 보내세요.']})
-        model, serializer_class, unique_fields = SECTIONS[section]
+        model, serializer_class, unique_fields = definition.model, definition.serializer, definition.unique_fields
         serializer = serializer_class(data=rows, many=True)
         if not serializer.is_valid():
             errors = []
@@ -91,7 +90,7 @@ class SectionView(AdminDataView):
                     values = messages if isinstance(messages, list) else [messages]
                     errors.append(f"{index + 1}행: {' '.join(str(message) for message in values)}")
             raise ValidationError({'rows': errors})
-        before = serializer_class(section_rows(section), many=True).data
+        before = serializer_class(definition.rows(), many=True).data
         existing = {row.pk: row for row in model.objects.all()}
         seen_ids, seen_keys = set(), set()
         for index, values in enumerate(serializer.validated_data):
@@ -100,7 +99,7 @@ class SectionView(AdminDataView):
                 raise ValidationError({'rows': [f'{index + 1}행의 번호가 중복되거나 존재하지 않습니다.']})
             if pk is not None:
                 seen_ids.add(pk)
-            if section != 'issues':
+            if unique_fields:
                 key_values = []
                 for field in unique_fields:
                     value = values.get(field, model._meta.get_field(field).get_default())
@@ -120,7 +119,7 @@ class SectionView(AdminDataView):
                         for key, value in values.items():
                             setattr(row, key, value)
                         row.save()
-                    elif section == 'issues':
+                    elif not unique_fields:
                         row = model.objects.create(**values)
                     else:
                         lookup = {key: values.get(key, model._meta.get_field(key).get_default()) for key in unique_fields}
@@ -132,12 +131,14 @@ class SectionView(AdminDataView):
         except IntegrityError as exc:
             raise ValidationError({'rows': ['중복 항목 또는 유효하지 않은 수량이 있습니다. 입력값을 확인하세요.']}) from exc
         bump(state)
-        after = serializer_class(section_rows(section), many=True).data
+        after = serializer_class(definition.rows(), many=True).data
         record_log(request, section, 'update', f'{len(saved_ids)}개 행 저장', before={'rows': before}, after={'rows': after})
         return Response({'revision': state.revision, 'rows': after})
 
 
 class MasterDataView(AdminDataView):
+    """리전·서비스·인력 공통데이터 추가·수정·삭제."""
+
     models = {'regions': (Region, RegionSerializer), 'services': (Service, ServiceSerializer), 'staff-members': (StaffMember, StaffMemberSerializer)}
 
     def get_instance(self, model, pk):
@@ -197,27 +198,3 @@ class MasterDataView(AdminDataView):
         bump(state)
         record_log(request, collection, 'update' if instance else 'create', '공통데이터 수정' if instance else '공통데이터 추가', before=before, after=serializer_class(saved).data)
         return Response(serializer.data, status=200 if instance else 201)
-
-
-class CommentsView(AdminDataView):
-    @transaction.atomic
-    def post(self, request, pk):
-        state = lock_state()
-        check_revision(state, request.data.get('revision'))
-        issue = get_object_or_404(RegionalIssue, pk=pk)
-        content = request.data.get('content')
-        if not isinstance(content, str) or not content.strip() or len(content) > 5000:
-            raise ValidationError({'content': ['댓글은 1~5000자로 입력하세요.']})
-        identity = actor(request)
-        comment = IssueComment.objects.create(issue=issue, content=content.strip(), author_name=identity['actor_name'], author_username=identity['actor_username'])
-        bump(state)
-        record_log(request, 'issues', 'comment', f'이슈 #{issue.pk} 댓글 추가')
-        return Response(CommentSerializer(comment).data, status=201)
-
-
-class LogsView(AdminDataView):
-    def get(self, request):
-        logs = ChangeLog.objects.all()
-        if request.query_params.get('section'):
-            logs = logs.filter(section=request.query_params['section'])
-        return Response(ChangeLogSerializer(logs[:200], many=True).data)

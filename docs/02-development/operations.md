@@ -1,99 +1,87 @@
 # 운영 데이터 설계
 
-## 최신값 관리
+[문서 목록](../README.md) · [데이터 확인과 DB 구조 변경](database.md) · [관리자 DB 관리](database-admin.md)
 
-주·월이나 보고 기간 없이 현재 수량·배치·작업·이슈를 저장합니다. 통합 현황과 각 기능 탭, 관리자 설정은 같은 원본 데이터를 사용합니다. K8s 전용 기능과 테이블은 제거했습니다.
+주·월이나 보고 기간 없이 **현재값(최신값)만** 저장합니다. 리포트·기능 탭·관리자 설정은 같은 원본 테이블을 씁니다. K8s 기능과 주별 테이블은 없습니다.
 
-| 테이블 | 데이터 |
+## 1. 테이블과 담당 앱
+
+| 테이블 | 데이터 | 앱 |
+| --- | --- | --- |
+| `ops_regions` | 리전 이름·국가 코드·전체 리전(자동 계산). 내부 숫자 ID로 연결 | `reporting` |
+| `ops_services` | 서비스 코드·이름 | `reporting` |
+| `ops_staff_members` | 인력 이름(동명이인 허용). 내부 ID로 연결 | `reporting` |
+| `infra_resources` | 리전·서비스별 Host·VM·Compute Rack·Storage Rack 수량 | `features/resources` |
+| `ops_staff_assignments` | 인력의 국가(KR·EU·NA)·직책·소속사·업무·근무지 | `features/staff` |
+| `ops_work_summaries` | 요청·변경·장애 작업 수량과 평균 복구시간 | `features/work` |
+| `ops_regional_issues` | 리전별 이슈·중요도·상태·진행률·담당자·조치·작성자 | `features/issues` |
+| `ops_issue_comments` | 이슈 댓글(`issue_id`) | `features/issues` |
+| `auth_user` | 이메일 아이디·이름·비밀번호 해시·활성/관리자 | Django 인증 |
+| `user_activity_logs` | 로그인·등록·수정(이전/새 값)·삭제(원본) 행동 이력 | `core` |
+| `auth_invites`, `auth_invite_uses` | 초대 링크와 가입 기록 | `invites` |
+| `ui_navigation_preferences` | 계정·브라우저별 숨긴 탭·사이드바 접기 | `reporting` |
+| `ops_data_state` | 운영 데이터 동시 수정 버전(`revision`) | `reporting` |
+| `ops_change_logs` | 운영 데이터 변경 이력 | `reporting` |
+| `db_admin_change_logs` | 계정·댓글 관리자 변경 이력 | `database_admin` |
+| `core_post`, `core_comment`, `core_postimage`, `core_dashboardpanel` | 게시판·대시보드(화면 미연결). 테이블 이름은 옮기기 전 그대로 | `features/board`, `features/dashboard` |
+
+리전·서비스·인력은 **공통데이터**입니다. 모든 기능이 같은 원본을 참조하며 자동으로 만들지 않습니다. 관리자가 DB 관리 → 공통데이터에서 등록합니다. 공통데이터에는 사용 상태(`is_active`) 열이 없습니다. `auth_user.is_active`(로그인 가능 여부)와 업무 진행 상태는 별개입니다.
+
+- 리전과 인력은 자동 생성되는 숫자 ID로 연결합니다. 화면에서는 이름으로 고르고 ID는 DB 원본에서만 보입니다. 서비스 코드와 국가 코드는 직접 입력하는 값입니다.
+- 리전 기본 목록은 이름순, 인프라 요약 그래프는 수량 내림차순입니다.
+- `ops_regions.global_region`(전체 리전)은 `country_code`로 DB가 계산하는 생성 열입니다. KR·CN=내수, EU=유럽, NA=북미, 그 외 NULL. 아직 화면·API에서 쓰지 않습니다. 분류를 바꾸려면 모델·마이그레이션의 계산식을 함께 바꿉니다.
+- 인프라 고유 조합은 리전·서비스(`unique_current_resource_service`)입니다. VM·Compute Rack·Storage Rack의 빈 값은 미입력, 0은 실제 0개입니다. 상단 Rack 카드는 Compute + Storage 합계이며 둘 다 비어 있을 때만 미입력입니다.
+- 운영 인력은 리전 대신 국가 코드(KR·EU·NA)를 저장하며 API와 DB가 허용값을 검사합니다.
+
+## 2. API와 저장
+
+| 경로 (`/api/` 아래) | 방식 | 내용 | 코드 |
+| --- | --- | --- | --- |
+| `operations/bootstrap/` | GET | 공통데이터·관리자 여부 | `reporting/views.py` |
+| `operations/current/` | GET | 기능별 현재값·합계·버전·최근 변경 이력(관리자만) | `reporting/views.py` + 각 `feature.py` |
+| `operations/logs/` | GET | 변경 이력 최근 200건(관리자만) | `reporting/views.py` |
+| `operations/issues/...`, `operations/issue-comments/...` | POST/PATCH/DELETE | 리전 이슈·댓글 작성(관리자·사용자) | `features/issues/views.py` |
+| `db-admin/sections/{기능}/` | PUT | `{revision, rows}`로 기능 현재값 전체 저장(관리자) | `reporting/views.py` |
+| `db-admin/common/{regions·services·staff-members}/[{pk}/]` | POST/PATCH/DELETE | 공통데이터 관리(관리자) | `reporting/views.py` |
+| `db-admin/issues/{id}/comments/` | POST | DB 관리 이슈 화면의 댓글(관리자) | `features/issues/admin_views.py` |
+
+`{기능}`은 각 기능 앱 `feature.py`의 `Section.key`(`resources`, `staff`, `work`, `issues`)입니다.
+
+- 일반 기능 화면은 관리자에게도 조회 전용입니다. 업무 데이터·댓글·공통데이터 변경은 `/api/db-admin/`에서 **실제 활성 관리자만** 합니다. 개발용 로그인 우회(`DEVELOPMENT_AUTH_BYPASS`)도 쓰기 권한을 주지 않습니다.
+- 예외: 리전 이슈와 댓글은 일반 화면에서 사용자도 작성합니다. 권한은 아래 3절.
+- 기능별 저장은 현재 전체 행을 보냅니다. 기존 행은 `id`를 유지하고 새 행은 생략합니다. 빠진 행은 실제로 삭제하며 연결된 데이터(댓글, 사용 중인 공통데이터)가 있으면 거절합니다.
+- 모든 저장은 `revision`을 확인합니다. 다른 저장이 먼저 있었으면 `409`이며 최신 데이터를 다시 불러와 편집합니다. 수량·상태 제약은 서버와 DB가 함께 검사합니다(오류 `400`).
+- 열 이름이 바뀐 뒤 예전 열 이름(`environment_name`, `zone_name` 등)으로 보내는 요청은 거절해 오래 열린 화면이 값을 바꾸지 않게 합니다.
+
+## 3. 권한
+
+| 권한 | 저장 방법 | 할 수 있는 일 |
+| --- | --- | --- |
+| 관리자 | `is_staff=true` | 모든 조회·수정·삭제, DB 관리, 변경 이력·행동 이력 |
+| 옵저버 | `observer` 그룹 | 조회만. 모든 쓰기·초대 발급·취소는 `403` |
+| 사용자 | 그 외 활성 계정 | 조회, 리전 이슈·댓글·게시판 작성, 본인이 작성한 것만 수정·삭제, 초대 발급 |
+
+- 수정·삭제 가능 여부는 서버가 `can_edit`로 내려 주고 화면은 이 값으로만 버튼을 보여 줍니다. 작성자 아이디는 응답에 넣지 않습니다.
+- DB 관리에서 입력한 작성자 없는 이슈는 관리자만 수정합니다.
+- 계정 아이디가 바뀌면 `core.signals.username_changed`로 리전 이슈·댓글의 작성자 아이디도 함께 바뀝니다.
+- 권한 변경은 DB 관리 → 기능별 설정 → 사용자·권한에서만 합니다. `/api/me/`는 조회 전용입니다.
+
+## 4. 개인 화면 설정
+
+`GET/PATCH /api/navigation/preferences/`는 본인의 `hidden_tabs`, `sidebar_collapsed`만 다룹니다. 로그인 사용자는 계정별, 비로그인 개발 화면은 서명된 HttpOnly 쿠키로 브라우저별로 저장합니다. 처음 로그인하면 브라우저 설정을 계정으로 가져옵니다. PATCH에는 CSRF가 필요합니다. 숨길 수 있는 탭은 각 앱 `feature.py`의 `tabs`이며 홈·DB 관리는 숨길 수 없습니다. 업무 데이터 권한과는 별개입니다.
+
+## 5. 과거 구조 변경 기록
+
+이미 배포된 마이그레이션은 기존 설치의 업그레이드에 필요하므로 지우지 않습니다.
+
+| 마이그레이션 | 내용 |
 | --- | --- |
-| `ops_regions` | 리전 이름·국가·전체 리전(내수·유럽·북미, 자동 계산) (내부 숫자 ID로 연결) |
-| `ops_services` | 서비스 코드·이름 |
-| `ops_staff_members` | 인력 이름 (내부 ID로 연결) |
-| `infra_resources` | 리전·서비스별 Host·VM·Compute Rack·Storage Rack 수량 |
-| `ops_staff_assignments` | 인력의 국가(KR·EU·NA)·직책·소속사·업무·근무지 |
-| `ops_work_summaries` | 현재 요청·변경·장애 작업 수량과 복구 시간 |
-| `ops_regional_issues` | 리전별 이슈·중요도·상태·담당자·조치 |
-| `ops_issue_comments` | `issue_id`로 이슈에 연결된 댓글 |
-| `auth_user` | 이메일 아이디·이름·암호화된 비밀번호·활성/관리자 권한 |
-| `ui_navigation_preferences` | 계정 또는 브라우저별 숨긴 탭·사이드바 접기. 개인 설정용 |
-| `ops_data_state` | 전체 운영 데이터의 동시 수정 버전. 내부 관리용 |
-| `ops_change_logs` | 운영 데이터 변경 이력. 내부 관리용 |
-| `db_admin_change_logs` | 계정·댓글 관리자 변경 이력. 내부 관리용 |
-
-`is_staff=true`가 관리자 권한입니다. 현재 기능에 별도의 권한 테이블은 필요하지 않습니다. Django의 세션·마이그레이션·인증 내부 테이블은 유지하지만 관리자 원본 조회 목록에는 표시하지 않습니다.
-
-리전·서비스·인력·수량은 자동 생성하지 않습니다. 관리자가 DB 관리 → 공통데이터에서 리전·서비스·인력을 등록한 후 기능별 설정에서 업무 데이터를 입력합니다. 계정은 회원가입 또는 관리자 사용자 설정에서 생성합니다.
-
-## API와 저장
-
-- `/api/operations/bootstrap/`: 공통데이터.
-- `/api/operations/current/`: 최신값·합계·변경 이력·동시 수정 버전.
-- `/api/db-admin/sections/{resources|staff|work|issues}/`: 편집 결과 저장.
-- `/api/db-admin/common/{regions|services|staff-members}/`: 관리자 기준정보 추가. 개별 경로는 수정·삭제.
-- `/api/db-admin/issues/{id}/comments/`: 댓글 입력.
-
-일반 운영 화면은 관리자에게도 조회 전용입니다. 개발 모드에서도 일반 사용자와 비로그인 사용자는 저장할 수 없습니다. 실제 활성 관리자만 DB 탭에서 편집할 수 있습니다. 편집 화면은 조회 상태로 열립니다. 편집 후 저장해야 DB에 반영됩니다. 삭제한 행은 저장 시 실제로 삭제합니다. 사용 중인 기준정보나 댓글이 연결된 이슈는 참조 데이터부터 정리해야 삭제할 수 있습니다. 수량·상태 제약과 동시 수정 검사는 서버와 DB에서 처리합니다.
-
-## 이전과 신규 설치
-
-기존 설치는 과거 마이그레이션을 통해 최근 주의 데이터·해당 댓글만 남긴 후 최신 테이블로 전환합니다. 계정·리전·서비스·인력 기준정보는 유지합니다. 주·K8s·test 테이블과 주별 조회 뷰는 제거합니다. 과거 마이그레이션 파일은 이 업그레이드 경로를 위해 보존합니다.
-
-신규 설치는 `0001_squashed_current_schema`와 현재 구조의 init SQL을 사용합니다. 기존 테이블이 있으면 `migrate --fake-initial --noinput`으로 인식하며, seed 명령은 실행하지 않습니다. 이후 변경에도 init SQL과 마이그레이션을 함께 맞춥니다.
-
-## 직접 DB 접속
-
-로컬 VS Code PostgreSQL 확장: Host `127.0.0.1`, Port `.env`의 `POSTGRES_PORT`(기본 `5433`), Database/User/Password는 각각 `POSTGRES_DB`/`POSTGRES_USER`/`POSTGRES_PASSWORD`, Schema `public`, SSL 끄기. 웹 관리자 계정과 DB 접속 계정은 별개입니다. Docker 내부 주소는 `db:5432`입니다.
-
-Compute 랙은 `0007_remove_compute_rack`으로 한 번 제거했다가 사용자 요청으로 `0016_rack_columns_global_region`에서 빈 `compute_rack_count` 열로 다시 추가했습니다. 이전에 삭제한 값은 복원하지 않습니다. 신규 설치에서는 0007이 init의 열을 지운 뒤 0016이 다시 만들어 최종 구조가 같아집니다. 계정 조회 `/api/me/`는 GET만 제공하며 변경은 관리자 계정 설정에서 처리합니다.
-
-리전·서비스·인력 공통데이터의 사용 상태(`is_active`)는 UI·API·DB에서 제거했습니다. 등록된 공통데이터는 그대로 선택 목록에 표시합니다. 로그인 계정의 `auth_user.is_active`는 인증을 위해 유지하며 인력 배치·이슈의 업무 진행 상태도 별도로 유지합니다.
-
-## 개인 화면 설정
-
-`GET/PATCH /api/navigation/preferences/`는 본인의 `hidden_tabs`, `sidebar_collapsed`만 조회·저장합니다. 로그인 시 계정에 저장하며 비로그인 개발 화면에서는 서명된 HttpOnly 쿠키로 브라우저별 설정을 구분합니다. 처음 로그인할 때 브라우저 설정을 계정으로 가져오며 이후 계정 설정을 우선합니다. PATCH에는 CSRF가 필요합니다. 업무 수정 권한과 별개이며 홈·DB 관리 진입은 숨길 수 없습니다.
-
-`ui_navigation_preferences`는 `auth_user` 생성 후 Django 마이그레이션 `0010_navigation_preferences`로 생성합니다. init SQL은 이 인증 의존성을 명시하며 중복 생성하지 않습니다. 운영 데이터와 계정은 자동 생성하지 않습니다.
-
-## 환경·Storage·인력 열 변경
-
-`0011_environment_storage_staff_columns`는 기존 값을 보존하여 `infra_resources.zone_name`을 `environment_name`(환경), `storage_rack_count`를 `storage_count`(Storage)로 변경합니다. `ops_regions.display_order`는 제거하며 기본 목록은 리전 이름순, 인프라 분포 그래프는 각 항목의 수량 내림차순입니다.
-
-운영 인력의 `role`은 `job_title`(직책)로 이름을 바꿉니다. `status`, `work_mode`, `remarks`는 제거하고 `job_description`(업무), `work_location`(근무지)을 빈 값으로 추가합니다. 계정·이슈의 상태 열은 별개로 유지합니다. 서버는 이전 열 이름으로 보내는 편집 요청을 거절하여 오래 열린 화면의 저장으로 값이 바뀌지 않게 합니다.
-
-신규 init은 새 열을 생성하고 같은 마이그레이션을 안전하게 적용합니다. 기존 설치의 변경 전 백업은 `.artifacts/backups/`에 비공개로 보관합니다. init이나 서버 시작 시 공통데이터·샘플 행을 생성하지 않습니다.
-
-## 운영 인력 국가 선택
-
-운영 인력은 개별 리전 대신 `country_code`에 KR·EU·NA를 저장합니다. 화면의 국가 선택·필터·CSV·관리자 DB 입력은 같은 국가 코드를 사용하며, 허용값을 API와 DB에서 검사합니다. 리전 등록 없이 인력을 배치할 수 있습니다. 인프라·작업·이슈는 기존 리전을 계속 참조합니다.
-
-`0012_staff_country`는 기존 배치의 연결 리전 국가를 옮긴 뒤 인력 테이블의 `region_code`를 제거합니다. KR·EU·NA로 옮길 수 없는 기존 행이 있으면 변경 전체를 중단하여 데이터를 보존합니다. 신규 설치용 init도 같은 국가 열을 생성합니다.
-
-## 인력 이름 관리
-
-인력 공통데이터는 이름만 입력합니다. `0013_remove_staff_code`는 사용자가 요청한 인력코드 열을 제거하며 기존 내부 `id`와 인력 배치·이슈 담당자 연결을 보존합니다. 동일한 이름의 인력도 서로 다른 ID로 구분하므로 이름을 고유키로 사용하지 않습니다. 화면·선택 목록·CSV에는 이름만 표시합니다. 신규 설치용 init도 인력코드를 생성하지 않습니다.
-
-## 리전 내부 식별자
-
-리전은 이름·국가만 입력하고 자동 생성되는 `ops_regions.id`를 PK로 사용합니다. `0014_region_primary_key`는 기존 `region_code`에 연결된 인프라·작업·이슈를 같은 리전의 새 `region_id`로 옮긴 뒤 코드 열을 제거합니다. 수량·업무·댓글과 인력 ID는 보존하며, 복합 고유 제약과 외래키도 새 ID에 다시 연결합니다. 기존 리전코드로 열린 편집 초안은 버전 충돌로 저장을 막습니다.
-
-리전·인력의 내부 ID는 DB 원본 탭에서만 표시합니다. 일반 화면과 공통데이터에서는 이름으로 선택하며, API의 ID는 내부 연결에 사용합니다. 리전 이름을 수정해도 연결된 기능 데이터는 유지됩니다. 서비스 코드와 국가(KR·EU·NA 등) 코드는 별개로 유지합니다.
-
-변경 이력의 화면에서도 리전·인력 연결은 이름으로 표시하고 내부 ID와 폐기된 코드는 숨깁니다. 원본 감사 이력 JSON은 DB에서 변경하지 않습니다.
-
-## Rack 열과 전체 리전
-
-`0016_rack_columns_global_region`은 `infra_resources.compute_rack_count`(Compute Rack)를 빈 값으로 추가하고, 기존 `storage_count`는 값을 그대로 둔 채 Storage Rack으로 표시합니다. 인프라 화면은 두 값을 Rack 그룹의 두 열로 보여 주고, 상단 Rack 카드는 둘의 합계를 표시합니다. 둘 다 비어 있는 행만 미입력이며 한쪽만 비면 입력된 값만 더합니다.
-
-`0017_remove_resource_environment`는 사용자 요청으로 `infra_resources.environment_name`(환경) 열과 값을 삭제하고, 고유 조합을 `unique_current_resource_service`(리전·서비스)로 바꿉니다. 리전·서비스가 겹치는 행이 있으면 아무것도 지우지 않고 중단합니다. 데이터 버전을 올려 환경 열이 있던 편집 초안의 저장을 막고, 서버는 `environment_name`을 보내는 요청을 거절합니다. 신규 설치 init은 과거 마이그레이션 0011이 이 열을 참조하므로 열을 만든 뒤 0017에서 지웁니다. 로컬 삭제 전 백업은 `.artifacts/backups/`에 비공개로 보관합니다.
-
-`ops_regions.global_region`(전체 리전)은 `country_code`로 DB가 자동 계산하는 읽기 전용 생성 열입니다. KR·CN은 `내수`, EU는 `유럽`, NA는 `북미`이며 그 외 코드는 빈 값(NULL)입니다. 아직 화면·API에서는 사용하지 않고 DB 원본 탭에서만 보입니다. 새 국가 코드를 분류하려면 모델·마이그레이션·init의 계산식을 함께 바꿉니다.
-
-## 관리자 변경 이력과 공통 글꼴
-
-변경 이력은 관리자 메뉴에만 표시합니다. `/api/operations/logs/`는 실제 활성 관리자만 조회하며, 일반 사용자와 개발 비로그인 화면의 현재값 응답에서는 `logs`를 빈 목록으로 제공합니다. 일반 리포트·홈·탭 관리에도 변경 이력을 표시하지 않습니다.
-
-영문·숫자는 Inter, 한글은 Pretendard v1.3.9 웹폰트를 로컬 `/fonts/`에서 제공합니다. 맥·윈도우가 같은 폰트 파일을 사용하며 OS별 렌더링 차이는 남을 수 있습니다. OFL 라이선스 파일을 폰트와 함께 보관합니다.
-
-## 로그인·회원가입 화면
-
-로그인을 복구하여 `DEVELOPMENT_AUTH_BYPASS=false`를 사용합니다. 비로그인 방문자는 좌측 이메일 로그인·회원가입 폼과 우측 Cloud Operations Center 브랜드 영역을 봅니다. 기존 계정과 관리자 권한은 유지하며, 신규 가입자는 일반 사용자로 생성하고 가입 후 세션을 시작합니다. 회원가입은 팀원이 발급한 초대 링크(`/?invite=<토큰>`)로 열었을 때만 폼이 보이며, 링크 없이 회원가입을 누르면 초대 링크가 필요하다는 안내만 표시합니다. 기존 CSRF·비밀번호 검증·세션 인증 API를 사용합니다.
+| `reporting` 0001~0006 | 주별 테이블을 최신값 테이블로 전환. 가장 최근 주의 데이터와 그 댓글만 이전, 주·K8s·test 테이블 제거 |
+| `reporting` 0007, 0016 | Compute Rack 열 제거 후 빈 열로 다시 추가(이전 값은 복원하지 않음) |
+| `reporting` 0009 | 공통데이터 사용 상태(`is_active`) 제거 |
+| `reporting` 0011 | 인프라 `zone_name`→`environment_name`, `storage_rack_count`→`storage_count`, 인력 `role`→`job_title`, 리전 표시 순서 제거 |
+| `reporting` 0012 | 운영 인력 리전 → 국가 코드(KR·EU·NA) |
+| `reporting` 0013, 0014 | 인력코드 제거, 리전 코드 PK → 자동 숫자 ID |
+| `reporting` 0015 | 이슈 작성자 열 |
+| `reporting` 0017 | 인프라 환경(`environment_name`) 열과 값 삭제(삭제 전 백업은 `.artifacts/backups/`) |
+| `reporting` 0018, `core` 0004, 각 기능 앱 0001 | 기능별 모델을 `backend/features/<기능>` 앱으로 이동. DB는 바꾸지 않고 Django 상태만 옮김 |

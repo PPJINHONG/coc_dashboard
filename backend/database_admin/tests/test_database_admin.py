@@ -1,9 +1,14 @@
+# DB 관리 API: 원본 조회(읽기 전용)·계정·공통데이터. 이슈 댓글 관리는 features/issues/tests에 있습니다.
 import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
 from database_admin.models import DatabaseChangeLog
-from reporting.models import IssueComment, Region, RegionalIssue, Service, StaffAssignment, StaffMember
+from features.issues.models import RegionalIssue
+from features.resources.models import InfrastructureResource
+from features.staff.models import StaffAssignment
+from features.work.models import WorkSummary
+from reporting.models import Region, Service, StaffMember
 
 ROOT = '/api/db-admin/'
 
@@ -106,21 +111,6 @@ def test_invalid_accounts_are_not_created(client, changes):
 
 
 @pytest.mark.django_db
-def test_feature_comment_crud_updates_actual_table_and_current_view(client):
-    region = Region.objects.create(region_name='리전')
-    issue = RegionalIssue.objects.create(region=region, title='운영 이슈')
-    response = client.post(ROOT + 'comments/', {'issue': issue.pk, 'author_name': '관리자', 'content': '새 댓글'}, format='json')
-    assert response.status_code == 201, response.data
-    pk = response.data['id']
-    assert client.patch(ROOT + f'comments/{pk}/', {'content': '수정 댓글'}, format='json').status_code == 200
-    assert IssueComment.objects.get().content == '수정 댓글'
-    assert client.get('/api/operations/current/').data['issues'][0]['comments'][0]['content'] == '수정 댓글'
-    assert client.get(ROOT + 'tables/ops_issue_comments/rows/').data['rows'][0]['values']['content'] == '수정 댓글'
-    assert client.delete(ROOT + f'comments/{pk}/').status_code == 204
-    assert not IssueComment.objects.exists()
-
-
-@pytest.mark.django_db
 def test_admin_feature_writes_require_csrf(admin):
     client = APIClient(enforce_csrf_checks=True); client.force_login(admin)
     assert client.post(ROOT + 'accounts/', {}, format='json').status_code == 403
@@ -180,8 +170,6 @@ def test_staff_name_only_preserves_links_and_allows_same_name(client):
 
 @pytest.mark.django_db
 def test_region_generated_id_preserves_all_feature_links_when_renamed(client):
-    from reporting.models import InfrastructureResource, WorkSummary
-
     created = client.post(ROOT + 'common/regions/', {'region_name': '센터', 'country_code': 'KR'}, format='json')
     assert created.status_code == 201, created.data
     pk = created.data['id']

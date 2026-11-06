@@ -1,0 +1,35 @@
+import { request } from './client';
+
+export interface User {
+  id: number;
+  name: string;
+  username: string;
+  email: string;
+  date_joined: string;
+  is_staff: boolean;
+  /** admin: 관리자, observer: 옵저버(읽기 전용), user: 사용자 */
+  role?: 'admin' | 'observer' | 'user' | null;
+}
+
+export interface Registration {
+  name: string;
+  username: string;
+  password: string;
+  invite: string;
+}
+
+export function register(data: Registration): Promise<User> {
+  return request<User>('POST', '/api/auth/register/', data);
+}
+
+export function login(username: string, password: string): Promise<User> {
+  return request<User>('POST', '/api/auth/login/', { username, password });
+}
+
+export function logout(): Promise<void> {
+  return request<void>('POST', '/api/auth/logout/');
+}
+
+export function getMe(): Promise<User> {
+  return request<User>('GET', '/api/me/');
+}

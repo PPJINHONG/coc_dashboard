@@ -2,71 +2,62 @@
 
 [문서 목록으로 돌아가기](../README.md)
 
-이 문서는 **프로젝트가 어떻게 움직이는지 처음 알아볼 때** 읽습니다. 명령어를 모두 외울 필요는 없습니다. 먼저 큰 흐름을 보고 필요한 문서만 열어보세요.
+**프로젝트가 어떻게 움직이는지 처음 알아볼 때** 읽습니다. 명령어를 모두 외울 필요는 없습니다.
 
-## 1. 이 프로젝트는 무엇으로 이루어져 있나요?
+## 1. 무엇으로 이루어져 있나요?
 
-| 구분 | 쉬운 설명 | 실제 폴더·도구 이름 |
+| 구분 | 쉬운 설명 | 실제 폴더·도구 |
 | --- | --- | --- |
-| 화면 | 사람이 브라우저에서 보는 부분 | `frontend/`, React, TypeScript |
-| 서버 | 요청을 받아 데이터를 읽고 결과를 돌려주는 부분 | `backend/`, Django |
-| 데이터 보관 | 내용을 표 형태로 저장하는 부분 | `db/`, PostgreSQL |
-
-예를 들어 화면에서 데이터를 요청하면 서버가 데이터 보관소를 읽고 결과를 돌려줍니다. 현재 기본 화면은 안내 문구를 보여주며, 데이터 조회는 별도 주소에서 확인할 수 있습니다.
+| 화면 | 브라우저에서 보는 부분 | `frontend/`, React, TypeScript |
+| 서버 | 요청을 받아 데이터를 읽고 저장하는 부분 | `backend/`, Django |
+| 데이터 보관 | 내용을 표 형태로 저장하는 부분 | PostgreSQL (`db/init/`은 신규 설치용 기준선) |
 
 ```text
-브라우저에서 화면 또는 데이터 주소 열기
-                  ↓
-화면 요청이면 frontend가 화면 제공
-데이터 요청이면 backend가 db에서 조회 후 결과 제공
+브라우저 localhost:8080
+        ↓
+frontend(Nginx) ── 화면 파일 제공
+        ↓ /api/
+backend(Django) ── 로그인 확인, DB 읽기·쓰기
+        ↓
+db(PostgreSQL)
 ```
 
-Docker는 이 세 부분을 각각 실행해 주는 도구입니다. 세 부분을 함께 켜는 방법을 적어 둔 파일이 프로젝트 최상위의 `compose.yaml`입니다.
+Docker가 세 부분을 각각 실행하고, 함께 켜는 방법은 프로젝트 최상위의 `compose.yaml`에 있습니다.
 
-## 2. 내 컴퓨터에서 열어보기
+## 2. 코드는 공통과 기능으로 나뉩니다
 
-Docker Desktop이 설치되어 있고 실행 중이어야 합니다. 터미널도 프로젝트 폴더에서 열어야 합니다.
+화면에 보이는 기능 탭(인프라 자원, 운영 인력, 운영 작업, 리전 이슈, 리포트, 변경 이력, DB 관리)은 **기능 폴더 하나씩**에 들어 있습니다.
 
-처음이라면 [프로젝트 켜고 끄기](../02-development/docker-compose.md)의 1~3단계를 순서대로 따라 하세요. 이미 설정했다면 다음 명령으로 다시 켤 수 있습니다.
+```text
+frontend/src/features/<기능>/   이 기능의 화면
+backend/features/<기능>/        이 기능의 테이블·API·테스트
+```
+
+사이드바·홈·로그인 같은 공통 뼈대와 버튼·표 같은 공통 부품은 `frontend/src/app/`, `frontend/src/shared/`, 로그인·권한·공통데이터는 `backend/core/`, `backend/reporting/` 등에 있습니다. 새 기능 폴더를 만들면 메뉴와 API에 자동으로 연결되므로 두 사람이 서로 다른 기능을 동시에 고쳐도 같은 파일을 덜 건드립니다. 자세한 구조는 [폴더 구조와 기능 추가 방법](../02-development/structure.md)에 있습니다.
+
+## 3. 내 컴퓨터에서 열어보기
+
+Docker Desktop이 실행 중이어야 합니다. 처음이라면 [프로젝트 켜고 끄기](../02-development/docker-compose.md)의 1~3단계를 따라 하세요. 이미 설정했다면:
 
 ```bash
 docker compose up --build -d
 ```
 
-오류가 없다면 브라우저에서 http://localhost:8080 을 엽니다. 첫 실행은 필요한 프로그램을 내려받기 때문에 오래 걸릴 수 있습니다.
+브라우저에서 http://localhost:8080 을 열고 로그인합니다. 빈 DB로 처음 켜면 관리자 `admin` / `admin`이 생깁니다. API 목록은 http://localhost:8080/api/docs/ 에서 봅니다.
 
-| 확인할 것 | 주소 | 보여야 하는 내용 |
-| --- | --- | --- |
-| 기본 화면 | http://localhost:8080 | 프로젝트 시작 안내 |
-| 서버 기본 화면 | http://localhost:8080/backend/ | Django로 만든 안내 페이지 |
-| 데이터 조회 | http://localhost:8080/api/operations/current/ | 최신 운영 데이터와 합계 |
-| API 안내 화면 | http://localhost:8080/api/docs/ | 데이터를 요청해 볼 수 있는 화면 |
-
-`localhost`는 내 컴퓨터를 뜻하고, `8080`은 이 프로젝트에 접속할 때 사용하는 번호입니다.
-
-## 3. 수정하고 함께 쓰는 순서
+## 4. 수정하고 함께 쓰는 순서
 
 ```text
-최신 공용 코드(main) 받기
-          ↓
-내 작업 공간(브랜치) 만들기
-          ↓
-코드 수정 → 내 PC에 기록(Commit) → GitHub에 올리기(Push)
-          ↓
-공용 코드에 합쳐 달라고 요청(PR)
-          ↓
-자동 검사 + 상대방 확인·승인
-          ↓
-실제로 공용 코드에 합치기(Merge)
+최신 main 받기 → 내 브랜치 만들기 → 내 기능 폴더에서 수정
+      → Commit → Push → PR → 자동 검사(빌드·테스트) + 상대 승인 → Merge
 ```
 
-자동 검사는 코드를 실행할 준비가 되는지 일부 확인합니다. 현재는 설정 확인과 프로그램 묶음 만들기까지 검사하며, 화면과 데이터 기능이 모두 정상인지는 사람이 직접 확인해야 합니다.
+자동 검사는 화면 빌드(TypeScript 검사 포함)와 서버 테스트까지 확인합니다. 화면이 실제로 잘 보이는지는 사람이 직접 확인합니다.
 
-상대방이 먼저 공용 코드를 바꿔도 내 작업 파일이 저절로 바뀌지는 않습니다. 개발 중에 가져오는 방법은 [상황별 Git 사용법](../03-collaboration/git-scenarios.md)에 있습니다.
+## 5. 다음에 읽을 문서
 
-## 4. 다음에는 무엇을 읽나요?
-
-- 실행부터 해보고 싶다면 [프로젝트 켜고 끄기](../02-development/docker-compose.md).
-- 어떤 파일을 수정하는지 알고 싶다면 [폴더와 파일 역할](../02-development/application.md).
-- 두 사람이 개발을 시작한다면 [평소 Git 작업 순서](../03-collaboration/git_collaboration_guide.md).
-- 낯선 단어가 나오면 [쉬운 용어 사전](glossary.md).
+- 실행: [프로젝트 켜고 끄기](../02-development/docker-compose.md)
+- 어디를 고칠지: [폴더 구조와 기능 추가 방법](../02-development/structure.md)
+- 두 사람이 나눠 개발하기: [기능별로 나눠 개발하기](../03-collaboration/parallel-development.md)
+- Git 순서: [평소 Git 작업 순서](../03-collaboration/git_collaboration_guide.md)
+- 낯선 단어: [쉬운 용어 사전](glossary.md)

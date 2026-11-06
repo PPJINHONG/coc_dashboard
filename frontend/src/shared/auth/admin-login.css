@@ -1,0 +1,11 @@
+/* 관리자 로그인 폼(사이드바 버튼 창·DB 관리 화면). */
+.db-login {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  max-width: 470px;
+  padding: 22px;
+}
+.report-modal .db-login {
+  padding: 0;
+}

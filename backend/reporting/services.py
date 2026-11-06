@@ -1,14 +1,8 @@
+"""운영 데이터 저장에 쓰는 공통 도구: 동시 수정 버전, 변경 이력, 작업자 이름."""
+
 from rest_framework.exceptions import APIException
 
-from .models import ChangeLog, DataState, InfrastructureResource, RegionalIssue, StaffAssignment, WorkSummary
-from .serializers import IssueSerializer, ResourceSerializer, StaffSerializer, WorkSerializer
-
-SECTIONS = {
-    'resources': (InfrastructureResource, ResourceSerializer, ('region', 'service')),
-    'staff': (StaffAssignment, StaffSerializer, ('staff',)),
-    'work': (WorkSummary, WorkSerializer, ('region', 'work_type', 'scope')),
-    'issues': (RegionalIssue, IssueSerializer, ()),
-}
+from .models import ChangeLog, DataState
 
 
 class Conflict(APIException):
@@ -39,30 +33,3 @@ def check_revision(state, revision):
 def bump(state):
     state.revision += 1
     state.save(update_fields=['revision', 'updated_at'])
-
-
-def section_rows(section):
-    model = SECTIONS[section][0]
-    if section == 'staff':
-        return model.objects.select_related('staff')
-    qs = model.objects.select_related('region')
-    if section == 'resources':
-        qs = qs.select_related('service')
-    if section == 'issues':
-        qs = qs.select_related('owner').prefetch_related('comments')
-    return qs
-
-
-def totals():
-    resources = list(section_rows('resources'))
-    work = list(section_rows('work'))
-    return {
-        'hosts': sum(row.host_count for row in resources),
-        'vms': sum(row.vm_count or 0 for row in resources),
-        'storage': sum(row.storage_count or 0 for row in resources),
-        'missing_vm_rows': sum(row.vm_count is None for row in resources),
-        'missing_storage_rows': sum(row.storage_count is None for row in resources),
-        'staff': section_rows('staff').count(),
-        'work_total': sum(row.total_count for row in work),
-        'work_completed': sum(row.completed_count for row in work),
-    }

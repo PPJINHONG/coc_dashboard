@@ -1,9 +1,6 @@
 from rest_framework import serializers
 
-from .models import (
-    ChangeLog, IssueComment, Region, Service, StaffMember,
-    RegionalIssue, InfrastructureResource, StaffAssignment, WorkSummary,
-)
+from .models import ChangeLog, Region, Service, StaffMember
 
 
 class RegionSerializer(serializers.ModelSerializer):
@@ -25,6 +22,9 @@ class StaffMemberSerializer(serializers.ModelSerializer):
 
 
 class RowSerializer(serializers.ModelSerializer):
+    """기능별 현재값 행의 공통 직렬화. 기능 앱의 serializers.py가 상속합니다."""
+
+    # 열 이름이 바뀐 뒤 오래 열린 화면이 예전 열로 저장하면 값이 바뀌지 않도록 거절합니다.
     retired_fields = ()
 
     def to_internal_value(self, data):
@@ -36,87 +36,6 @@ class RowSerializer(serializers.ModelSerializer):
 
     class Meta:
         validators = []
-
-
-class ResourceSerializer(RowSerializer):
-    retired_fields = ('zone_name', 'storage_rack_count', 'environment_name')
-
-    class Meta(RowSerializer.Meta):
-        model = InfrastructureResource
-        fields = ['id', 'region', 'service', 'host_count', 'vm_count', 'compute_rack_count', 'storage_count', 'remarks', 'updated_at']
-        read_only_fields = ['updated_at']
-
-
-class StaffSerializer(RowSerializer):
-    retired_fields = ('region', 'role', 'status', 'work_mode', 'remarks')
-
-    staff_name = serializers.CharField(source='staff.staff_name', read_only=True)
-
-    class Meta(RowSerializer.Meta):
-        model = StaffAssignment
-        fields = ['id', 'country_code', 'staff', 'staff_name', 'job_title', 'company_name', 'job_description', 'work_location']
-
-
-class WorkSerializer(RowSerializer):
-    class Meta(RowSerializer.Meta):
-        model = WorkSummary
-        fields = ['id', 'region', 'work_type', 'scope', 'total_count', 'completed_count', 'batch_count', 'delayed_count', 'mttr_minutes', 'remarks']
-
-    def validate(self, data):
-        total = data.get('total_count', 0)
-        completed = data.get('completed_count', 0)
-        if completed > total:
-            raise serializers.ValidationError({'completed_count': '완료 건수는 전체 건수를 넘을 수 없습니다.'})
-        if data.get('batch_count', 0) > total:
-            raise serializers.ValidationError({'batch_count': '정기배치는 전체 건수를 넘을 수 없습니다.'})
-        if data.get('delayed_count', 0) > total - completed:
-            raise serializers.ValidationError({'delayed_count': '지연 건수는 미완료 건수를 넘을 수 없습니다.'})
-        mttr = data.get('mttr_minutes')
-        if mttr is not None and (mttr < 0 or data.get('work_type') != 'incident'):
-            raise serializers.ValidationError({'mttr_minutes': '복구시간은 장애대응에만 0 이상의 값으로 입력하세요.'})
-        return data
-
-
-def _can_edit(serializer, author_username):
-    # 아이디는 응답에 넣지 않고, 요청한 사용자가 수정·삭제할 수 있는지만 알려 줍니다.
-    from core.roles import can_modify
-
-    request = serializer.context.get('request')
-    return bool(request and can_modify(request.user, author_username))
-
-
-class CommentSerializer(serializers.ModelSerializer):
-    can_edit = serializers.SerializerMethodField()
-
-    class Meta:
-        model = IssueComment
-        fields = ['id', 'author_name', 'content', 'created_at', 'can_edit']
-        read_only_fields = fields
-
-    def get_can_edit(self, obj):
-        return _can_edit(self, obj.author_username)
-
-
-class IssueSerializer(RowSerializer):
-    owner_name = serializers.CharField(source='owner.staff_name', read_only=True, default='')
-    comments = CommentSerializer(many=True, read_only=True)
-    can_edit = serializers.SerializerMethodField()
-
-    class Meta(RowSerializer.Meta):
-        model = RegionalIssue
-        fields = ['id', 'region', 'title', 'description', 'severity', 'status', 'progress_percent', 'owner', 'owner_name', 'next_action', 'author_name', 'comments', 'updated_at', 'can_edit']
-        read_only_fields = ['updated_at', 'author_name']
-
-    def get_can_edit(self, obj):
-        return _can_edit(self, obj.author_username)
-
-    def validate(self, data):
-        progress = data.get('progress_percent', 0)
-        if progress > 100:
-            raise serializers.ValidationError({'progress_percent': '진행률은 0~100 사이로 입력하세요.'})
-        if data.get('status') == 'resolved' and progress != 100:
-            raise serializers.ValidationError({'progress_percent': '완료 상태의 진행률은 100%여야 합니다.'})
-        return data
 
 
 class ChangeLogSerializer(serializers.ModelSerializer):

@@ -1,4 +1,4 @@
-# Compose 설정과 애플리케이션 이미지 빌드를 확인하는 기본 Workflow입니다.
+# Compose 설정, 애플리케이션 이미지 빌드, 백엔드 테스트를 확인하는 기본 Workflow입니다.
 name: Basic CI
 
 # main 대상 PR, main에 반영된 코드, Actions 화면의 수동 실행에서 동작합니다.
@@ -18,7 +18,7 @@ jobs:
     # main 보호 규칙에 등록할 때 사용할 검사 이름입니다.
     name: Compose build
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       # GitHub의 임시 실행 컴퓨터(runner)에 저장소 파일을 내려받습니다.
       # action은 v4.2.2의 커밋으로 고정했습니다.
@@ -38,6 +38,15 @@ jobs:
         run: docker compose config --quiet
       - name: Validate production Compose configuration
         run: docker compose -f compose.prod.yaml config --quiet
-      # frontend/backend 이미지가 만들어지는지만 확인합니다.
+      # frontend(TypeScript 검사 포함)/backend 이미지가 만들어지는지 확인합니다.
       - name: Build application images
         run: docker compose build
+      # 임시 DB로 백엔드 테스트를 실행합니다. 두 브랜치의 마이그레이션이 갈라졌거나
+      # 모델 변경에 마이그레이션이 빠졌으면 여기서 실패하므로 서버가 못 켜지는 변경을 병합 전에 막습니다.
+      - name: Run backend tests
+        run: |
+          docker compose up -d --wait db
+          docker compose run --rm --no-deps --entrypoint python backend -m pytest -q
+      - name: Stop test database
+        if: always()
+        run: docker compose down
