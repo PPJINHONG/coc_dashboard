@@ -55,7 +55,7 @@ const feature: FeatureDefinition = {
   report: {
     order: 3,
     Summary: ({ data, snapshot }) => (
-      <IssuesPage rows={sectionRows(snapshot, "issues")} data={data} rowLimit={15} />
+      <IssuesPage rows={sectionRows(snapshot, "issues")} data={data} month={snapshot.month} rowLimit={15} />
     ),
   },
   admin: [
@@ -68,6 +68,7 @@ const feature: FeatureDefinition = {
       <IssuesPage
         rows={sectionRows(snapshot, "issues")}
         data={data}
+        month={snapshot.month}
         canWrite={Boolean(user) && user?.role !== "observer"}
         onChanged={refresh}
       />

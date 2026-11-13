@@ -246,6 +246,24 @@
 .topbar-actions {
   gap: 11px;
 }
+/* 상단바 기준 월 선택: 이전 달 · 월 목록 · 다음 달 */
+.month-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.month-picker select {
+  width: auto;
+  min-width: 112px;
+  height: 30px;
+  padding-block: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+.month-picker .icon-button {
+  font-size: 17px;
+  line-height: 1;
+}
 .topbar-divider {
   width: 1px;
   height: 17px;
@@ -383,8 +401,12 @@
     font-size: 10px;
     padding: 6px 8px;
   }
-  .topbar-actions .btn svg {
+  .topbar-actions .btn svg,
+  .month-picker .icon-button {
     display: none;
+  }
+  .month-picker select {
+    min-width: 96px;
   }
 }
 @media print {

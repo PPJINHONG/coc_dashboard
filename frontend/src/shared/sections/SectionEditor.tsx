@@ -315,7 +315,7 @@ export function SectionAdmin({
       rows={sectionRows(snapshot, config.key)}
       data={data}
       onSave={async (rows) => {
-        await saveRows(snapshot.revision, config.key, rows);
+        await saveRows(snapshot.revision, config.key, rows, snapshot.month);
         await onChanged();
       }}
       onEditing={onEditing}

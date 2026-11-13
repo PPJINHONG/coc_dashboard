@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 // 공통 스타일을 기능 스타일보다 먼저 읽습니다.
 import "./shell.css";
 import "./home.css";
@@ -28,6 +28,22 @@ function initialTab(): string {
   const value = new URLSearchParams(window.location.hash.slice(1)).get("tab");
   return value && TABS.some((tab) => tab.id === value) ? value : "home";
 }
+/** 기준 월 선택지: 이번 달부터 24개월 전까지(최근 월이 위). 고른 월이 범위 밖이면 함께 넣습니다. */
+const MONTH_RANGE = 24;
+function monthOptions(selected: string): string[] {
+  const today = new Date();
+  const months = Array.from({ length: MONTH_RANGE + 1 }, (_, index) => {
+    const value = new Date(today.getFullYear(), today.getMonth() - index, 1);
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`;
+  });
+  if (selected && !months.includes(selected)) months.push(selected);
+  return months.sort().reverse();
+}
+const monthLabel = (value: string) => {
+  const [year, month] = value.split("-");
+  return `${year}년 ${Number(month)}월`;
+};
+
 const DEFAULT_PREFERENCE: NavigationPreference = {
   hidden_tabs: [],
   sidebar_collapsed: false,
@@ -49,17 +65,19 @@ export default function AppShell() {
     [manageTabs, setManageTabs] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [confirm, setConfirm] = useState<(() => void) | null>(null);
+  // 상단바에서 고른 기준 월. 처음에는 비워 두고 서버가 정한 이번 달(snapshot.month)을 씁니다.
+  const monthRef = useRef<string | undefined>(undefined);
   const refresh = useCallback(async () => {
     const [bootstrap, current] = await Promise.all([
       api.bootstrap(),
-      api.snapshot(),
+      api.snapshot(monthRef.current),
     ]);
     setData(bootstrap);
     setSnapshot(current);
   }, []);
   useEffect(() => {
     let cancelled = false;
-    Promise.all([api.bootstrap(), api.snapshot(), api.navigationPreference()])
+    Promise.all([api.bootstrap(), api.snapshot(monthRef.current), api.navigationPreference()])
       .then(([bootstrap, current, preferences]) => {
         if (!cancelled) {
           setData(bootstrap);
@@ -112,6 +130,27 @@ export default function AppShell() {
       setTab(next);
       window.history.pushState(null, "", `#tab=${next}`);
       window.scrollTo({ top: 0, behavior: "instant" });
+    });
+  }
+  /** 기준 월을 바꾸면 모든 탭이 그 월 데이터를 다시 불러옵니다. 편집 중이면 먼저 확인합니다. */
+  function changeMonth(next: string) {
+    if (!next || next === snapshot?.month) return;
+    guarded(() => {
+      setDirty(false);
+      const previous = monthRef.current;
+      monthRef.current = next;
+      setLoading(true);
+      api
+        .snapshot(next)
+        .then((current) => {
+          setSnapshot(current);
+          setError(null);
+        })
+        .catch((err) => {
+          monthRef.current = previous;
+          setError(errorMessage(err));
+        })
+        .finally(() => setLoading(false));
     });
   }
   async function collapseSidebar() {
@@ -296,6 +335,11 @@ export default function AppShell() {
             </nav>
           </div>
           <div className="topbar-actions">
+            <MonthPicker
+              value={snapshot.month}
+              disabled={loading || busy}
+              onChange={changeMonth}
+            />
             <button
               className={`icon-button borderless${loading ? " is-loading" : ""}`}
               disabled={loading || busy}
@@ -408,6 +452,58 @@ export default function AppShell() {
           </div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+/** 상단바 기준 월 선택. 이전·다음 달 버튼과 목록으로 고릅니다. 다음 달은 이번 달까지만 이동합니다. */
+function MonthPicker({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: string;
+  disabled: boolean;
+  onChange: (month: string) => void;
+}) {
+  const options = monthOptions(value);
+  const index = options.indexOf(value);
+  const older = options[index + 1];
+  const newer = index > 0 ? options[index - 1] : undefined;
+  return (
+    <div className="month-picker" role="group" aria-label="기준 월">
+      <button
+        type="button"
+        className="icon-button borderless"
+        aria-label="이전 달"
+        title="이전 달"
+        disabled={disabled || !older}
+        onClick={() => older && onChange(older)}
+      >
+        ‹
+      </button>
+      <select
+        aria-label="기준 월 선택"
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {options.map((month) => (
+          <option key={month} value={month}>
+            {monthLabel(month)}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        className="icon-button borderless"
+        aria-label="다음 달"
+        title="다음 달"
+        disabled={disabled || !newer}
+        onClick={() => newer && onChange(newer)}
+      >
+        ›
+      </button>
     </div>
   );
 }
