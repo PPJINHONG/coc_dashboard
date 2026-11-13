@@ -25,6 +25,7 @@ export type IconName =
   | "settings"
   | "logout"
   | "close"
+  | "clock"
   | "shield";
 const paths: Record<IconName, string[]> = {
   person: ["M20 21v-2a7 7 0 0 0-14 0v2", "M17 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0"],
@@ -66,6 +67,7 @@ const paths: Record<IconName, string[]> = {
   ],
   logout: ["M9 3H3v18h6M10 12h12m-5-5 5 5-5 5"],
   close: ["m6 6 12 12M6 18 18 6"],
+  clock: ["M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0", "M12 7v5l3 2"],
   shield: ["m12 2 9 4v6c0 6-9 10-9 10S3 18 3 12V6ZM8 12l3 3 5-6"],
 };
 export default function Icon({

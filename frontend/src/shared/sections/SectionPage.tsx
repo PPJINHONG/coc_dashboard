@@ -24,7 +24,7 @@ export default function SectionPage({
   subtitle?: string;
   /** 제목 오른쪽 버튼(CSV 내보내기 앞) */
   actions?: ReactNode;
-  /** 본문을 표 대신 직접 그릴 때(리전 이슈 카드) */
+  /** 본문을 표 대신 직접 그릴 때 */
   renderBody?: (visible: DataRow[]) => ReactNode;
   /** 화면 끝에 붙일 내용(입력 창 등) */
   children?: ReactNode;

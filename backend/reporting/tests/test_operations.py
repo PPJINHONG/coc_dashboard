@@ -5,7 +5,6 @@ from django.contrib.auth import get_user_model
 from django.db import connection
 from rest_framework.test import APIClient
 
-from features.issues.models import IssueComment, RegionalIssue
 from features.resources.models import InfrastructureResource
 from reporting.models import ChangeLog, DataState, Region, Service
 
@@ -45,7 +44,7 @@ def test_first_setup_is_empty_and_manual_reference_data_is_shared(client):
     assert bootstrap['regions'] == [] and bootstrap['services'] == [] and bootstrap['staff_members'] == []
     assert 'weeks' not in bootstrap and 'current_week' not in bootstrap
     snapshot = client.get(ROOT + 'current/').data
-    assert snapshot['resources'] == [] and snapshot['issues'] == []
+    assert snapshot['resources'] == []
     assert 'week' not in snapshot and 'kubernetes' not in snapshot
     client.force_login(get_user_model().objects.create_user(username='setup@example.com', is_staff=True))
     for collection, values in [('regions', {'region_name': '테스트 리전'}), ('services', {'service_code': 'TEST', 'service_name': '테스트 서비스'})]:
@@ -122,21 +121,17 @@ def test_only_active_admin_can_write_even_when_development_bypass_enabled(base, 
         user = get_user_model().objects.create_user(username=f'{role}@example.com', is_staff=role == 'inactive_admin', is_active=role != 'inactive_admin')
         client.force_authenticate(user)
     assert client.get(ROOT + 'current/').status_code == 200
-    issue = RegionalIssue.objects.create(region_id=101, title='원본 이슈')
     before_revision = DataState.objects.get(pk=1).revision
     for method, path, values in [
         ('put', ADMIN + 'sections/resources/', {'revision': before_revision, 'rows': [resource()]}),
-        ('put', ADMIN + 'sections/issues/', {'revision': before_revision, 'rows': []}),
-        ('post', ADMIN + f'issues/{issue.pk}/comments/', {'revision': before_revision, 'content': '등록 금지'}),
         ('post', ADMIN + 'common/regions/', {'region_name': '차단'}),
         ('patch', ADMIN + 'common/regions/101/', {'region_name': '차단'}),
         ('delete', ADMIN + 'common/regions/101/', {}),
     ]:
         response = getattr(client, method)(path, values, format='json')
         assert response.status_code == 403, (role, path, response.data)
-    assert not InfrastructureResource.objects.exists() and not IssueComment.objects.exists()
+    assert not InfrastructureResource.objects.exists()
     assert Region.objects.get().region_name == '테스트 리전'
-    assert RegionalIssue.objects.get().title == '원본 이슈'
     assert DataState.objects.get(pk=1).revision == before_revision
 
 
@@ -173,7 +168,7 @@ def test_region_has_no_display_order(client, base):
 
 @pytest.mark.django_db
 @pytest.mark.parametrize('role', ['anonymous', 'member', 'inactive_admin', 'admin'])
-def test_change_history_is_admin_only_in_api_and_snapshot(role):
+def test_change_history_requires_active_login_and_members_only_see_own(role):
     ChangeLog.objects.create(section='resources', action='update', actor_name='관리자', summary='관리자 이력')
     client = APIClient()
     if role != 'anonymous':
@@ -185,7 +180,9 @@ def test_change_history_is_admin_only_in_api_and_snapshot(role):
     logs = client.get(ROOT + 'current/').data['logs']
     response = client.get(ROOT + 'logs/')
     if role == 'admin':
-        assert response.status_code == 200 and response.data[0]['summary'] == '관리자 이력'
+        assert response.status_code == 200 and response.data['results'][0]['summary'] == '관리자 이력'
         assert len(logs) == 1
+    elif role == 'member':
+        assert response.status_code == 200 and response.data['results'] == [] and logs == []
     else:
         assert response.status_code == 403 and logs == []

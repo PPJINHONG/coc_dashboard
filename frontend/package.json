@@ -8,6 +8,10 @@
     "build": "tsc --noEmit && vite build"
   },
   "dependencies": {
+    "@tiptap/extension-image": "3.33.1",
+    "@tiptap/extension-table": "3.33.1",
+    "@tiptap/react": "3.33.1",
+    "@tiptap/starter-kit": "3.33.1",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },

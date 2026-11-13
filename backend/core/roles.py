@@ -19,6 +19,7 @@ COUNTRIES = ("KR", "EU", "NA")
 TEAM_LEAD_GROUP = "team_lead"
 GROUP_LEAD_PREFIX = "group_lead_"  # 그룹 이름 group_lead_KR 등. 한 사람이 여러 국가를 맡을 수 있습니다.
 ROLES = [(ROLE_ADMIN, "관리자"), (ROLE_TEAM_LEAD, "팀장"), (ROLE_GROUP_LEAD, "그룹장"), (ROLE_OBSERVER, "옵저버(읽기 전용)"), (ROLE_USER, "사용자")]
+ROLE_LEVELS = {ROLE_ADMIN: 3, ROLE_TEAM_LEAD: 2, ROLE_GROUP_LEAD: 1, ROLE_USER: 0, ROLE_OBSERVER: 0}
 OBSERVER_GROUP = "observer"
 READ_ONLY_MESSAGE = "읽기 전용(옵저버) 계정은 데이터를 변경할 수 없습니다."
 
@@ -60,6 +61,22 @@ def staff_edit_countries(user):
 
 def is_admin(user):
     return bool(user and user.is_authenticated and user.is_active and user.is_staff)
+
+
+def can_manage_members(user):
+    return bool(user and user.is_authenticated and user.is_active and user_role(user) in (ROLE_ADMIN, ROLE_TEAM_LEAD))
+
+
+def assignable_roles(user):
+    if not can_manage_members(user):
+        return []
+    level = ROLE_LEVELS[user_role(user)]
+    return [(role, label) for role, label in ROLES if ROLE_LEVELS[role] < level]
+
+
+def can_manage_account(actor, target):
+    return bool(can_manage_members(actor) and actor.pk != target.pk and not target.is_superuser
+                and ROLE_LEVELS.get(user_role(target), 3) < ROLE_LEVELS[user_role(actor)])
 
 
 def can_write(user):

@@ -5,7 +5,7 @@ from django.contrib.auth.signals import user_logged_in, user_logged_out, user_lo
 from django.dispatch import Signal, receiver
 
 # 계정 아이디가 바뀌면 보냅니다(old_username, new_username).
-# 작성자 아이디를 저장하는 기능 앱이 받아서 자기 데이터를 새 아이디로 바꿉니다. 예: features/issues/signals.py
+# 작성자 아이디 스냅샷을 저장하는 기능 앱이 필요하면 이 신호를 받아 갱신합니다.
 username_changed = Signal()
 
 

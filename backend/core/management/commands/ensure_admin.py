@@ -49,7 +49,7 @@ class Command(BaseCommand):
                 legacy.password = make_password(ADMIN_PASSWORD)
                 legacy.is_staff = legacy.is_superuser = legacy.is_active = True
                 legacy.save(update_fields=["username", "password", "is_staff", "is_superuser", "is_active"])
-                # 작성자 아이디를 저장하는 기능(리전 이슈 등)이 새 아이디로 바꿉니다.
+                # 작성자 아이디 스냅샷을 저장하는 기능이 새 아이디로 바꿉니다.
                 username_changed.send(sender=User, old_username=old, new_username=ADMIN_USERNAME)
                 self.stdout.write(f"기존 관리자 {old} 계정을 {ADMIN_USERNAME}(으)로 변경했습니다.")
                 return

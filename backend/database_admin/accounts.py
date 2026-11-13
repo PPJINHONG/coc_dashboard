@@ -13,8 +13,9 @@ from rest_framework.response import Response
 from core.defaults import DEFAULT_USERNAMES
 from core.models import UserActivity
 from core.roles import COUNTRIES, ROLE_ADMIN, ROLE_GROUP_LEAD, ROLES, apply_role, managed_countries, online_sessions, user_role
+from core.roles import assignable_roles, can_manage_account, record_activity
 from core.signals import username_changed
-from reporting.services import bump, lock_state
+from reporting.services import bump, lock_state, record_log
 
 from .services import log_change
 from .views import AdminView, payload
@@ -30,11 +31,12 @@ class AccountSerializer(serializers.ModelSerializer):
     is_online = serializers.SerializerMethodField()
     active_sessions = serializers.SerializerMethodField()
     last_activity = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
 
     class Meta:
         model = get_user_model()
         fields = ['id', 'name', 'username', 'email', 'role', 'managed_countries', 'is_staff', 'is_active', 'password', 'date_joined', 'last_login',
-                  'is_online', 'active_sessions', 'last_activity']
+                  'is_online', 'active_sessions', 'last_activity', 'can_edit']
         read_only_fields = ['id', 'email', 'date_joined', 'last_login']
         extra_kwargs = {'username': {'validators': []}}
 
@@ -47,6 +49,10 @@ class AccountSerializer(serializers.ModelSerializer):
     def get_active_sessions(self, obj):
         sessions = self.context.get('sessions')
         return (sessions if sessions is not None else online_sessions()).get(obj.pk, 0)
+
+    def get_can_edit(self, obj):
+        request = self.context.get('request')
+        return bool(request and can_manage_account(request.user, obj))
 
     def get_is_online(self, obj):
         return self.get_active_sessions(obj) > 0
@@ -72,6 +78,15 @@ class AccountSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        actor = self.context['request'].user
+        if self.instance and not can_manage_account(actor, self.instance):
+            raise serializers.ValidationError('본인 또는 동급·상위 역할의 회원은 변경할 수 없습니다.')
+        # is_staff를 직접 보내는 과거 요청에도 동일한 역할 제한을 적용합니다.
+        requested_role = attrs.get('role')
+        if requested_role is None and 'is_staff' in attrs:
+            requested_role = ROLE_ADMIN if attrs['is_staff'] else 'user'
+        if requested_role is not None and requested_role not in dict(assignable_roles(actor)):
+            raise serializers.ValidationError({'role': '본인보다 하위 역할만 지정할 수 있습니다.'})
         if 'role' in attrs:
             attrs['is_staff'] = attrs['role'] == ROLE_ADMIN
         role = attrs.get('role', user_role(self.instance) if self.instance else None)
@@ -121,7 +136,7 @@ class AccountSerializer(serializers.ModelSerializer):
         if role:
             apply_role(instance, role, countries)
         if old_username != instance.username:
-            # 본인 수정·삭제 판단이 끊기지 않도록 작성자 아이디를 저장하는 기능(리전 이슈 등)이 새 아이디로 바꿉니다.
+            # 작성자 아이디 스냅샷을 저장하는 기능이 본인 수정 권한을 이어가도록 알립니다.
             username_changed.send(sender=type(instance), old_username=old_username, new_username=instance.username)
         if password is not None and instance.pk == self.context['request'].user.pk:
             update_session_auth_hash(self.context['request'], instance)
@@ -131,6 +146,10 @@ class AccountSerializer(serializers.ModelSerializer):
 def account_context(request):
     latest = dict(UserActivity.objects.filter(user__isnull=False).values('user').annotate(latest=Max('created_at')).values_list('user', 'latest'))
     return {'request': request, 'sessions': online_sessions(), 'latest_activity': latest}
+
+
+def audit_data(data):
+    return {key: data[key] for key in ('id', 'name', 'username', 'email', 'role', 'managed_countries', 'is_staff', 'is_active')}
 
 
 class AccountsView(AdminView):
@@ -149,6 +168,8 @@ class AccountsView(AdminView):
             raise ValidationError('이미 사용 중인 아이디입니다.') from exc
         bump(state)
         log_change(request, 'insert', 'auth_user', {'changes': serializer.data})
+        record_activity(request, 'create', '회원 등록', 'account', serializer.instance.pk, after=audit_data(serializer.data))
+        record_log(request, 'members', 'create', '회원 등록', after=audit_data(serializer.data))
         return Response(serializer.data, status=201)
 
 
@@ -167,6 +188,10 @@ class AccountView(AdminView):
             raise ValidationError('이미 사용 중인 아이디입니다.') from exc
         bump(state)
         log_change(request, 'update', 'auth_user', {'before': before, 'changes': serializer.data, 'password_changed': 'password' in request.data})
+        record_activity(request, 'update', '회원 정보 수정', 'account', instance.pk, before=audit_data(before),
+                        after={**audit_data(serializer.data), **({'password_changed': True} if 'password' in request.data else {})})
+        record_log(request, 'members', 'update', '회원 정보 수정', before=audit_data(before),
+                   after={**audit_data(serializer.data), **({'password_changed': True} if 'password' in request.data else {})})
         return Response(serializer.data)
 
     @transaction.atomic
@@ -175,12 +200,17 @@ class AccountView(AdminView):
         instance = get_object_or_404(get_user_model().objects.select_for_update(), pk=pk)
         if instance.pk == request.user.pk or instance.is_superuser:
             raise ValidationError('현재 로그인한 계정과 최고 관리자 계정은 삭제할 수 없습니다.')
+        if not can_manage_account(request.user, instance):
+            raise ValidationError('본인보다 하위 역할의 회원만 삭제할 수 있습니다.')
         if str(payload(request).get('confirm_username', '')) != instance.username:
             raise ValidationError('삭제할 계정의 이메일 아이디를 확인하세요.')
         before = AccountSerializer(instance).data
+        target_id = instance.pk
         instance.delete()
         bump(state)
         log_change(request, 'delete', 'auth_user', {'before': before})
+        record_activity(request, 'delete', '회원 삭제', 'account', target_id, before=audit_data(before))
+        record_log(request, 'members', 'delete', '회원 삭제', before=audit_data(before))
         return Response(status=204)
 
 

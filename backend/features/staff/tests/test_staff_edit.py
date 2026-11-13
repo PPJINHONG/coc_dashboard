@@ -4,9 +4,8 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
 from core.roles import ROLE_GROUP_LEAD, ROLE_OBSERVER, ROLE_TEAM_LEAD, apply_role, user_role
-from features.issues.models import RegionalIssue
-from features.staff.models import StaffAssignment
-from reporting.models import ChangeLog, DataState, Region, StaffMember
+from features.staff.models import StaffAssignment, StaffCalendarEvent
+from reporting.models import ChangeLog, DataState, StaffMember
 
 URL = '/api/operations/staff/'
 
@@ -75,15 +74,16 @@ def test_group_lead_only_edits_managed_country_and_keeps_others():
 
 
 @pytest.mark.django_db
-def test_removed_staff_member_kept_when_used_by_issue():
+def test_calendar_link_prevents_removing_staff_and_keeps_entire_batch():
     kept = assignment('담당자', 'KR')
-    RegionalIssue.objects.create(region=Region.objects.create(region_name='리전'), title='이슈', owner=kept.staff)
+    StaffCalendarEvent.objects.create(assignment=kept, country_code='KR', kind='leave', start_date='2026-11-01', end_date='2026-11-02')
     gone = assignment('삭제 대상', 'KR')
     client, _ = login(ROLE_TEAM_LEAD, name='lead')
-    assert client.put(URL, {'revision': 0, 'rows': []}, format='json').status_code == 200
-    assert not StaffAssignment.objects.exists()
+    assert client.put(URL, {'revision': 0, 'rows': []}, format='json').status_code == 400
+    assert StaffAssignment.objects.count() == 2
     assert StaffMember.objects.filter(pk=kept.staff_id).exists()
-    assert not StaffMember.objects.filter(pk=gone.staff_id).exists()
+    assert StaffMember.objects.filter(pk=gone.staff_id).exists()
+    assert revision() == 0
 
 
 @pytest.mark.django_db

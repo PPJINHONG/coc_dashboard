@@ -13,7 +13,7 @@
 | 인프라 자원 탭 | `features/resources/` | `features/resources/` |
 | 운영 인력 탭 | `features/staff/` | `features/staff/` |
 | 운영 작업 탭 | `features/work/` | `features/work/` |
-| 리전 이슈 탭·이슈 댓글 | `features/issues/` | `features/issues/` |
+| 권역별 요청작업 탭·티켓·본문 이미지 | `features/regional_requests/` | `features/regional_requests/` |
 | 리포트 탭 | `features/report/` | (기능별 데이터를 모아 보여 줌) |
 | 변경 이력 탭 | `features/logs/` | `reporting/` (ChangeLog) |
 | DB 관리 탭(공통데이터·DB 원본·사용자·권한) | `features/database/` | `database_admin/`, `reporting/` |
@@ -41,7 +41,7 @@ frontend/src/
 │  └─ *.css                 뼈대·홈·탭 관리·초대·로그인 스타일
 ├─ features/                기능별 폴더 (담당자가 따로 고치는 곳)
 │  ├─ registry.ts           features/*/feature.tsx를 자동으로 모음 (고치지 않음)
-│  ├─ resources/ staff/ work/ issues/ report/ logs/ database/
+│  ├─ resources/ staff/ work/ regional_requests/ report/ logs/ database/
 │  │  ├─ feature.tsx        이 기능의 등록 정보: 탭 이름·아이콘·순서·홈 카드·리포트·DB 관리 탭·화면
 │  │  ├─ fields.ts          표·입력 열 정의 (있는 기능만)
 │  │  ├─ *.tsx              이 기능의 화면 부품
@@ -95,7 +95,7 @@ backend/
 ├─ invites/                 공통: 팀원 초대 링크
 └─ features/                기능별 Django 앱 (담당자가 따로 고치는 곳)
    ├─ __init__.py           apps.py가 있는 하위 폴더를 찾는 함수 (고치지 않음)
-   ├─ resources/ staff/ work/ issues/
+   ├─ resources/ staff/ work/ regional_requests/
    │  ├─ apps.py            앱 등록 정보 (label = 폴더 이름)
    │  ├─ models.py          이 기능의 테이블
    │  ├─ migrations/        이 기능의 테이블 변경 기록 (앱마다 따로 번호가 붙음)
@@ -131,7 +131,7 @@ FEATURE = Feature(
 ### 서버 코드 규칙
 
 - 기능 앱은 공통 앱(`core`, `reporting`, `database_admin`, `invites`)만 import합니다. **다른 기능 앱을 import하지 않습니다.**
-- 공통 앱은 기능 앱을 직접 import하지 않습니다. 기능 목록은 `feature.py`로 모으고, 계정 아이디 변경처럼 기능이 따라 바꿔야 하는 일은 신호로 알립니다(`core.signals.username_changed` → `features/issues/signals.py`).
+- 공통 앱은 기능 앱을 직접 import하지 않습니다. 기능 목록은 `feature.py`로 모으고, 계정 아이디 변경처럼 기능이 따라 바꿔야 하는 일은 `core.signals.username_changed` 같은 공통 신호로 알립니다.
 - 테이블 구조 변경은 그 기능 앱의 마이그레이션으로만 합니다. 자세한 규칙은 [데이터 확인과 DB 구조 변경](database.md)을 봅니다.
 
 ## 4. 새 기능 탭 추가 순서

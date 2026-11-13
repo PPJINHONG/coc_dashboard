@@ -6,7 +6,6 @@ from django.contrib.auth import get_user_model
 from django.db import IntegrityError, connection, transaction
 from rest_framework.test import APIClient
 
-from features.issues.models import IssueComment, RegionalIssue
 from features.resources.models import InfrastructureResource
 from features.work.models import WorkSummary
 from reporting.models import ChangeLog, Region, Service
@@ -98,32 +97,13 @@ def test_work_unique_per_month(client, base):
 
 
 @pytest.mark.django_db
-def test_issue_belongs_to_created_month_and_comments_follow(client, base):
-    response = client.post(ROOT + 'issues/', {'month': '2026-10', 'region': 101, 'title': '10월 이슈'}, format='json')
-    assert response.status_code == 201
-    issue = RegionalIssue.objects.get()
-    assert issue.period_month == date(2026, 10, 1)
-    assert response.data['row']['month'] == '2026-10'
-    # 수정 요청에 다른 월을 보내도 등록한 월은 바뀌지 않습니다.
-    assert client.patch(ROOT + f'issues/{issue.pk}/', {'month': '2026-11', 'title': '수정'}, format='json').status_code == 200
-    issue.refresh_from_db()
-    assert issue.period_month == date(2026, 10, 1)
-    assert client.post(ROOT + f'issues/{issue.pk}/comments/', {'content': '확인'}, format='json').status_code == 201
-    assert IssueComment.objects.get().issue_id == issue.pk
-    assert client.get(ROOT + 'current/?month=2026-10').data['issues'][0]['comments'][0]['content'] == '확인'
-    assert client.get(ROOT + 'current/?month=2026-11').data['issues'] == []
-    months = set(ChangeLog.objects.filter(section='issues').values_list('period_month', flat=True))
-    assert months == {date(2026, 10, 1)}
-
-
-@pytest.mark.django_db
 def test_change_logs_record_month_and_filter(client, base):
     assert save(client, 'resources', [resource()], 0, '2026-08').status_code == 200
     assert client.post(ADMIN + 'common/services/', {'service_code': 'TWO', 'service_name': '둘'}, format='json').status_code == 201
     log = ChangeLog.objects.get(section='resources')
     assert log.period_month == date(2026, 8, 1)
     assert ChangeLog.objects.get(section='services').period_month is None
-    logs = client.get(ROOT + 'logs/?month=2026-08').data
+    logs = client.get(ROOT + 'logs/?month=2026-08').data['results']
     assert [entry['month'] for entry in logs] == ['2026-08']
 
 

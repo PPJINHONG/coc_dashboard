@@ -6,8 +6,8 @@
 
 ## 1. 웹에서 확인
 
-- 일반 기능 탭: 인프라 자원·운영 작업·리전 이슈는 기준 월별, 운영 인력은 현재값 조회. 리전 이슈만 사용자가 작성합니다. 월 구조는 [운영 데이터 설계](operations.md#기준-월).
-- 관리자 **DB 관리 → 기능별 설정**: 업무 데이터, 이슈 댓글, 사용자·권한 관리.
+- 일반 기능 탭: 인프라 자원·운영 작업은 기준 월별, 운영 인력은 현재값 조회. 권역별 요청작업은 KST 요청일 기준 월별로 조회하고 관리자·사용자가 등록합니다. 월 구조는 [운영 데이터 설계](operations.md#기준-월).
+- 관리자 **DB 관리 → 기능별 설정**: 업무 데이터와 사용자·권한 관리.
 - 관리자 **DB 관리 → DB 원본**: 같은 원본 테이블을 읽기 전용으로 확인.
 - `http://localhost:8080/api/operations/current/?month=YYYY-MM`: 기준 월 데이터와 합계(로그인 필요, 월 생략 시 이번 달).
 
@@ -41,7 +41,7 @@ docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 | 인프라 자원 `infra_resources` | `features/resources` |
 | 운영 인력 배치 `ops_staff_assignments` | `features/staff` |
 | 운영 작업 `ops_work_summaries` | `features/work` |
-| 리전 이슈·댓글 `ops_regional_issues`, `ops_issue_comments` | `features/issues` |
+| 권역별 요청작업·이미지 `ops_regional_requests`, `ops_regional_request_images` | `features/regional_requests` |
 | 게시판 `core_post` 등, 대시보드 `core_dashboardpanel` | `features/board`, `features/dashboard` |
 | 리전·서비스·인력·변경 이력·탭 설정 | `reporting` (공통 앱, 한 번에 한 사람) |
 | 행동 이력 `user_activity_logs` | `core` (공통 앱) |

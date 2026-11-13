@@ -2,10 +2,11 @@ import type { Bootstrap, DataRow } from "../../shared/api/operations";
 import Icon from "../../shared/components/Icon";
 import { cell } from "../../shared/fields";
 import { staffFields } from "./fields";
+import type { Field } from "../../shared/fields";
 
 /** 운영 인력 조회 표: 국가 배지·사람 아이콘·직책 표시. */
-export default function StaffTable({ rows, data }: { rows: DataRow[]; data: Bootstrap }) {
-  const columns = staffFields(data);
+export default function StaffTable({ rows, data, onEdit, columns: selectedColumns }: { rows: DataRow[]; data: Bootstrap; onEdit?: (row: DataRow) => void; columns?: Field[] }) {
+  const columns = selectedColumns ?? staffFields(data, rows.some((row) => Object.hasOwn(row, "grade")));
   return (
     <div className="staff-table-scroll" tabIndex={0} role="region" aria-label="운영 인력 목록">
       <table className="staff-table">
@@ -13,6 +14,7 @@ export default function StaffTable({ rows, data }: { rows: DataRow[]; data: Boot
           <tr>
             <th scope="col" className="staff-row-number">No.</th>
             {columns.map((field) => <th scope="col" key={field.key}>{field.label}</th>)}
+            {onEdit && <th scope="col">관리</th>}
           </tr>
         </thead>
         <tbody>
@@ -36,11 +38,12 @@ export default function StaffTable({ rows, data }: { rows: DataRow[]; data: Boot
                     ) : cell(row, field)}
                   </td>
                 ))}
+                {onEdit && <td>{row.can_edit === true && <button className="btn btn-sm" onClick={() => onEdit(row)} aria-label={`${row.staff_name} 정보 수정`}>정보 수정</button>}</td>}
               </tr>
             );
           })}
           {!rows.length && (
-            <tr><td colSpan={columns.length + 1} className="staff-empty">표시할 운영 인력이 없습니다.</td></tr>
+            <tr><td colSpan={columns.length + 1 + (onEdit ? 1 : 0)} className="staff-empty">표시할 운영 인력이 없습니다.</td></tr>
           )}
         </tbody>
       </table>
