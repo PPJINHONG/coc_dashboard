@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from . import registry
 from .models import ChangeLog, Region, Service, StaffMember
+from .months import month_label, parse_month, request_month
 from .permissions import OperationsAdministrator, ReportingPermission, can_manage
 from .serializers import ChangeLogSerializer, RegionSerializer, ServiceSerializer, StaffMemberSerializer
 from .services import bump, check_revision, lock_state, record_log
@@ -47,15 +48,20 @@ class BootstrapView(ReportingView):
 
 
 class SnapshotView(ReportingView):
-    """모든 기능의 현재값을 한 번에 돌려줍니다. 기능 목록은 각 앱의 feature.py에서 모읍니다."""
+    """모든 기능의 기준 월 데이터를 한 번에 돌려줍니다. 기능 목록은 각 앱의 feature.py에서 모읍니다.
+
+    `?month=YYYY-MM`으로 월을 고르며, 없으면 이번 달입니다. 월 구분이 없는 기능(운영 인력)은 항상 전체 행입니다.
+    """
 
     @transaction.atomic
     def get(self, request):
+        month = request_month(request)
         state = lock_state()
-        payload = {'revision': state.revision, 'updated_at': state.updated_at, 'totals': registry.totals(),
+        payload = {'revision': state.revision, 'updated_at': state.updated_at, 'month': month_label(month),
+                   'totals': registry.totals(month),
                    'logs': ChangeLogSerializer(ChangeLog.objects.all()[:50], many=True).data if can_manage(request) else []}
         for key, section in registry.sections().items():
-            payload[key] = section.serializer(section.rows(), many=True, context={'request': request}).data
+            payload[key] = section.serializer(section.rows(month), many=True, context={'request': request}).data
         return Response(payload)
 
 
@@ -64,17 +70,23 @@ class LogsView(AdminDataView):
         logs = ChangeLog.objects.all()
         if request.query_params.get('section'):
             logs = logs.filter(section=request.query_params['section'])
+        if request.query_params.get('month'):
+            logs = logs.filter(period_month=parse_month(request.query_params['month']))
         return Response(ChangeLogSerializer(logs[:200], many=True).data)
 
 
 class SectionView(AdminDataView):
-    """기능별 현재값 전체를 한 번에 저장합니다. 보낸 목록에서 빠진 행은 삭제합니다."""
+    """기능별 기준 월 데이터 전체를 한 번에 저장합니다. 보낸 목록에서 빠진 행은 삭제합니다.
+
+    월별 기능은 본문 `month`(YYYY-MM, 없으면 이번 달)의 행만 바꾸고 다른 달 행은 건드리지 않습니다.
+    """
 
     @transaction.atomic
     def put(self, request, section):
         definition = registry.sections().get(section)
         if definition is None:
             raise ValidationError('알 수 없는 기능입니다.')
+        month = request_month(request) if definition.monthly else None
         state = lock_state()
         check_revision(state, request.data.get('revision'))
         rows = request.data.get('rows')
@@ -90,8 +102,8 @@ class SectionView(AdminDataView):
                     values = messages if isinstance(messages, list) else [messages]
                     errors.append(f"{index + 1}행: {' '.join(str(message) for message in values)}")
             raise ValidationError({'rows': errors})
-        before = serializer_class(definition.rows(), many=True).data
-        existing = {row.pk: row for row in model.objects.all()}
+        before = serializer_class(definition.rows(month), many=True).data
+        existing = {row.pk: row for row in definition.scoped(month)}
         seen_ids, seen_keys = set(), set()
         for index, values in enumerate(serializer.validated_data):
             pk = values.get('id')
@@ -114,6 +126,8 @@ class SectionView(AdminDataView):
                 for values in serializer.validated_data:
                     values = values.copy()
                     pk = values.pop('id', None)
+                    if month is not None:
+                        values['period_month'] = month
                     if pk is not None:
                         row = existing[pk]
                         for key, value in values.items():
@@ -123,17 +137,20 @@ class SectionView(AdminDataView):
                         row = model.objects.create(**values)
                     else:
                         lookup = {key: values.get(key, model._meta.get_field(key).get_default()) for key in unique_fields}
+                        if month is not None:
+                            lookup['period_month'] = month
                         row, _ = model.objects.update_or_create(**lookup, defaults=values)
                     saved_ids.append(row.pk)
-                model.objects.exclude(pk__in=saved_ids).delete()
+                definition.scoped(month).exclude(pk__in=saved_ids).delete()
         except ProtectedError as exc:
             raise ValidationError('댓글 등 연결된 데이터가 있습니다. 해당 데이터를 먼저 삭제하세요.') from exc
         except IntegrityError as exc:
             raise ValidationError({'rows': ['중복 항목 또는 유효하지 않은 수량이 있습니다. 입력값을 확인하세요.']}) from exc
         bump(state)
-        after = serializer_class(definition.rows(), many=True).data
-        record_log(request, section, 'update', f'{len(saved_ids)}개 행 저장', before={'rows': before}, after={'rows': after})
-        return Response({'revision': state.revision, 'rows': after})
+        after = serializer_class(definition.rows(month), many=True).data
+        summary = f'{month_label(month)} {len(saved_ids)}개 행 저장' if month else f'{len(saved_ids)}개 행 저장'
+        record_log(request, section, 'update', summary, before={'rows': before}, after={'rows': after}, month=month)
+        return Response({'revision': state.revision, 'month': month_label(month), 'rows': after})
 
 
 class MasterDataView(AdminDataView):

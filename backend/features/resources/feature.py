@@ -12,8 +12,8 @@ SECTION = Section(
 )
 
 
-def totals():
-    rows = list(SECTION.rows())
+def totals(month):
+    rows = list(SECTION.scoped(month))
     return {
         'hosts': sum(row.host_count for row in rows),
         'vms': sum(row.vm_count or 0 for row in rows),

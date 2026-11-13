@@ -1,7 +1,7 @@
 from django.db import models
 from django.db.models import F, Q
 
-from reporting.models import CurrentRow
+from reporting.models import CurrentRow, month_first_day_check
 
 
 class WorkSummary(CurrentRow):
@@ -16,10 +16,11 @@ class WorkSummary(CurrentRow):
 
     class Meta:
         db_table = 'ops_work_summaries'
-        db_table_comment = '현재 요청·변경·장애 작업 현황'
-        ordering = ['work_type', 'region_id', 'scope', 'id']
+        db_table_comment = '월별 요청·변경·장애 작업 현황'
+        ordering = ['-period_month', 'work_type', 'region_id', 'scope', 'id']
         constraints = [
-            models.UniqueConstraint(fields=['region', 'work_type', 'scope'], name='unique_current_work_scope'),
+            models.UniqueConstraint(fields=['period_month', 'region', 'work_type', 'scope'], name='unique_monthly_work_scope'),
+            month_first_day_check('work_month_first_day'),
             models.CheckConstraint(condition=Q(work_type__in=['request', 'change', 'incident']), name='current_work_valid_type'),
             models.CheckConstraint(condition=Q(scope__in=['infra', 'automation']), name='current_work_valid_scope'),
             models.CheckConstraint(condition=Q(completed_count__lte=F('total_count')), name='work_completed_lte_total'),

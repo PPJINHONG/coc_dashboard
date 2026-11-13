@@ -17,6 +17,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.roles import CanWrite, can_modify, display_name, record_activity
+from reporting.months import month_label, request_month
 from reporting.services import bump, lock_state, record_log
 
 from .models import IssueComment, RegionalIssue
@@ -29,6 +30,7 @@ def issue_snapshot(issue):
     """이력에 남길 이슈 원본. 사람이 읽을 수 있도록 리전·담당자 이름과 댓글을 함께 담습니다."""
     return {
         'id': issue.pk,
+        'month': month_label(issue.period_month),
         'region': issue.region_id,
         'region_name': issue.region.region_name,
         'title': issue.title,
@@ -87,15 +89,18 @@ class UserWriteView(APIView):
 
 
 class IssueCreateView(UserWriteView):
+    """이슈 등록. 본문 `month`(YYYY-MM)의 기준 월에 속하며, 없으면 이번 달입니다. 등록 후 월은 바꾸지 않습니다."""
+
     @transaction.atomic
     def post(self, request):
+        month = request_month(request)
         state = lock_state()
         serializer = IssueSerializer(data=issue_payload(request), context={'request': request})
         serializer.is_valid(raise_exception=True)
-        issue = serializer.save(author_name=display_name(request.user), author_username=request.user.username)
+        issue = serializer.save(period_month=month, author_name=display_name(request.user), author_username=request.user.username)
         bump(state)
         after = issue_snapshot(issue)
-        record_log(request, 'issues', 'create', f'이슈 #{issue.pk} 등록', after=after)
+        record_log(request, 'issues', 'create', f'이슈 #{issue.pk} 등록', after=after, month=issue.period_month)
         record_activity(request, 'create', f'리전 이슈 #{issue.pk} 등록: {issue.title}', 'issue', issue.pk, after=after)
         return Response({'revision': state.revision, 'row': IssueSerializer(issue, context={'request': request}).data}, status=201)
 
@@ -116,7 +121,7 @@ class IssueDetailView(UserWriteView):
         issue.refresh_from_db()
         bump(state)
         after = issue_snapshot(issue)
-        record_log(request, 'issues', 'update', f'이슈 #{issue.pk} 수정', before=before, after=after)
+        record_log(request, 'issues', 'update', f'이슈 #{issue.pk} 수정', before=before, after=after, month=issue.period_month)
         record_activity(request, 'update', f'리전 이슈 #{issue.pk} 수정: {issue.title}', 'issue', issue.pk, before=before, after=after)
         return Response({'revision': state.revision, 'row': IssueSerializer(issue, context={'request': request}).data})
 
@@ -127,10 +132,11 @@ class IssueDetailView(UserWriteView):
         require_modify(request, issue.author_username, '이슈')
         before = issue_snapshot(issue)
         # 이슈에 달린 댓글(다른 사람 댓글 포함)도 함께 지우고, 원본은 이력에 보관합니다.
+        month = issue.period_month
         issue.comments.all().delete()
         issue.delete()
         bump(state)
-        record_log(request, 'issues', 'delete', f'이슈 #{pk} 삭제', before=before)
+        record_log(request, 'issues', 'delete', f'이슈 #{pk} 삭제', before=before, month=month)
         record_activity(request, 'delete', f'리전 이슈 #{pk} 삭제: {before["title"]} (댓글 {len(before["comments"])}개 포함)', 'issue', pk, before=before)
         return Response({'revision': state.revision}, status=200)
 
@@ -144,14 +150,14 @@ class IssueCommentCreateView(UserWriteView):
                                               author_name=display_name(request.user), author_username=request.user.username)
         bump(state)
         after = comment_snapshot(comment)
-        record_log(request, 'issues', 'comment', f'이슈 #{issue.pk} 댓글 추가', after=after)
+        record_log(request, 'issues', 'comment', f'이슈 #{issue.pk} 댓글 추가', after=after, month=issue.period_month)
         record_activity(request, 'create', f'리전 이슈 #{issue.pk} 댓글 작성', 'issue_comment', comment.pk, after=after)
         return Response({'revision': state.revision}, status=201)
 
 
 class IssueCommentDetailView(UserWriteView):
     def get_comment(self, pk):
-        return get_object_or_404(IssueComment.objects.select_for_update(), pk=pk)
+        return get_object_or_404(IssueComment.objects.select_for_update(of=('self',)).select_related('issue'), pk=pk)
 
     @transaction.atomic
     def patch(self, request, pk):
@@ -163,7 +169,7 @@ class IssueCommentDetailView(UserWriteView):
         comment.save(update_fields=['content'])
         bump(state)
         after = comment_snapshot(comment)
-        record_log(request, 'issues', 'comment_update', f'이슈 #{comment.issue_id} 댓글 수정', before=before, after=after)
+        record_log(request, 'issues', 'comment_update', f'이슈 #{comment.issue_id} 댓글 수정', before=before, after=after, month=comment.issue.period_month)
         record_activity(request, 'update', f'리전 이슈 #{comment.issue_id} 댓글 수정', 'issue_comment', comment.pk, before=before, after=after)
         return Response({'revision': state.revision})
 
@@ -173,8 +179,9 @@ class IssueCommentDetailView(UserWriteView):
         comment = self.get_comment(pk)
         require_modify(request, comment.author_username, '댓글')
         before = comment_snapshot(comment)
+        month = comment.issue.period_month
         comment.delete()
         bump(state)
-        record_log(request, 'issues', 'comment_delete', f'이슈 #{before["issue"]} 댓글 삭제', before=before)
+        record_log(request, 'issues', 'comment_delete', f'이슈 #{before["issue"]} 댓글 삭제', before=before, month=month)
         record_activity(request, 'delete', f'리전 이슈 #{before["issue"]} 댓글 삭제', 'issue_comment', pk, before=before)
         return Response({'revision': state.revision})

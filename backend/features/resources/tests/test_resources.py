@@ -76,7 +76,8 @@ def test_current_resource_columns_and_unique_constraint(db):
         constraints = connection.introspection.get_constraints(cursor, 'infra_resources')
     assert 'storage_count' in infra_columns
     assert not {'zone_name', 'storage_rack_count', 'environment_name'} & infra_columns
-    assert constraints['unique_current_resource_service']['columns'] == ['region_id', 'service_code']
+    assert constraints['unique_monthly_resource_service']['columns'] == ['period_month', 'region_id', 'service_code']
+    assert 'unique_current_resource_service' not in constraints
     assert 'unique_current_resource_environment' not in constraints
 
 

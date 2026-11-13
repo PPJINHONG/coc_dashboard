@@ -4,7 +4,8 @@
 공통 파일에 기능 이름을 나열하지 않으므로 두 사람이 서로 다른 기능을 추가해도 같은 파일을 고치지 않습니다.
 
 - sections: 현재값 조회(/api/operations/current/)와 관리자 일괄 저장(/api/db-admin/sections/<key>/)
-- totals: 현재값 응답의 합계(totals)에 더할 값
+  모델에 기준 월(period_month) 열이 있으면 월별 기능으로 보고, 조회·저장을 그 월 안으로 한정합니다.
+- totals: 현재값 응답의 합계(totals)에 더할 값. 조회한 기준 월(date)을 인자로 받습니다.
 - tables: DB 관리 > DB 원본에서 읽기 전용으로 보여 줄 테이블과 이름
 - tabs: 개인 탭 숨김(/api/navigation/preferences/)을 허용할 화면 탭 ID
 """
@@ -29,8 +30,19 @@ class Section:
     related: tuple = ()  # 조회할 때 함께 불러올 연결 데이터(select_related)
     prefetch: tuple = ()  # 조회할 때 미리 불러올 하위 목록(prefetch_related)
 
-    def rows(self):
+    @property
+    def monthly(self):
+        return any(field.name == 'period_month' for field in self.model._meta.get_fields())
+
+    def scoped(self, month=None):
+        """월별 기능이면 기준 월의 행만, 아니면 전체 행을 돌려줍니다(연결 데이터 미포함)."""
         queryset = self.model.objects.all()
+        if self.monthly and month is not None:
+            queryset = queryset.filter(period_month=month)
+        return queryset
+
+    def rows(self, month=None):
+        queryset = self.scoped(month)
         if self.related:
             queryset = queryset.select_related(*self.related)
         if self.prefetch:
@@ -43,7 +55,7 @@ class Feature:
     tabs: tuple = ()
     tables: dict = field(default_factory=dict)
     sections: tuple = ()
-    totals: Callable[[], dict] | None = None
+    totals: Callable[[object], dict] | None = None  # totals(month) -> dict
 
 
 @cache
@@ -73,9 +85,9 @@ def table_labels():
     return {name: label for feature in features() for name, label in feature.tables.items()}
 
 
-def totals():
+def totals(month=None):
     result = {}
     for feature in features():
         if feature.totals:
-            result.update(feature.totals())
+            result.update(feature.totals(month))
     return result
