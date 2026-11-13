@@ -103,7 +103,7 @@ def test_change_logs_record_month_and_filter(client, base):
     log = ChangeLog.objects.get(section='resources')
     assert log.period_month == date(2026, 8, 1)
     assert ChangeLog.objects.get(section='services').period_month is None
-    logs = client.get(ROOT + 'logs/?month=2026-08').data
+    logs = client.get(ROOT + 'logs/?month=2026-08').data['results']
     assert [entry['month'] for entry in logs] == ['2026-08']
 
 

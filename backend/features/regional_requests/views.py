@@ -18,6 +18,7 @@ from rest_framework.views import APIView
 from core.roles import CanWrite, can_write, display_name, is_admin, record_activity
 from reporting.months import request_month
 from reporting.services import bump, lock_state, record_log
+from reporting.history import capture_history
 
 from .models import RegionalRequest, RegionalRequestImage
 from .serializers import RegionalRequestImageSerializer, RegionalRequestSerializer
@@ -112,12 +113,13 @@ class RegionalRequestListCreateView(APIView):
 
     @transaction.atomic
     def post(self, request):
+        state = lock_state()
         serializer = RegionalRequestSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         images = resolve_images(request.user, image_ids(serializer))
         requested_at = timezone.now()
         period_month = timezone.localtime(requested_at).date().replace(day=1)
-        state = lock_state()
+        capture_history(request, 'regional_requests')
         ticket = serializer.save(
             period_month=period_month,
             requested_at=requested_at,
@@ -149,6 +151,7 @@ class RegionalRequestDetailView(APIView):
 
     @transaction.atomic
     def patch(self, request, pk):
+        state = lock_state()
         ticket = self.get_ticket(pk, lock=True)
         editable = is_admin(request.user) or (can_write(request.user) and ticket.author_id == request.user.pk)
         changed_fields = set(request.data)
@@ -160,12 +163,12 @@ class RegionalRequestDetailView(APIView):
         images = None
         if "content_html" in request.data:
             images = resolve_images(request.user, image_ids(serializer), ticket=ticket)
+        capture_history(request, 'regional_requests')
         ticket = serializer.save()
         if images is not None:
             sync_images(ticket, images)
         ticket = request_queryset().get(pk=ticket.pk)
         after = ticket_snapshot(ticket)
-        state = lock_state()
         bump(state)
         record_log(request, "regional_requests", "update", f"요청작업 #{ticket.pk} 수정", before=before, after=after, month=ticket.period_month)
         record_activity(request, "update", f"권역 요청작업 #{ticket.pk} 수정: {ticket.title}", "regional_request", ticket.pk, before=before, after=after)
@@ -175,12 +178,13 @@ class RegionalRequestDetailView(APIView):
     def delete(self, request, pk):
         if not is_admin(request.user):
             raise PermissionDenied("요청작업은 관리자만 삭제할 수 있습니다.")
+        state = lock_state()
         ticket = self.get_ticket(pk, lock=True)
         before = ticket_snapshot(ticket)
         period_month = ticket.period_month
         title = ticket.title
+        capture_history(request, 'regional_requests')
         ticket.delete()
-        state = lock_state()
         bump(state)
         record_log(request, "regional_requests", "delete", f"요청작업 #{pk} 삭제", before=before, month=period_month)
         record_activity(request, "delete", f"권역 요청작업 #{pk} 삭제: {title}", "regional_request", pk, before=before)
@@ -216,6 +220,7 @@ class ImageUploadView(APIView):
             raise ValidationError({"file": ["이미지 해상도 또는 프레임 수가 너무 큽니다."]})
 
         cutoff = timezone.now() - timedelta(days=1)
+        lock_state()
         for orphan in RegionalRequestImage.objects.filter(uploader=request.user, request__isnull=True, created_at__lt=cutoff):
             orphan.delete()
         image = RegionalRequestImage.objects.create(

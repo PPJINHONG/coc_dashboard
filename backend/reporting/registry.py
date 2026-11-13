@@ -29,6 +29,10 @@ class Section:
     unique_fields: tuple = ()
     related: tuple = ()  # 조회할 때 함께 불러올 연결 데이터(select_related)
     prefetch: tuple = ()  # 조회할 때 미리 불러올 하위 목록(prefetch_related)
+    # 복구 시 함께 보존할 모델. 부모 → 자식 순서이며 기능 앱에서만 지정합니다.
+    history_models: tuple = ()
+    # 관리자·팀장 외에는 현재값뿐 아니라 변경 이력에서도 숨길 필드입니다.
+    private_fields: tuple = ()
 
     @property
     def monthly(self):
@@ -51,10 +55,20 @@ class Section:
 
 
 @dataclass(frozen=True)
+class History:
+    """별도 작성 API를 사용하는 기능의 이력 등록. 일괄 저장 API에는 노출하지 않습니다."""
+
+    key: str
+    models: tuple
+    scope: Callable[[dict, dict], dict] | None = None
+
+
+@dataclass(frozen=True)
 class Feature:
     tabs: tuple = ()
     tables: dict = field(default_factory=dict)
     sections: tuple = ()
+    histories: tuple = ()
     totals: Callable[[object], dict] | None = None  # totals(month) -> dict
 
 
@@ -75,6 +89,10 @@ def features():
 
 def sections():
     return {section.key: section for feature in features() for section in feature.sections}
+
+
+def histories():
+    return {history.key: history for feature in features() for history in feature.histories}
 
 
 def hideable_tabs():

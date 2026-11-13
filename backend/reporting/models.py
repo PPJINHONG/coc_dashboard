@@ -90,6 +90,9 @@ class ChangeLog(models.Model):
     summary = models.CharField(max_length=300)
     before_data = models.JSONField(default=dict, db_default={})
     after_data = models.JSONField(default=dict, db_default={})
+    restore_data = models.JSONField(default=dict, blank=True, db_default={})
+    restored_from = models.OneToOneField('self', null=True, blank=True, on_delete=models.PROTECT,
+                                        related_name='restoration', db_comment='복구한 원본 변경 이력')
     created_at = models.DateTimeField(auto_now_add=True, db_default=models.functions.Now())
 
     class Meta:

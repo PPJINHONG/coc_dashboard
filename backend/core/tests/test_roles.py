@@ -76,11 +76,12 @@ def test_admin_sees_sessions_activity_and_changes_roles(people, region):
     history = admin.get(ADMIN + f"accounts/{people['alice'].pk}/activities/").data
     assert [row["action"] for row in history["activities"]] == ["create", "login"]
 
-    # 권한 변경: 사용자 -> 옵저버 -> 관리자 -> 사용자
+    # 권한 변경: 사용자 -> 옵저버 -> 팀장 -> 사용자. 동급 관리자는 지정할 수 없습니다.
     pk = people["alice"].pk
     assert admin.patch(ADMIN + f"accounts/{pk}/", {"role": "observer"}, format="json").data["role"] == "observer"
     assert alice.post(OPS + "regional_requests/", request_body(region), format="json").status_code == 403
-    assert admin.patch(ADMIN + f"accounts/{pk}/", {"role": "admin"}, format="json").data["role"] == "admin"
+    assert admin.patch(ADMIN + f"accounts/{pk}/", {"role": "admin"}, format="json").status_code == 400
+    assert admin.patch(ADMIN + f"accounts/{pk}/", {"role": "team_lead"}, format="json").data["role"] == "team_lead"
     assert admin.patch(ADMIN + f"accounts/{pk}/", {"role": "user"}, format="json").data["role"] == "user"
     assert alice.post(OPS + "regional_requests/", request_body(region), format="json").status_code == 201
 

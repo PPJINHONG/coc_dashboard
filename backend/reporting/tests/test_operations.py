@@ -168,7 +168,7 @@ def test_region_has_no_display_order(client, base):
 
 @pytest.mark.django_db
 @pytest.mark.parametrize('role', ['anonymous', 'member', 'inactive_admin', 'admin'])
-def test_change_history_is_admin_only_in_api_and_snapshot(role):
+def test_change_history_requires_active_login_and_members_only_see_own(role):
     ChangeLog.objects.create(section='resources', action='update', actor_name='관리자', summary='관리자 이력')
     client = APIClient()
     if role != 'anonymous':
@@ -180,7 +180,9 @@ def test_change_history_is_admin_only_in_api_and_snapshot(role):
     logs = client.get(ROOT + 'current/').data['logs']
     response = client.get(ROOT + 'logs/')
     if role == 'admin':
-        assert response.status_code == 200 and response.data[0]['summary'] == '관리자 이력'
+        assert response.status_code == 200 and response.data['results'][0]['summary'] == '관리자 이력'
         assert len(logs) == 1
+    elif role == 'member':
+        assert response.status_code == 200 and response.data['results'] == [] and logs == []
     else:
         assert response.status_code == 403 and logs == []

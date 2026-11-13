@@ -53,6 +53,10 @@ export interface FeatureDefinition {
   order: number;
   /** 관리자에게만 보입니다(사이드바의 관리자 메뉴). */
   adminOnly?: boolean;
+  /** 지정된 계정 역할만 이 기능에 접근합니다. */
+  allowedRoles?: NonNullable<User["role"]>[];
+  /** 관리자 또는 팀장용 관리 메뉴에 배치합니다. 접근 권한은 allowedRoles로 지정합니다. */
+  management?: boolean;
   /** false면 탭 관리에서 숨길 수 없습니다. 기본 true. 숨길 수 있는 탭은 백엔드 feature.py tabs에도 적습니다. */
   hideable?: boolean;
   /** 홈 카드·탭 관리·화면 위에 쓰는 영문 이름 */

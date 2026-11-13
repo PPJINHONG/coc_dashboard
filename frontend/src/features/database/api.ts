@@ -1,5 +1,4 @@
 import { request } from "../../shared/api/client";
-import type { ManagedRecord } from "../../shared/api/records";
 
 export interface DbTable {
   name: string;
@@ -70,22 +69,3 @@ export const saveMaster = (
   );
 export const deleteMaster = (kind: MasterKind, pk: string | number) =>
   request("DELETE", `${base}common/${kind}/${encodeURIComponent(pk)}/`);
-
-// 사용자·권한 > 이력
-export interface Activity {
-  id: number;
-  action: "login" | "logout" | "login_failed" | "create" | "update" | "delete" | string;
-  target_type: string;
-  target_id: string;
-  summary: string;
-  before_data: Record<string, unknown>;
-  after_data: Record<string, unknown>;
-  changes: Record<string, { before: unknown; after: unknown }>;
-  ip_address: string | null;
-  created_at: string;
-}
-export const accountActivities = (id: number) =>
-  request<{ account: ManagedRecord; activities: Activity[] }>(
-    "GET",
-    `${base}accounts/${id}/activities/`,
-  );

@@ -3,13 +3,10 @@ import type { Bootstrap, Snapshot } from "../../shared/api/operations";
 import AdminLogin from "../../shared/auth/AdminLogin";
 import { useAuth } from "../../shared/auth/AuthContext";
 import Panel from "../../shared/components/Panel";
-import type { AdminTab, FeatureDefinition } from "../../shared/feature";
-import AccountsAdmin from "./AccountsAdmin";
+import type { FeatureDefinition } from "../../shared/feature";
 import CommonData from "./CommonData";
 import RawTables from "./RawTables";
 
-/** 사용자·권한은 DB 관리 자체 탭이라 기능 탭 뒤에 둡니다. */
-const ACCOUNTS_TAB: AdminTab = { id: "accounts", label: "사용자·권한", Editor: AccountsAdmin };
 
 interface AdminProps {
   data: Bootstrap;
@@ -22,7 +19,7 @@ interface AdminProps {
 }
 export default function DatabaseAdmin(props: AdminProps) {
   const { user } = useAuth();
-  const tabs = [...props.features.flatMap((feature) => feature.admin ?? []), ACCOUNTS_TAB];
+  const tabs = props.features.flatMap((feature) => feature.admin ?? []);
   const [mode, setMode] = useState<"common" | "features" | "raw">("features");
   const [feature, setFeature] = useState(tabs[0].id);
   const [editing, setEditing] = useState(false),

@@ -15,6 +15,7 @@ from .months import month_label, parse_month, request_month
 from .permissions import OperationsAdministrator, ReportingPermission, can_manage
 from .serializers import ChangeLogSerializer, RegionSerializer, ServiceSerializer, StaffMemberSerializer
 from .services import bump, check_revision, lock_state, record_log
+from .history import capture_history, visible_history
 
 
 @method_decorator(csrf_protect, name='dispatch')
@@ -59,20 +60,36 @@ class SnapshotView(ReportingView):
         state = lock_state()
         payload = {'revision': state.revision, 'updated_at': state.updated_at, 'month': month_label(month),
                    'totals': registry.totals(month),
-                   'logs': ChangeLogSerializer(ChangeLog.objects.all()[:50], many=True).data if can_manage(request) else []}
+                   'logs': visible_history(request.user, limit=50)}
         for key, section in registry.sections().items():
             payload[key] = section.serializer(section.rows(month), many=True, context={'request': request}).data
         return Response(payload)
 
 
-class LogsView(AdminDataView):
+class LogsView(ReportingView):
     def get(self, request):
-        logs = ChangeLog.objects.all()
+        if not request.user.is_authenticated or not request.user.is_active:
+            raise PermissionDenied('로그인한 활성 사용자만 변경 이력을 조회할 수 있습니다.')
+        catalog_rows = visible_history(request.user, {'month': request.query_params.get('month')})
+        rows = (visible_history(request.user, request.query_params)
+                if request.query_params.get('region') or request.query_params.get('actor') else catalog_rows)
+        tabs, actors, regions = {}, {}, {}
+        for row in catalog_rows:
+            tab = tabs.setdefault(row['section'], {'id': row['section'], 'count': 0, 'latest_at': row['created_at']})
+            tab['count'] += 1
+            actors[row['actor_key']] = {'id': row['actor_key'], 'name': row['actor_name']}
+            regions.update({item['id']: item for item in row['regions']})
         if request.query_params.get('section'):
-            logs = logs.filter(section=request.query_params['section'])
-        if request.query_params.get('month'):
-            logs = logs.filter(period_month=parse_month(request.query_params['month']))
-        return Response(ChangeLogSerializer(logs[:200], many=True).data)
+            rows = [row for row in rows if row['section'] == request.query_params['section']]
+        try:
+            offset = max(0, int(request.query_params.get('offset', 0)))
+        except (ValueError, TypeError) as exc:
+            raise ValidationError('페이지 값이 올바르지 않습니다.') from exc
+        page_size = 30
+        return Response({'results': rows[offset:offset + page_size], 'count': len(rows),
+                         'next_offset': offset + page_size if offset + page_size < len(rows) else None,
+                         'tabs': list(tabs.values()), 'actors': sorted(actors.values(), key=lambda item: item['name']),
+                         'regions': sorted(regions.values(), key=lambda item: item['region_name'])})
 
 
 class SectionView(AdminDataView):
@@ -89,6 +106,7 @@ class SectionView(AdminDataView):
         month = request_month(request) if definition.monthly else None
         state = lock_state()
         check_revision(state, request.data.get('revision'))
+        capture_history(request, section)
         rows = request.data.get('rows')
         if not isinstance(rows, list) or len(rows) > 500:
             raise ValidationError({'rows': ['행은 500개 이하의 목록으로 보내세요.']})
@@ -180,6 +198,7 @@ class MasterDataView(AdminDataView):
             raise ValidationError('알 수 없는 공통데이터입니다.')
         state = lock_state()
         model, serializer = self.models[collection]
+        capture_history(request, collection)
         instance = self.get_instance(model, pk)
         before = serializer(instance).data
         try:
@@ -201,6 +220,7 @@ class MasterDataView(AdminDataView):
             raise PermissionDenied('리전·서비스 공통데이터는 관리자만 수정할 수 있습니다.')
         state = lock_state()
         model, serializer_class = self.models[collection]
+        capture_history(request, collection)
         instance = self.get_instance(model, pk)
         if instance is not None and model._meta.pk.name in request.data and str(request.data[model._meta.pk.name]) != str(instance.pk):
             raise ValidationError('기존 공통데이터의 코드는 변경할 수 없습니다.')

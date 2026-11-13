@@ -19,6 +19,10 @@ interface Props {
   onRefresh: () => void;
   /** 편집 전 조회 본문을 직접 그릴 때. 없으면 config.Table을 패널에 넣습니다. */
   renderView?: (rows: DataRow[]) => ReactNode;
+  /** 처음부터 편집 상태로 엽니다(기능 탭의 바로 편집). */
+  initialEditing?: boolean;
+  /** 편집을 취소하거나 저장을 마쳤을 때 호출합니다. 넘기면 조회 화면 대신 호출한 쪽으로 돌아갑니다. */
+  onClose?: () => void;
 }
 
 /** DB 관리 > 기능별 설정의 현재값 편집 화면. 편집 초안을 만든 뒤 저장할 때 전체 행을 보냅니다. */
@@ -31,8 +35,10 @@ export default function SectionEditor({
   onBusy,
   onRefresh,
   renderView,
+  initialEditing = false,
+  onClose,
 }: Props) {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(initialEditing);
   const [draft, setDraft] = useState<DataRow[]>(() => structuredClone(rows));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +84,7 @@ export default function SectionEditor({
       await onSave(draft);
       setEditing(false);
       onEditing(false);
+      onClose?.();
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -94,6 +101,7 @@ export default function SectionEditor({
           setDraft(structuredClone(rows));
           setEditing(false);
           setError(null);
+          onClose?.();
         }}
       >
         취소

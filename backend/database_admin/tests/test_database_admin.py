@@ -41,7 +41,7 @@ def test_anonymous_and_non_admin_cannot_access_even_in_development(path):
 @pytest.mark.django_db
 def test_catalog_only_lists_website_tables_and_raw_data_is_readonly(client):
     names = {table['name'] for table in client.get(ROOT).data['tables']}
-    assert names == {'auth_user', 'ops_regions', 'ops_services', 'ops_staff_members', 'infra_resources', 'ops_staff_assignments', 'ops_work_summaries', 'ops_regional_requests', 'ops_regional_request_images', 'user_activity_logs'}
+    assert names == {'auth_user', 'ops_regions', 'ops_services', 'ops_staff_members', 'infra_resources', 'ops_staff_assignments', 'ops_staff_calendar_events', 'ops_staff_responsibilities', 'ops_staff_choices', 'ops_work_summaries', 'ops_regional_requests', 'ops_regional_request_images', 'user_activity_logs'}
     for name in ('django_session', 'django_migrations', 'auth_permission', 'core_post', 'ops_data_state'):
         assert client.get(ROOT + f'tables/{name}/').status_code == 404
     meta = client.get(ROOT + 'tables/ops_regions/').data
@@ -83,9 +83,10 @@ def test_account_creation_edit_role_password_login_and_delete(client):
     user = get_user_model().objects.get(pk=pk)
     assert user.check_password(values['password']) and not user.is_staff
     assert APIClient().login(username=user.username, password=values['password'])
-    response = client.patch(ROOT + f'accounts/{pk}/', {'name': '권한 변경', 'is_staff': True, 'password': 'ChangedExample!83472'}, format='json')
+    assert client.patch(ROOT + f'accounts/{pk}/', {'is_staff': True}, format='json').status_code == 400
+    response = client.patch(ROOT + f'accounts/{pk}/', {'name': '권한 변경', 'role': 'team_lead', 'password': 'ChangedExample!83472'}, format='json')
     assert response.status_code == 200, response.data
-    user.refresh_from_db(); assert user.is_staff and user.first_name == '권한 변경' and user.check_password('ChangedExample!83472')
+    user.refresh_from_db(); assert not user.is_staff and user.groups.filter(name='team_lead').exists() and user.first_name == '권한 변경' and user.check_password('ChangedExample!83472')
     raw = client.get(ROOT + 'tables/auth_user/rows/').data
     assert any(row['values']['first_name'] == '권한 변경' for row in raw['rows'])
     assert 'StrongExample' not in str(list(DatabaseChangeLog.objects.values()))

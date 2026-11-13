@@ -1,0 +1,87 @@
+/* 사이드바 하단 3권역 시계: 버튼 오른쪽에 떠 있는 작은 패널 */
+.region-clock {
+  position: relative;
+}
+.region-clock-panel {
+  position: absolute;
+  left: calc(100% + 12px);
+  bottom: 0;
+  width: 286px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px #1c2a3a1f;
+  padding: 12px 14px 6px;
+  z-index: 30;
+}
+.region-clock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.region-clock-head strong {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-strong);
+}
+.region-clock-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.region-clock-panel li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-soft);
+}
+.region-clock-panel li:first-child {
+  border-top: 0;
+}
+.region-clock-place,
+.region-clock-time {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.region-clock-place {
+  align-self: flex-start;
+  padding-top: 3px;
+}
+.region-clock-time {
+  align-items: flex-end;
+  text-align: right;
+}
+.region-clock-place strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+.region-clock-panel small {
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.region-clock-time time {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-strong);
+  line-height: 1.2;
+}
+.region-clock-panel li[data-zone="kr"] time {
+  color: var(--accent);
+}
+@media (max-width: 600px) {
+  .region-clock-panel {
+    width: 252px;
+  }
+  .region-clock-time time {
+    font-size: 17px;
+  }
+}

@@ -8,7 +8,11 @@ export interface User {
   date_joined: string;
   is_staff: boolean;
   /** admin: 관리자, observer: 옵저버(읽기 전용), user: 사용자 */
-  role?: 'admin' | 'observer' | 'user' | null;
+  role?: 'admin' | 'team_lead' | 'group_lead' | 'observer' | 'user' | null;
+  /** 그룹장의 관리 국가(KR·EU·NA) */
+  managed_countries?: string[];
+  /** 운영 인력 탭에서 편집할 수 있는 국가. 관리자·팀장은 전체, 그룹장은 관리 국가, 그 외는 빈 목록 */
+  staff_edit_countries?: string[];
 }
 
 export interface Registration {

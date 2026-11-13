@@ -6,6 +6,7 @@ import "../shared/styles/sections.css";
 import "./preferences.css";
 import * as api from "../shared/api/operations";
 import type { Bootstrap, NavigationPreference, Snapshot } from "../shared/api/operations";
+import type { User } from "../shared/api/auth";
 import AdminLogin from "../shared/auth/AdminLogin";
 import { useAuth } from "../shared/auth/AuthContext";
 import ErrorMessage from "../shared/components/ErrorMessage";
@@ -15,14 +16,19 @@ import { errorMessage } from "../shared/errors";
 import { FEATURES } from "../features/registry";
 import HomePage from "./HomePage";
 import InviteDialog from "./InviteDialog";
+import RegionClocks from "./RegionClocks";
 import TabPreferences from "./TabPreferences";
 
 /** 사이드바 첫 칸인 홈. 기능 목록은 features/registry.ts가 자동으로 모읍니다. */
 const HOME = { id: "home", label: "홈", icon: "home" as IconName, adminOnly: false };
 const TABS = [HOME, ...FEATURES];
+const isManagementTab = (id: string) => Boolean(FEATURES.find((item) => item.id === id)?.management || TABS.find((item) => item.id === id)?.adminOnly);
 
-const canAccessTab = (id: string, isAdmin: boolean) =>
-  isAdmin || !TABS.find((tab) => tab.id === id)?.adminOnly;
+const canAccessTab = (id: string, user: User | null) => {
+  const item = FEATURES.find((feature) => feature.id === id);
+  if (item?.adminOnly && !user?.is_staff) return false;
+  return !item?.allowedRoles || Boolean(user && item.allowedRoles.includes(user.is_staff ? "admin" : user.role ?? "user"));
+};
 
 function initialTab(): string {
   const value = new URLSearchParams(window.location.hash.slice(1)).get("tab");
@@ -105,7 +111,7 @@ export default function AppShell() {
   }, [dirty]);
   useEffect(() => {
     if (
-      !canAccessTab(tab, Boolean(user?.is_staff)) ||
+      !canAccessTab(tab, user) ||
       preference.hidden_tabs.includes(tab)
     ) {
       setTab("home");
@@ -195,7 +201,7 @@ export default function AppShell() {
   const visibleTabs = TABS.filter(
     (item) =>
       !preference.hidden_tabs.includes(item.id) &&
-      canAccessTab(item.id, Boolean(user?.is_staff)),
+      canAccessTab(item.id, user),
   );
   const collapsed = preference.sidebar_collapsed;
   const navButton = (item: (typeof TABS)[number]) => (
@@ -210,7 +216,7 @@ export default function AppShell() {
     >
       <Icon name={item.icon} size={18} />
       <span>{item.label}</span>
-      {item.adminOnly && <Icon name="shield" size={12} />}
+      {isManagementTab(item.id) && <Icon name="shield" size={12} />}
     </button>
   );
   return (
@@ -232,12 +238,12 @@ export default function AppShell() {
           </span>
         </button>
         <nav className="sidebar-nav" aria-label="기능 탭">
-          {visibleTabs.filter((item) => !item.adminOnly).map(navButton)}
+          {visibleTabs.filter((item) => !isManagementTab(item.id)).map(navButton)}
         </nav>
-        {user?.is_staff && (
+        {visibleTabs.some((item) => isManagementTab(item.id)) && (
           <nav className="sidebar-admin-nav" aria-label="관리자 메뉴">
-            <span className="sidebar-group-label">관리자</span>
-            {visibleTabs.filter((item) => item.adminOnly).map(navButton)}
+            <span className="sidebar-group-label">관리</span>
+            {visibleTabs.filter((item) => isManagementTab(item.id)).map(navButton)}
           </nav>
         )}
         <div className="sidebar-utilities">
@@ -264,6 +270,7 @@ export default function AppShell() {
               <small>{preference.hidden_tabs.length}</small>
             )}
           </button>
+          <RegionClocks collapsed={collapsed} />
         </div>
         <div className="sidebar-foot">
           <div className="sidebar-user">
@@ -286,7 +293,15 @@ export default function AppShell() {
             <div>
               <strong>{user?.name || "Visitor"}</strong>
               <small>
-                {user?.is_staff ? "관리자" : user?.role === "observer" ? "옵저버(읽기 전용)" : "사용자"}
+                {user?.is_staff
+                  ? "관리자"
+                  : user?.role === "observer"
+                    ? "옵저버(읽기 전용)"
+                    : user?.role === "team_lead"
+                      ? "팀장"
+                      : user?.role === "group_lead"
+                        ? `그룹장 (${(user.managed_countries ?? []).join("·")})`
+                        : "사용자"}
               </small>
             </div>
             <button
@@ -391,19 +406,19 @@ export default function AppShell() {
             <HomePage
               data={data}
               snapshot={snapshot}
-              features={FEATURES}
+              features={FEATURES.filter((item) => canAccessTab(item.id, user))}
               hiddenTabs={preference.hidden_tabs}
               isAdmin={Boolean(user?.is_staff)}
               navigate={navigate}
               manageTabs={() => setManageTabs(true)}
             />
           )}
-          {feature && (
+          {feature && canAccessTab(feature.id, user) && (
             <feature.Page
               data={data}
               snapshot={snapshot}
               user={user}
-              features={FEATURES}
+              features={FEATURES.filter((item) => canAccessTab(item.id, user))}
               navigate={navigate}
               refresh={refresh}
               setDirty={setDirty}
@@ -416,7 +431,7 @@ export default function AppShell() {
       {manageTabs && (
         <TabPreferences
           preference={preference}
-          features={FEATURES}
+          features={FEATURES.filter((item) => canAccessTab(item.id, user))}
           isAdmin={Boolean(user?.is_staff)}
           onClose={() => setManageTabs(false)}
           onSaved={setPreference}

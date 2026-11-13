@@ -10,10 +10,12 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
+from core.defaults import DEFAULT_USERNAMES
 from core.models import UserActivity
-from core.roles import ROLE_ADMIN, ROLES, apply_role, online_sessions, user_role
+from core.roles import COUNTRIES, ROLE_ADMIN, ROLE_GROUP_LEAD, ROLES, apply_role, managed_countries, online_sessions, user_role
+from core.roles import assignable_roles, can_manage_account, record_activity
 from core.signals import username_changed
-from reporting.services import bump, lock_state
+from reporting.services import bump, lock_state, record_log
 
 from .services import log_change
 from .views import AdminView, payload
@@ -24,25 +26,33 @@ class AccountSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=False, min_length=8, max_length=128, trim_whitespace=False)
     # 관리자·옵저버(읽기 전용)·사용자. 보내지 않으면 기존 is_staff 방식과 같이 동작합니다.
     role = serializers.ChoiceField(choices=ROLES, required=False)
+    # 그룹장(group_lead)의 관리 국가. 그룹장일 때 하나 이상 필요하며 다른 권한에서는 무시합니다.
+    managed_countries = serializers.ListField(child=serializers.ChoiceField(choices=COUNTRIES), required=False, allow_empty=True)
     is_online = serializers.SerializerMethodField()
     active_sessions = serializers.SerializerMethodField()
     last_activity = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
 
     class Meta:
         model = get_user_model()
-        fields = ['id', 'name', 'username', 'email', 'role', 'is_staff', 'is_active', 'password', 'date_joined', 'last_login',
-                  'is_online', 'active_sessions', 'last_activity']
+        fields = ['id', 'name', 'username', 'email', 'role', 'managed_countries', 'is_staff', 'is_active', 'password', 'date_joined', 'last_login',
+                  'is_online', 'active_sessions', 'last_activity', 'can_edit']
         read_only_fields = ['id', 'email', 'date_joined', 'last_login']
         extra_kwargs = {'username': {'validators': []}}
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data['role'] = user_role(instance)
+        data['managed_countries'] = managed_countries(instance)
         return data
 
     def get_active_sessions(self, obj):
         sessions = self.context.get('sessions')
         return (sessions if sessions is not None else online_sessions()).get(obj.pk, 0)
+
+    def get_can_edit(self, obj):
+        request = self.context.get('request')
+        return bool(request and can_manage_account(request.user, obj))
 
     def get_is_online(self, obj):
         return self.get_active_sessions(obj) > 0
@@ -57,8 +67,8 @@ class AccountSerializer(serializers.ModelSerializer):
 
     def validate_username(self, value):
         value = value.strip().lower()
-        # 기본 관리자 admin만 @ 없는 아이디를 유지할 수 있습니다.
-        if not (self.instance and self.instance.username == value == 'admin'):
+        # 기본 계정(admin·kr·eu·na·readonly)만 @ 없는 아이디를 유지할 수 있습니다.
+        if not (self.instance and self.instance.username == value and value in DEFAULT_USERNAMES):
             serializers.EmailField(max_length=150).run_validation(value)
         users = get_user_model().objects.filter(Q(username__iexact=value) | Q(email__iexact=value))
         if self.instance:
@@ -68,8 +78,24 @@ class AccountSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        actor = self.context['request'].user
+        if self.instance and not can_manage_account(actor, self.instance):
+            raise serializers.ValidationError('본인 또는 동급·상위 역할의 회원은 변경할 수 없습니다.')
+        # is_staff를 직접 보내는 과거 요청에도 동일한 역할 제한을 적용합니다.
+        requested_role = attrs.get('role')
+        if requested_role is None and 'is_staff' in attrs:
+            requested_role = ROLE_ADMIN if attrs['is_staff'] else 'user'
+        if requested_role is not None and requested_role not in dict(assignable_roles(actor)):
+            raise serializers.ValidationError({'role': '본인보다 하위 역할만 지정할 수 있습니다.'})
         if 'role' in attrs:
             attrs['is_staff'] = attrs['role'] == ROLE_ADMIN
+        role = attrs.get('role', user_role(self.instance) if self.instance else None)
+        countries = attrs.get('managed_countries', managed_countries(self.instance) if self.instance else [])
+        if role == ROLE_GROUP_LEAD and not countries:
+            raise serializers.ValidationError({'managed_countries': '그룹장은 관리 국가를 하나 이상 고르세요.'})
+        if 'managed_countries' in attrs and 'role' not in attrs and self.instance is not None:
+            # 관리 국가만 바꿔도 현재 권한으로 다시 저장합니다.
+            attrs['role'] = role
         if self.instance is None and not attrs.get('password'):
             raise serializers.ValidationError({'password': '새 계정의 비밀번호를 입력하세요.'})
         if self.instance and self.instance.pk == self.context['request'].user.pk:
@@ -88,14 +114,18 @@ class AccountSerializer(serializers.ModelSerializer):
     def create(self, values):
         password = values.pop('password')
         role = values.pop('role', None)
+        countries = values.pop('managed_countries', [])
         user = get_user_model().objects.create_user(**values, email=values['username'], password=password)
         if role:
-            apply_role(user, role)
+            apply_role(user, role, countries)
         return user
 
     def update(self, instance, values):
         password = values.pop('password', None)
         role = values.pop('role', None)
+        countries = values.pop('managed_countries', None)
+        if countries is None:
+            countries = managed_countries(instance)
         old_username = instance.username
         for key, value in values.items():
             setattr(instance, key, value)
@@ -104,7 +134,7 @@ class AccountSerializer(serializers.ModelSerializer):
             instance.set_password(password)
         instance.save()
         if role:
-            apply_role(instance, role)
+            apply_role(instance, role, countries)
         if old_username != instance.username:
             # 작성자 아이디 스냅샷을 저장하는 기능이 본인 수정 권한을 이어가도록 알립니다.
             username_changed.send(sender=type(instance), old_username=old_username, new_username=instance.username)
@@ -116,6 +146,10 @@ class AccountSerializer(serializers.ModelSerializer):
 def account_context(request):
     latest = dict(UserActivity.objects.filter(user__isnull=False).values('user').annotate(latest=Max('created_at')).values_list('user', 'latest'))
     return {'request': request, 'sessions': online_sessions(), 'latest_activity': latest}
+
+
+def audit_data(data):
+    return {key: data[key] for key in ('id', 'name', 'username', 'email', 'role', 'managed_countries', 'is_staff', 'is_active')}
 
 
 class AccountsView(AdminView):
@@ -134,6 +168,8 @@ class AccountsView(AdminView):
             raise ValidationError('이미 사용 중인 아이디입니다.') from exc
         bump(state)
         log_change(request, 'insert', 'auth_user', {'changes': serializer.data})
+        record_activity(request, 'create', '회원 등록', 'account', serializer.instance.pk, after=audit_data(serializer.data))
+        record_log(request, 'members', 'create', '회원 등록', after=audit_data(serializer.data))
         return Response(serializer.data, status=201)
 
 
@@ -152,6 +188,10 @@ class AccountView(AdminView):
             raise ValidationError('이미 사용 중인 아이디입니다.') from exc
         bump(state)
         log_change(request, 'update', 'auth_user', {'before': before, 'changes': serializer.data, 'password_changed': 'password' in request.data})
+        record_activity(request, 'update', '회원 정보 수정', 'account', instance.pk, before=audit_data(before),
+                        after={**audit_data(serializer.data), **({'password_changed': True} if 'password' in request.data else {})})
+        record_log(request, 'members', 'update', '회원 정보 수정', before=audit_data(before),
+                   after={**audit_data(serializer.data), **({'password_changed': True} if 'password' in request.data else {})})
         return Response(serializer.data)
 
     @transaction.atomic
@@ -160,12 +200,17 @@ class AccountView(AdminView):
         instance = get_object_or_404(get_user_model().objects.select_for_update(), pk=pk)
         if instance.pk == request.user.pk or instance.is_superuser:
             raise ValidationError('현재 로그인한 계정과 최고 관리자 계정은 삭제할 수 없습니다.')
+        if not can_manage_account(request.user, instance):
+            raise ValidationError('본인보다 하위 역할의 회원만 삭제할 수 있습니다.')
         if str(payload(request).get('confirm_username', '')) != instance.username:
             raise ValidationError('삭제할 계정의 이메일 아이디를 확인하세요.')
         before = AccountSerializer(instance).data
+        target_id = instance.pk
         instance.delete()
         bump(state)
         log_change(request, 'delete', 'auth_user', {'before': before})
+        record_activity(request, 'delete', '회원 삭제', 'account', target_id, before=audit_data(before))
+        record_log(request, 'members', 'delete', '회원 삭제', before=audit_data(before))
         return Response(status=204)
 
 

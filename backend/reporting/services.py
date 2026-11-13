@@ -23,7 +23,9 @@ def actor(request):
 
 def record_log(request, section, action, summary, before=None, after=None, month=None):
     """운영 변경 이력을 남깁니다. 월별 기능 데이터는 기준 월(month, 그 달 1일)을 함께 저장합니다."""
-    ChangeLog.objects.create(section=section, action=action, summary=summary, before_data=before or {}, after_data=after or {},
+    from .history import restore_delta
+    return ChangeLog.objects.create(section=section, action=action, summary=summary, before_data=before or {}, after_data=after or {},
+                             restore_data=restore_delta(request, section),
                              period_month=month, **actor(request))
 
 
