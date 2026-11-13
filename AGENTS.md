@@ -23,7 +23,7 @@
 - 실제 비밀번호·키·토큰은 출력하거나 Git·문서·보고에 포함하지 않는다. 설정 확인에는 `docker compose config --quiet`를 사용한다.
 - 환경변수를 바꾸면 사용 코드/Compose, CI의 임시 `.env`, [설정 문서](docs/02-development/configuration.md)를 함께 맞춘다. 터미널의 환경변수가 `.env`보다 우선할 수 있다.
 - DB·첨부파일은 로컬은 고정 이름 Docker 볼륨 `coc-dashboard_postgres_data`, `coc-dashboard_media_data`, EC2는 `/srv_db/postgres`, `/srv_db/media`에 보관한다. 배포는 `git pull` → `down` → `up --build -d`(EC2는 `-f compose.prod.yaml`)이며 EC2 백업은 AWS 스냅샷이다. Git에는 업무 데이터를 넣지 않는다.
-- backend 시작 시 `ensure_admin`이 `admin` 계정이 없을 때만 `admin`/`admin` 관리자를 만든다(기존 `admin@admin`은 `admin`으로 변경). `admin`만 @ 없는 아이디를 허용한다.
+- backend 시작 시 `ensure_admin`이 기본 계정을 없을 때만 만든다. 비밀번호는 아이디와 같으며 이미 있는 계정의 비밀번호·권한은 바꾸지 않는다. `admin`(관리자, 기존 `admin@admin`은 `admin`으로 변경), `kr`·`eu`·`na`(각각 KR·EU·NA 그룹장), `readonly`(옵저버). 목록은 `backend/core/defaults.py`이며 기본 계정만 @ 없는 아이디를 허용한다. 운영에서는 첫 로그인 후 비밀번호를 바꾼다.
 
 ## DB 구조 변경
 
@@ -45,8 +45,8 @@
 - 로그인·회원가입(초대 링크 전용)을 사용하며 `.env`의 `DEVELOPMENT_AUTH_BYPASS=false`를 유지한다. 로그인 없는 개발은 별도 요청이 있을 때만 허용한다.
 - 인프라 자원·운영 작업·리전 이슈는 기준 월(`period_month`, 그 달 1일 DATE)별로 저장·조회한다. API는 `month`(`YYYY-MM`, 조회는 `?month=`, 저장은 본문)를 받고 없으면 이번 달(Asia/Seoul)이다. 관리자 일괄 저장은 그 월의 행만 바꾸고 다른 달을 지우지 않는다. 리전 이슈는 등록한 월에만 속하고 댓글은 이슈의 월을 따른다. 새 달은 빈 상태로 시작한다(자동 복사 없음). 운영 인력과 공통데이터(리전·서비스·인력)는 월 구분 없이 하나이며, 모든 화면에서 같은 원본 테이블을 참조한다. 주 선택·확정과 K8s 기능은 제공하지 않는다.
 - 운영 변경 이력(`ops_change_logs.period_month`)에 월별 데이터의 기준 월을 남긴다. 공통데이터·운영 인력 변경은 비워 둔다.
-- 권한은 관리자(`is_staff`)·옵저버(`observer` 그룹, 읽기 전용)·사용자 3단계다. 관리자만 DB 관리 > 기능별 설정 > 사용자·권한에서 변경한다. 계정 API는 `role`(admin·observer·user)을 받는다. `/api/me/`는 조회만 제공한다.
-- DB 탭 밖의 운영 화면은 관리자도 조회 전용이다. 운영 데이터·댓글·공통데이터 저장 API는 `/api/db-admin/`에서만 제공하며 개발 우회 여부와 무관하게 실제 활성 관리자만 쓸 수 있다.
+- 권한은 관리자(`is_staff`)·팀장(`team_lead` 그룹)·그룹장(`group_lead_KR`·`group_lead_EU`·`group_lead_NA` 그룹, 관리 국가)·옵저버(`observer` 그룹, 읽기 전용)·사용자다. 팀장·그룹장은 사용자 권한에 운영 인력 편집이 더해진 것이다. 운영 인력은 운영 인력 탭에서 바로 편집하며(`PUT /api/operations/staff/`), 관리자·팀장은 전체 국가, 그룹장은 관리 국가 행만 편집하고 국가도 관리 국가로만 고른다. 행별 `can_edit`와 `/api/me/`의 `staff_edit_countries`는 서버가 계산한다. 계정 API는 `role`(admin·team_lead·group_lead·observer·user)과 그룹장의 `managed_countries`를 받는다. 관리자만 DB 관리 > 기능별 설정 > 사용자·권한에서 변경한다. `/api/me/`는 조회만 제공한다.
+- DB 탭 밖의 운영 화면은 관리자도 조회 전용이다(운영 인력 탭 편집은 위 예외). 운영 데이터·댓글·공통데이터 저장 API는 `/api/db-admin/`에서만 제공하며 개발 우회 여부와 무관하게 실제 활성 관리자만 쓸 수 있다.
 - 예외: 리전 이슈와 댓글은 `/api/operations/issues/`, `/api/operations/issue-comments/`에서 사용자도 작성한다. 관리자는 모두, 사용자는 본인이 작성한 것(`author_username`)만 수정·삭제하며 옵저버는 모든 쓰기가 403이다. DB 관리에서 입력한 작성자 없는 이슈는 관리자만 수정한다. 게시판 API도 같은 규칙을 따른다.
 - 수정·삭제 가능 여부는 서버가 `can_edit`로 계산하고 화면은 이 값으로만 버튼을 표시한다. 작성자 아이디는 응답에 노출하지 않는다.
 - 초대 링크 발급·취소(`/api/invites/`)는 관리자·사용자만 하고 옵저버는 403이다. 옵저버 화면에는 "팀원 초대" 메뉴를 표시하지 않는다.
@@ -58,7 +58,7 @@
 - 공통데이터(리전·서비스·인력)의 사용 상태 열 `is_active`는 제공하지 않는다. 로그인 계정의 `is_active`와 업무 진행 상태는 별개로 유지한다. 리전 표시 순서 열은 쓰지 않으며 기본 목록은 리전 이름순이다.
 - 인프라 수량은 Host·VM·Compute Rack(`compute_rack_count`)·Storage Rack(`storage_count`)이며 고유 조합은 기준 월·리전·서비스(`unique_monthly_resource_service`)다. 운영 작업은 기준 월·리전·작업유형·범위(`unique_monthly_work_scope`)다. 상단 세 번째 카드는 Rack(Compute + Storage 합계)이고 요약 그래프는 수량 내림차순이다. 환경 열은 없다.
 - 리전의 `global_region`(전체 리전)은 `country_code`에서 DB가 계산하는 생성 열이다(KR·CN=내수, EU=유럽, NA=북미, 그 외 NULL). 아직 화면·API에서 사용하지 않는다.
-- 운영 인력은 국가(KR·EU·NA)·성명·직책·소속사·업무·근무지만 편집하며 리전 대신 국가 코드를 저장한다.
+- 운영 인력은 국가(KR·EU·NA)·성명·직책·소속사·업무·근무지·PC IP(`pc_ip`)·오토에버 계정(`autoever_account`)·Z 계정(`z_account`)을 편집하며 리전 대신 국가 코드를 저장한다. 직책·소속사는 비워 둘 수 있다. 운영 인력 탭 편집의 성명은 이름으로 입력하고 새 행은 인력 공통데이터를 새로 만든다.
 
 ## 화면 디자인과 개인 설정
 

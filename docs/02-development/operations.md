@@ -22,7 +22,7 @@
 | `ops_services` | 서비스 코드·이름 | `reporting` |
 | `ops_staff_members` | 인력 이름(동명이인 허용). 내부 ID로 연결 | `reporting` |
 | `infra_resources` | 기준 월·리전·서비스별 Host·VM·Compute Rack·Storage Rack 수량 | `features/resources` |
-| `ops_staff_assignments` | 인력의 국가(KR·EU·NA)·직책·소속사·업무·근무지 | `features/staff` |
+| `ops_staff_assignments` | 인력의 국가(KR·EU·NA)·직책·소속사·업무·근무지·PC IP·오토에버 계정·Z 계정 | `features/staff` |
 | `ops_work_summaries` | 기준 월별 요청·변경·장애 작업 수량과 평균 복구시간 | `features/work` |
 | `ops_regional_issues` | 기준 월별 리전 이슈·중요도·상태·진행률·담당자·조치·작성자 | `features/issues` |
 | `ops_issue_comments` | 이슈 댓글(`issue_id`). 월은 이슈를 따름 | `features/issues` |
@@ -68,6 +68,8 @@
 | 권한 | 저장 방법 | 할 수 있는 일 |
 | --- | --- | --- |
 | 관리자 | `is_staff=true` | 모든 조회·수정·삭제, DB 관리, 변경 이력·행동 이력 |
+| 팀장 | `team_lead` 그룹 | 사용자 권한 + 운영 인력 탭에서 전체 국가 운영 인력 편집 |
+| 그룹장 | `group_lead_KR`·`_EU`·`_NA` 그룹 | 사용자 권한 + 관리 국가의 운영 인력만 편집(국가도 관리 국가로만 선택) |
 | 옵저버 | `observer` 그룹 | 조회만. 모든 쓰기·초대 발급·취소는 `403` |
 | 사용자 | 그 외 활성 계정 | 조회, 리전 이슈·댓글·게시판 작성, 본인이 작성한 것만 수정·삭제, 초대 발급 |
 

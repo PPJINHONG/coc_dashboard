@@ -10,8 +10,9 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
+from core.defaults import DEFAULT_USERNAMES
 from core.models import UserActivity
-from core.roles import ROLE_ADMIN, ROLES, apply_role, online_sessions, user_role
+from core.roles import COUNTRIES, ROLE_ADMIN, ROLE_GROUP_LEAD, ROLES, apply_role, managed_countries, online_sessions, user_role
 from core.signals import username_changed
 from reporting.services import bump, lock_state
 
@@ -24,13 +25,15 @@ class AccountSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=False, min_length=8, max_length=128, trim_whitespace=False)
     # 관리자·옵저버(읽기 전용)·사용자. 보내지 않으면 기존 is_staff 방식과 같이 동작합니다.
     role = serializers.ChoiceField(choices=ROLES, required=False)
+    # 그룹장(group_lead)의 관리 국가. 그룹장일 때 하나 이상 필요하며 다른 권한에서는 무시합니다.
+    managed_countries = serializers.ListField(child=serializers.ChoiceField(choices=COUNTRIES), required=False, allow_empty=True)
     is_online = serializers.SerializerMethodField()
     active_sessions = serializers.SerializerMethodField()
     last_activity = serializers.SerializerMethodField()
 
     class Meta:
         model = get_user_model()
-        fields = ['id', 'name', 'username', 'email', 'role', 'is_staff', 'is_active', 'password', 'date_joined', 'last_login',
+        fields = ['id', 'name', 'username', 'email', 'role', 'managed_countries', 'is_staff', 'is_active', 'password', 'date_joined', 'last_login',
                   'is_online', 'active_sessions', 'last_activity']
         read_only_fields = ['id', 'email', 'date_joined', 'last_login']
         extra_kwargs = {'username': {'validators': []}}
@@ -38,6 +41,7 @@ class AccountSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data['role'] = user_role(instance)
+        data['managed_countries'] = managed_countries(instance)
         return data
 
     def get_active_sessions(self, obj):
@@ -57,8 +61,8 @@ class AccountSerializer(serializers.ModelSerializer):
 
     def validate_username(self, value):
         value = value.strip().lower()
-        # 기본 관리자 admin만 @ 없는 아이디를 유지할 수 있습니다.
-        if not (self.instance and self.instance.username == value == 'admin'):
+        # 기본 계정(admin·kr·eu·na·readonly)만 @ 없는 아이디를 유지할 수 있습니다.
+        if not (self.instance and self.instance.username == value and value in DEFAULT_USERNAMES):
             serializers.EmailField(max_length=150).run_validation(value)
         users = get_user_model().objects.filter(Q(username__iexact=value) | Q(email__iexact=value))
         if self.instance:
@@ -70,6 +74,13 @@ class AccountSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if 'role' in attrs:
             attrs['is_staff'] = attrs['role'] == ROLE_ADMIN
+        role = attrs.get('role', user_role(self.instance) if self.instance else None)
+        countries = attrs.get('managed_countries', managed_countries(self.instance) if self.instance else [])
+        if role == ROLE_GROUP_LEAD and not countries:
+            raise serializers.ValidationError({'managed_countries': '그룹장은 관리 국가를 하나 이상 고르세요.'})
+        if 'managed_countries' in attrs and 'role' not in attrs and self.instance is not None:
+            # 관리 국가만 바꿔도 현재 권한으로 다시 저장합니다.
+            attrs['role'] = role
         if self.instance is None and not attrs.get('password'):
             raise serializers.ValidationError({'password': '새 계정의 비밀번호를 입력하세요.'})
         if self.instance and self.instance.pk == self.context['request'].user.pk:
@@ -88,14 +99,18 @@ class AccountSerializer(serializers.ModelSerializer):
     def create(self, values):
         password = values.pop('password')
         role = values.pop('role', None)
+        countries = values.pop('managed_countries', [])
         user = get_user_model().objects.create_user(**values, email=values['username'], password=password)
         if role:
-            apply_role(user, role)
+            apply_role(user, role, countries)
         return user
 
     def update(self, instance, values):
         password = values.pop('password', None)
         role = values.pop('role', None)
+        countries = values.pop('managed_countries', None)
+        if countries is None:
+            countries = managed_countries(instance)
         old_username = instance.username
         for key, value in values.items():
             setattr(instance, key, value)
@@ -104,7 +119,7 @@ class AccountSerializer(serializers.ModelSerializer):
             instance.set_password(password)
         instance.save()
         if role:
-            apply_role(instance, role)
+            apply_role(instance, role, countries)
         if old_username != instance.username:
             # 본인 수정·삭제 판단이 끊기지 않도록 작성자 아이디를 저장하는 기능(리전 이슈 등)이 새 아이디로 바꿉니다.
             username_changed.send(sender=type(instance), old_username=old_username, new_username=instance.username)

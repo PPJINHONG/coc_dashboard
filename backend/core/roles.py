@@ -13,7 +13,12 @@ from rest_framework.permissions import BasePermission
 from .models import UserActivity
 
 ROLE_ADMIN, ROLE_OBSERVER, ROLE_USER = "admin", "observer", "user"
-ROLES = [(ROLE_ADMIN, "관리자"), (ROLE_OBSERVER, "옵저버(읽기 전용)"), (ROLE_USER, "사용자")]
+# 팀장: 운영 인력 전체 국가 편집. 그룹장: 관리 국가(KR·EU·NA 중 하나 이상)의 운영 인력만 편집. 그 밖에는 사용자와 같습니다.
+ROLE_TEAM_LEAD, ROLE_GROUP_LEAD = "team_lead", "group_lead"
+COUNTRIES = ("KR", "EU", "NA")
+TEAM_LEAD_GROUP = "team_lead"
+GROUP_LEAD_PREFIX = "group_lead_"  # 그룹 이름 group_lead_KR 등. 한 사람이 여러 국가를 맡을 수 있습니다.
+ROLES = [(ROLE_ADMIN, "관리자"), (ROLE_TEAM_LEAD, "팀장"), (ROLE_GROUP_LEAD, "그룹장"), (ROLE_OBSERVER, "옵저버(읽기 전용)"), (ROLE_USER, "사용자")]
 OBSERVER_GROUP = "observer"
 READ_ONLY_MESSAGE = "읽기 전용(옵저버) 계정은 데이터를 변경할 수 없습니다."
 
@@ -23,9 +28,34 @@ def user_role(user):
         return None
     if user.is_staff:
         return ROLE_ADMIN
-    if user.groups.filter(name=OBSERVER_GROUP).exists():
+    names = set(user.groups.values_list("name", flat=True))
+    if OBSERVER_GROUP in names:
         return ROLE_OBSERVER
+    if TEAM_LEAD_GROUP in names:
+        return ROLE_TEAM_LEAD
+    if any(name.startswith(GROUP_LEAD_PREFIX) for name in names):
+        return ROLE_GROUP_LEAD
     return ROLE_USER
+
+
+def managed_countries(user):
+    """그룹장이 맡은 국가 목록(KR·EU·NA 순서). 그룹장이 아니면 빈 목록입니다."""
+    if not user or not user.is_authenticated:
+        return []
+    names = set(user.groups.values_list("name", flat=True))
+    return [code for code in COUNTRIES if f"{GROUP_LEAD_PREFIX}{code}" in names]
+
+
+def staff_edit_countries(user):
+    """운영 인력을 편집할 수 있는 국가. 관리자·팀장은 전체, 그룹장은 관리 국가, 그 외는 없음."""
+    if not user or not user.is_authenticated or not user.is_active:
+        return []
+    role = user_role(user)
+    if role in (ROLE_ADMIN, ROLE_TEAM_LEAD):
+        return list(COUNTRIES)
+    if role == ROLE_GROUP_LEAD:
+        return managed_countries(user)
+    return []
 
 
 def is_admin(user):
@@ -45,15 +75,24 @@ def can_modify(user, author_username):
     return is_admin(user) or (can_write(user) and owns(user, author_username))
 
 
-def apply_role(user, role):
-    """권한을 저장합니다. is_staff는 관리자 여부, 옵저버는 그룹 소속으로 구분합니다."""
+def apply_role(user, role, countries=None):
+    """권한을 저장합니다. is_staff는 관리자 여부, 옵저버·팀장·그룹장(관리 국가별)은 그룹 소속으로 구분합니다."""
     user.is_staff = role == ROLE_ADMIN
     user.save(update_fields=["is_staff"])
-    group, _ = Group.objects.get_or_create(name=OBSERVER_GROUP)
+    wanted = set()
     if role == ROLE_OBSERVER:
-        user.groups.add(group)
-    else:
-        user.groups.remove(group)
+        wanted.add(OBSERVER_GROUP)
+    elif role == ROLE_TEAM_LEAD:
+        wanted.add(TEAM_LEAD_GROUP)
+    elif role == ROLE_GROUP_LEAD:
+        wanted.update(f"{GROUP_LEAD_PREFIX}{code}" for code in (countries or []) if code in COUNTRIES)
+    managed = [OBSERVER_GROUP, TEAM_LEAD_GROUP, *(f"{GROUP_LEAD_PREFIX}{code}" for code in COUNTRIES)]
+    for name in managed:
+        group, _ = Group.objects.get_or_create(name=name)
+        if name in wanted:
+            user.groups.add(group)
+        else:
+            user.groups.remove(group)
 
 
 class CanWrite(BasePermission):

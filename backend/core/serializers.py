@@ -21,24 +21,40 @@ class AccountSerializer(serializers.ModelSerializer):
     username = serializers.CharField(max_length=150, allow_blank=False)
     # 관리자(admin)·옵저버(observer, 읽기 전용)·사용자(user). 변경은 DB 관리의 사용자·권한에서만 합니다.
     role = serializers.SerializerMethodField()
+    # 그룹장의 관리 국가, 운영 인력을 편집할 수 있는 국가(관리자·팀장은 전체). 화면은 이 값으로 편집 버튼·국가 선택지를 정합니다.
+    managed_countries = serializers.SerializerMethodField()
+    staff_edit_countries = serializers.SerializerMethodField()
 
     class Meta:
         model = get_user_model()
-        fields = ("id", "name", "username", "email", "date_joined", "is_staff", "role")
-        read_only_fields = ("id", "email", "date_joined", "is_staff", "role")
+        fields = ("id", "name", "username", "email", "date_joined", "is_staff", "role", "managed_countries", "staff_edit_countries")
+        read_only_fields = ("id", "email", "date_joined", "is_staff", "role", "managed_countries", "staff_edit_countries")
 
     def get_role(self, obj):
         from .roles import user_role
 
         return user_role(obj) if obj.pk else None
 
+    def get_managed_countries(self, obj):
+        from .roles import managed_countries
+
+        return managed_countries(obj) if obj.pk else []
+
+    def get_staff_edit_countries(self, obj):
+        from .roles import staff_edit_countries
+
+        return staff_edit_countries(obj) if obj.pk else []
+
     def validate_username(self, value):
         value = value.lower()
         # 요청한 관리자 아이디는 일반 이메일 검사에서 제외하되, 신규 가입에는 허용하지 않습니다.
+        from .defaults import DEFAULT_USERNAMES
+
+        # 기본 계정(admin·kr·eu·na·readonly)은 자기 아이디를 그대로 둘 때만 @ 없는 아이디를 유지합니다.
         existing_admin = (
             self.instance is not None
-            and self.instance.is_superuser
-            and self.instance.username == value == "admin"
+            and self.instance.username == value
+            and value in DEFAULT_USERNAMES
         )
         if not existing_admin:
             serializers.EmailField(max_length=150).run_validation(value)

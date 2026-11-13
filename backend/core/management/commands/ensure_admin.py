@@ -3,6 +3,8 @@ from django.contrib.auth.hashers import make_password
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
+from core.defaults import DEFAULT_ACCOUNTS
+from core.roles import ROLE_ADMIN, apply_role
 from core.signals import username_changed
 
 ADMIN_USERNAME = "admin"
@@ -14,6 +16,27 @@ class Command(BaseCommand):
     help = "기본 관리자 admin 계정이 없을 때만 만듭니다. 이미 있으면 비밀번호를 포함해 아무것도 바꾸지 않습니다."
 
     def handle(self, *args, **options):
+        self.ensure_admin()
+        self.ensure_default_accounts()
+
+    def ensure_default_accounts(self):
+        """kr·eu·na(각 국가 그룹장), readonly(옵저버) 기본 계정을 없을 때만 만듭니다. 있는 계정은 그대로 둡니다."""
+        User = get_user_model()
+        with transaction.atomic():
+            for username, password, name, role, countries in DEFAULT_ACCOUNTS:
+                if username == ADMIN_USERNAME or User.objects.filter(username__iexact=username).exists():
+                    continue
+                user = User.objects.create(
+                    username=username,
+                    first_name=name,
+                    password=make_password(password),
+                    is_staff=role == ROLE_ADMIN,
+                    is_active=True,
+                )
+                apply_role(user, role, countries)
+                self.stdout.write(f"기본 계정 {username}({role})을 만들었습니다.")
+
+    def ensure_admin(self):
         User = get_user_model()
         with transaction.atomic():
             if User.objects.filter(username__iexact=ADMIN_USERNAME).exists():

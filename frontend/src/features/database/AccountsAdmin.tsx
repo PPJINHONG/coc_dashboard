@@ -5,16 +5,31 @@ import ActivityHistory from "./ActivityHistory";
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "관리자",
+  team_lead: "팀장",
+  group_lead: "그룹장",
   observer: "옵저버(읽기 전용)",
   user: "사용자",
 };
+
+/** 그룹장 관리 국가 선택지: 국가 하나 또는 여러 국가 조합. 값은 "KR,EU"처럼 쉼표로 잇습니다. */
+const COUNTRIES = ["KR", "EU", "NA"];
+const COUNTRY_SCOPES: [string, string][] = [
+  ["", "해당 없음 (그룹장일 때만 선택)"],
+  ...[["KR"], ["EU"], ["NA"], ["KR", "EU"], ["KR", "NA"], ["EU", "NA"], COUNTRIES].map(
+    (codes): [string, string] => [codes.join(","), codes.join(" · ")],
+  ),
+];
+const countryList = (value: unknown) =>
+  (Array.isArray(value) ? value.map(String) : String(value ?? "").split(","))
+    .map((code) => code.trim())
+    .filter((code) => COUNTRIES.includes(code));
 
 /** DB 관리 > 기능별 설정 > 사용자·권한: 계정·권한·로그인 상태와 계정별 행동 이력. */
 const config: RecordsConfig = {
   collection: "accounts",
   title: "사용자·아이디·권한",
   subtitle:
-    "권한(관리자·옵저버·사용자)과 로그인 상태를 확인하고, ‘이력’에서 계정별 행동과 변경 전·후 값을 확인합니다.",
+    "권한(관리자·팀장·그룹장·옵저버·사용자)과 로그인 상태를 확인하고, ‘이력’에서 계정별 행동과 변경 전·후 값을 확인합니다. 팀장은 운영 인력 전체, 그룹장은 관리 국가의 운영 인력을 운영 인력 탭에서 편집합니다.",
   addLabel: "+ 사용자 추가",
   noun: "사용자",
   deleteTitle: "계정 삭제",
@@ -34,10 +49,19 @@ const config: RecordsConfig = {
       label: "권한",
       options: [
         ["user", "사용자 (글 작성·본인 데이터 수정·삭제)"],
+        ["group_lead", "그룹장 (사용자 + 관리 국가의 운영 인력 편집)"],
+        ["team_lead", "팀장 (사용자 + 전체 운영 인력 편집)"],
         ["observer", "옵저버 (읽기 전용)"],
         ["admin", "관리자 (전체 수정·삭제·이력 확인)"],
       ],
       default: "user",
+    },
+    {
+      key: "managed_countries",
+      label: "그룹장 관리 국가",
+      options: COUNTRY_SCOPES,
+      default: "",
+      optional: true,
     },
     {
       key: "is_active",
@@ -57,7 +81,9 @@ const config: RecordsConfig = {
   ],
   renderCell: (key, row) =>
     key === "role" ? (
-      ROLE_LABELS[String(row[key])] ?? String(row[key] ?? "")
+      `${ROLE_LABELS[String(row[key])] ?? String(row[key] ?? "")}${
+        row[key] === "group_lead" ? ` (${countryList(row.managed_countries).join(" · ")})` : ""
+      }`
     ) : key === "is_online" ? (
       row[key] ? (
         <span className="report-badge status-open">로그인 중 ({String(row.active_sessions)}세션)</span>
@@ -70,9 +96,11 @@ const config: RecordsConfig = {
       row[key] ? new Date(String(row[key])).toLocaleString("ko-KR") : "—"
     ) : undefined,
   // 비밀번호는 복사하지 않고 새 아이디·비밀번호를 입력합니다. 복사한 계정은 일반 사용자입니다.
-  copyValues: (values) => ({ ...values, username: "", password: "", role: "user" }),
+  copyValues: (values) => ({ ...values, username: "", password: "", role: "user", managed_countries: "" }),
   beforeSave: (values, editing) => {
     if (editing && !values.password) delete values.password;
+    // 관리 국가는 그룹장일 때만 보냅니다. 그룹장인데 비어 있으면 서버가 거절합니다.
+    values.managed_countries = values.role === "group_lead" ? countryList(values.managed_countries) : [];
     values.is_active = String(values.is_active) === "true";
     return values;
   },

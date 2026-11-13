@@ -13,7 +13,7 @@ LOGOUT_URL = "/api/auth/logout/"
 ME_URL = "/api/me/"
 PASSWORD = "pass12345!"
 NEW_PASSWORD = "Updated!93827"
-PUBLIC_FIELDS = {"id", "name", "username", "email", "date_joined", "is_staff", "role"}
+PUBLIC_FIELDS = {"id", "name", "username", "email", "date_joined", "is_staff", "role", "managed_countries", "staff_edit_countries"}
 INVITE = "test-invite-token-for-registration"
 
 
@@ -216,8 +216,30 @@ def test_ensure_admin_creates_default_admin_that_logs_in_without_at_sign():
 def test_ensure_admin_keeps_existing_admin_password():
     get_user_model().objects.create_user(username="admin", password=PASSWORD, is_staff=True)
     call_command("ensure_admin", stdout=StringIO())
-    assert get_user_model().objects.count() == 1
+    assert get_user_model().objects.filter(username="admin").count() == 1
     assert get_user_model().objects.get(username="admin").check_password(PASSWORD)
+
+
+@pytest.mark.django_db
+def test_ensure_admin_creates_default_accounts_with_roles_once():
+    from core.roles import user_role
+
+    get_user_model().objects.create_user(username="kr", password=PASSWORD)
+    call_command("ensure_admin", stdout=StringIO())
+    call_command("ensure_admin", stdout=StringIO())
+    users = {user.username: user for user in get_user_model().objects.all()}
+    assert set(users) == {"admin", "kr", "eu", "na", "readonly"}
+    assert {name: user_role(user) for name, user in users.items()} == {
+        # kr은 미리 있던 일반 계정이라 권한을 바꾸지 않습니다.
+        "admin": "admin", "kr": "user", "eu": "group_lead", "na": "group_lead", "readonly": "observer"}
+    from core.roles import managed_countries
+
+    assert managed_countries(users["eu"]) == ["EU"] and managed_countries(users["na"]) == ["NA"]
+    # 이미 있던 계정의 비밀번호는 바꾸지 않습니다.
+    assert users["kr"].check_password(PASSWORD) and not users["kr"].check_password("kr")
+    for name in ("eu", "na", "readonly"):
+        response = APIClient().post(LOGIN_URL, {"username": name, "password": name}, format="json")
+        assert response.status_code == 200, name
 
 
 @pytest.mark.django_db

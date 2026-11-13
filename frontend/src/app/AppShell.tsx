@@ -286,7 +286,15 @@ export default function AppShell() {
             <div>
               <strong>{user?.name || "Visitor"}</strong>
               <small>
-                {user?.is_staff ? "관리자" : user?.role === "observer" ? "옵저버(읽기 전용)" : "사용자"}
+                {user?.is_staff
+                  ? "관리자"
+                  : user?.role === "observer"
+                    ? "옵저버(읽기 전용)"
+                    : user?.role === "team_lead"
+                      ? "팀장"
+                      : user?.role === "group_lead"
+                        ? `그룹장 (${(user.managed_countries ?? []).join("·")})`
+                        : "사용자"}
               </small>
             </div>
             <button
