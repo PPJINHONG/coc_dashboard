@@ -12,8 +12,8 @@ SECTION = Section(
 )
 
 
-def totals():
-    rows = list(SECTION.rows())
+def totals(month):
+    rows = list(SECTION.scoped(month))
     return {
         'work_total': sum(row.total_count for row in rows),
         'work_completed': sum(row.completed_count for row in rows),

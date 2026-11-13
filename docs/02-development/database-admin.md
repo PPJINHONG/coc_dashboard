@@ -40,7 +40,7 @@ DB 관리 탭과 `/api/db-admin/`은 **실제 로그인한 활성 관리자만**
 
 | 경로 (`/api/db-admin/` 아래) | 방식 | 내용 | 코드 |
 | --- | --- | --- | --- |
-| `sections/{기능}/` | PUT | 기능별 현재값 저장 | `reporting/admin_urls.py` |
+| `sections/{기능}/` | PUT | 기능별 기준 월 데이터 저장(본문 `month`, 생략 시 이번 달) | `reporting/admin_urls.py` |
 | `common/{collection}/`, `common/{collection}/{pk}/` | POST / PATCH·DELETE | 공통데이터 | `reporting/admin_urls.py` |
 | `issues/{id}/comments/` | POST | 이슈 화면의 댓글 등록 | `features/issues/admin_urls.py` |
 | `comments/`, `comments/{id}/` | GET·POST / PATCH·DELETE | 이슈 댓글 관리 | `features/issues/admin_urls.py` |

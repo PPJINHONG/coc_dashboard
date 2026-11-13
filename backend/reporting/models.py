@@ -1,10 +1,12 @@
 """운영 공통 모델: 리전·서비스·인력 공통데이터, 동시 수정 버전, 변경 이력, 개인 화면 설정.
 
-기능별 현재값 테이블(인프라 자원·운영 인력·운영 작업·리전 이슈)은 backend/features/<기능>/models.py에 있습니다.
+기능별 테이블(인프라 자원·운영 작업·리전 이슈는 월별, 운영 인력은 현재값)은 backend/features/<기능>/models.py에 있습니다.
 """
 
 from django.db import models
 from django.db.models import Case, Q, Value, When
+
+from .months import current_month
 
 # 전체 리전(내수·유럽·북미)은 국가 코드에서 DB가 자동 계산합니다. 아직 화면·API에서는 사용하지 않습니다.
 GLOBAL_REGION_EXPRESSION = Case(
@@ -61,8 +63,12 @@ class DataState(models.Model):
 
 
 class CurrentRow(models.Model):
-    """기능 앱의 리전별 현재값 테이블이 상속하는 공통 열(리전·수정 시각)."""
+    """기능 앱의 리전별 월별 테이블이 상속하는 공통 열(기준 월·리전·수정 시각).
 
+    기준 월은 그 달 1일 날짜입니다. 1일만 허용하는 검사 제약은 각 모델 Meta에 둡니다(month_first_day_check).
+    """
+
+    period_month = models.DateField(default=current_month, db_index=True, db_comment='기준 월(그 달 1일)')
     region = models.ForeignKey(Region, on_delete=models.PROTECT)
     updated_at = models.DateTimeField(auto_now=True, db_default=models.functions.Now())
 
@@ -70,8 +76,14 @@ class CurrentRow(models.Model):
         abstract = True
 
 
+def month_first_day_check(name):
+    return models.CheckConstraint(condition=Q(period_month__day=1), name=name)
+
+
 class ChangeLog(models.Model):
     section = models.CharField(max_length=30)
+    # 월별 기능 데이터의 기준 월. 공통데이터·운영 인력 변경은 비워 둡니다.
+    period_month = models.DateField(null=True, blank=True, db_index=True, db_comment='변경한 데이터의 기준 월(그 달 1일)')
     action = models.CharField(max_length=30)
     actor_name = models.CharField(max_length=150)
     actor_username = models.CharField(max_length=150, blank=True, default='', db_default='')

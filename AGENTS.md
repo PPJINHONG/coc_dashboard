@@ -43,7 +43,8 @@
 
 - 상세: [운영 데이터 설계](docs/02-development/operations.md), [관리자 DB 관리](docs/02-development/database-admin.md).
 - 로그인·회원가입(초대 링크 전용)을 사용하며 `.env`의 `DEVELOPMENT_AUTH_BYPASS=false`를 유지한다. 로그인 없는 개발은 별도 요청이 있을 때만 허용한다.
-- 운영 현황은 주·월 구분 없이 최신값만 사용하고 주 선택·복사·확정과 K8s 기능은 제공하지 않는다. 리전·서비스·인력 공통데이터는 모든 화면에서 같은 원본 테이블을 참조한다.
+- 인프라 자원·운영 작업·리전 이슈는 기준 월(`period_month`, 그 달 1일 DATE)별로 저장·조회한다. API는 `month`(`YYYY-MM`, 조회는 `?month=`, 저장은 본문)를 받고 없으면 이번 달(Asia/Seoul)이다. 관리자 일괄 저장은 그 월의 행만 바꾸고 다른 달을 지우지 않는다. 리전 이슈는 등록한 월에만 속하고 댓글은 이슈의 월을 따른다. 새 달은 빈 상태로 시작한다(자동 복사 없음). 운영 인력과 공통데이터(리전·서비스·인력)는 월 구분 없이 하나이며, 모든 화면에서 같은 원본 테이블을 참조한다. 주 선택·확정과 K8s 기능은 제공하지 않는다.
+- 운영 변경 이력(`ops_change_logs.period_month`)에 월별 데이터의 기준 월을 남긴다. 공통데이터·운영 인력 변경은 비워 둔다.
 - 권한은 관리자(`is_staff`)·옵저버(`observer` 그룹, 읽기 전용)·사용자 3단계다. 관리자만 DB 관리 > 기능별 설정 > 사용자·권한에서 변경한다. 계정 API는 `role`(admin·observer·user)을 받는다. `/api/me/`는 조회만 제공한다.
 - DB 탭 밖의 운영 화면은 관리자도 조회 전용이다. 운영 데이터·댓글·공통데이터 저장 API는 `/api/db-admin/`에서만 제공하며 개발 우회 여부와 무관하게 실제 활성 관리자만 쓸 수 있다.
 - 예외: 리전 이슈와 댓글은 `/api/operations/issues/`, `/api/operations/issue-comments/`에서 사용자도 작성한다. 관리자는 모두, 사용자는 본인이 작성한 것(`author_username`)만 수정·삭제하며 옵저버는 모든 쓰기가 403이다. DB 관리에서 입력한 작성자 없는 이슈는 관리자만 수정한다. 게시판 API도 같은 규칙을 따른다.
@@ -55,7 +56,7 @@
 - 행 복사는 관리자 DB 편집 초안에서 제공한다. 복사된 PK·시각·비밀번호·기존 댓글을 저장하지 않고 새 코드나 고유 조합을 확인한 뒤 저장한다.
 - 리전과 인력은 자동 생성 숫자 PK로 연결하고 이름으로 선택한다. 리전코드·인력코드는 쓰지 않으며 내부 ID는 DB 원본에서만 표시한다. 인력은 이름만 입력하고 동명이인을 허용한다. 서비스 코드와 국가 코드는 별개로 유지한다.
 - 공통데이터(리전·서비스·인력)의 사용 상태 열 `is_active`는 제공하지 않는다. 로그인 계정의 `is_active`와 업무 진행 상태는 별개로 유지한다. 리전 표시 순서 열은 쓰지 않으며 기본 목록은 리전 이름순이다.
-- 인프라 수량은 Host·VM·Compute Rack(`compute_rack_count`)·Storage Rack(`storage_count`)이며 고유 조합은 리전·서비스(`unique_current_resource_service`)다. 상단 세 번째 카드는 Rack(Compute + Storage 합계)이고 요약 그래프는 수량 내림차순이다. 환경 열은 없다.
+- 인프라 수량은 Host·VM·Compute Rack(`compute_rack_count`)·Storage Rack(`storage_count`)이며 고유 조합은 기준 월·리전·서비스(`unique_monthly_resource_service`)다. 운영 작업은 기준 월·리전·작업유형·범위(`unique_monthly_work_scope`)다. 상단 세 번째 카드는 Rack(Compute + Storage 합계)이고 요약 그래프는 수량 내림차순이다. 환경 열은 없다.
 - 리전의 `global_region`(전체 리전)은 `country_code`에서 DB가 계산하는 생성 열이다(KR·CN=내수, EU=유럽, NA=북미, 그 외 NULL). 아직 화면·API에서 사용하지 않는다.
 - 운영 인력은 국가(KR·EU·NA)·성명·직책·소속사·업무·근무지만 편집하며 리전 대신 국가 코드를 저장한다.
 

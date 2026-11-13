@@ -38,7 +38,14 @@ class RowSerializer(serializers.ModelSerializer):
         validators = []
 
 
+def month_field():
+    """기준 월(period_month)을 `YYYY-MM`으로 보여 주는 읽기 전용 열. 저장할 월은 요청의 month로 정합니다."""
+    return serializers.DateField(source='period_month', format='%Y-%m', read_only=True)
+
+
 class ChangeLogSerializer(serializers.ModelSerializer):
+    month = month_field()
+
     class Meta:
         model = ChangeLog
-        fields = ['id', 'section', 'action', 'actor_name', 'summary', 'before_data', 'after_data', 'created_at']
+        fields = ['id', 'section', 'month', 'action', 'actor_name', 'summary', 'before_data', 'after_data', 'created_at']

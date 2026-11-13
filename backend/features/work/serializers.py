@@ -1,14 +1,16 @@
 from rest_framework import serializers
 
-from reporting.serializers import RowSerializer
+from reporting.serializers import RowSerializer, month_field
 
 from .models import WorkSummary
 
 
 class WorkSerializer(RowSerializer):
+    month = month_field()
+
     class Meta(RowSerializer.Meta):
         model = WorkSummary
-        fields = ['id', 'region', 'work_type', 'scope', 'total_count', 'completed_count', 'batch_count', 'delayed_count', 'mttr_minutes', 'remarks']
+        fields = ['id', 'month', 'region', 'work_type', 'scope', 'total_count', 'completed_count', 'batch_count', 'delayed_count', 'mttr_minutes', 'remarks']
 
     def validate(self, data):
         total = data.get('total_count', 0)

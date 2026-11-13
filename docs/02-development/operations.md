@@ -2,7 +2,17 @@
 
 [문서 목록](../README.md) · [데이터 확인과 DB 구조 변경](database.md) · [관리자 DB 관리](database-admin.md)
 
-주·월이나 보고 기간 없이 **현재값(최신값)만** 저장합니다. 리포트·기능 탭·관리자 설정은 같은 원본 테이블을 씁니다. K8s 기능과 주별 테이블은 없습니다.
+인프라 자원·운영 작업·리전 이슈는 **기준 월별로** 저장합니다. 운영 인력과 공통데이터(리전·서비스·인력)는 월 구분 없이 현재값 하나입니다. 리포트·기능 탭·관리자 설정은 같은 원본 테이블을 씁니다. K8s 기능과 주별 테이블은 없습니다.
+
+### 기준 월
+
+- 열: 각 월별 테이블의 `period_month`(DATE, 그 달 1일만 허용. 검사 제약 `*_month_first_day`). 기본값은 이번 달(Asia/Seoul).
+- API: `month`를 `YYYY-MM`으로 주고받습니다. 조회는 `?month=2026-08`, 저장은 본문 `"month": "2026-08"`. 없으면 이번 달이고 형식이 틀리면 `400`입니다. 응답의 각 행과 최상위에 `month`가 있습니다.
+- 인프라 자원·운영 작업은 월마다 따로 입력합니다. 새 달은 빈 상태로 시작하며 지난달 값을 자동 복사하지 않습니다.
+- 리전 이슈는 등록한 월에만 속하고 다음 달로 이어지지 않습니다. 수정해도 월은 바뀌지 않습니다. 댓글은 이슈의 월을 따릅니다.
+- 합계(`totals`)는 조회한 월 기준입니다. 운영 인력 수는 월과 관계없이 전체입니다.
+- 마이그레이션 적용 전에 있던 행은 2026-11월로 들어갔습니다.
+- 화면: 상단바의 기준 월 선택(이전 달·목록·다음 달, 이번 달부터 24개월 전까지)이 모든 탭과 DB 관리에 같이 적용됩니다. 처음 열면 이번 달이고, 편집 중에 월을 바꾸면 확인 창을 띄웁니다. 코드는 `frontend/src/app/AppShell.tsx`(`MonthPicker`)이며 저장 요청은 `snapshot.month`를 보냅니다.
 
 ## 1. 테이블과 담당 앱
 
@@ -11,17 +21,17 @@
 | `ops_regions` | 리전 이름·국가 코드·전체 리전(자동 계산). 내부 숫자 ID로 연결 | `reporting` |
 | `ops_services` | 서비스 코드·이름 | `reporting` |
 | `ops_staff_members` | 인력 이름(동명이인 허용). 내부 ID로 연결 | `reporting` |
-| `infra_resources` | 리전·서비스별 Host·VM·Compute Rack·Storage Rack 수량 | `features/resources` |
+| `infra_resources` | 기준 월·리전·서비스별 Host·VM·Compute Rack·Storage Rack 수량 | `features/resources` |
 | `ops_staff_assignments` | 인력의 국가(KR·EU·NA)·직책·소속사·업무·근무지 | `features/staff` |
-| `ops_work_summaries` | 요청·변경·장애 작업 수량과 평균 복구시간 | `features/work` |
-| `ops_regional_issues` | 리전별 이슈·중요도·상태·진행률·담당자·조치·작성자 | `features/issues` |
-| `ops_issue_comments` | 이슈 댓글(`issue_id`) | `features/issues` |
+| `ops_work_summaries` | 기준 월별 요청·변경·장애 작업 수량과 평균 복구시간 | `features/work` |
+| `ops_regional_issues` | 기준 월별 리전 이슈·중요도·상태·진행률·담당자·조치·작성자 | `features/issues` |
+| `ops_issue_comments` | 이슈 댓글(`issue_id`). 월은 이슈를 따름 | `features/issues` |
 | `auth_user` | 이메일 아이디·이름·비밀번호 해시·활성/관리자 | Django 인증 |
 | `user_activity_logs` | 로그인·등록·수정(이전/새 값)·삭제(원본) 행동 이력 | `core` |
 | `auth_invites`, `auth_invite_uses` | 초대 링크와 가입 기록 | `invites` |
 | `ui_navigation_preferences` | 계정·브라우저별 숨긴 탭·사이드바 접기 | `reporting` |
 | `ops_data_state` | 운영 데이터 동시 수정 버전(`revision`) | `reporting` |
-| `ops_change_logs` | 운영 데이터 변경 이력 | `reporting` |
+| `ops_change_logs` | 운영 데이터 변경 이력. 월별 데이터 변경은 `period_month`에 기준 월 | `reporting` |
 | `db_admin_change_logs` | 계정·댓글 관리자 변경 이력 | `database_admin` |
 | `core_post`, `core_comment`, `core_postimage`, `core_dashboardpanel` | 게시판·대시보드(화면 미연결). 테이블 이름은 옮기기 전 그대로 | `features/board`, `features/dashboard` |
 
@@ -30,7 +40,7 @@
 - 리전과 인력은 자동 생성되는 숫자 ID로 연결합니다. 화면에서는 이름으로 고르고 ID는 DB 원본에서만 보입니다. 서비스 코드와 국가 코드는 직접 입력하는 값입니다.
 - 리전 기본 목록은 이름순, 인프라 요약 그래프는 수량 내림차순입니다.
 - `ops_regions.global_region`(전체 리전)은 `country_code`로 DB가 계산하는 생성 열입니다. KR·CN=내수, EU=유럽, NA=북미, 그 외 NULL. 아직 화면·API에서 쓰지 않습니다. 분류를 바꾸려면 모델·마이그레이션의 계산식을 함께 바꿉니다.
-- 인프라 고유 조합은 리전·서비스(`unique_current_resource_service`)입니다. VM·Compute Rack·Storage Rack의 빈 값은 미입력, 0은 실제 0개입니다. 상단 Rack 카드는 Compute + Storage 합계이며 둘 다 비어 있을 때만 미입력입니다.
+- 인프라 고유 조합은 기준 월·리전·서비스(`unique_monthly_resource_service`), 운영 작업은 기준 월·리전·작업유형·범위(`unique_monthly_work_scope`)입니다. VM·Compute Rack·Storage Rack의 빈 값은 미입력, 0은 실제 0개입니다. 상단 Rack 카드는 Compute + Storage 합계이며 둘 다 비어 있을 때만 미입력입니다.
 - 운영 인력은 리전 대신 국가 코드(KR·EU·NA)를 저장하며 API와 DB가 허용값을 검사합니다.
 
 ## 2. API와 저장
@@ -38,10 +48,10 @@
 | 경로 (`/api/` 아래) | 방식 | 내용 | 코드 |
 | --- | --- | --- | --- |
 | `operations/bootstrap/` | GET | 공통데이터·관리자 여부 | `reporting/views.py` |
-| `operations/current/` | GET | 기능별 현재값·합계·버전·최근 변경 이력(관리자만) | `reporting/views.py` + 각 `feature.py` |
-| `operations/logs/` | GET | 변경 이력 최근 200건(관리자만) | `reporting/views.py` |
-| `operations/issues/...`, `operations/issue-comments/...` | POST/PATCH/DELETE | 리전 이슈·댓글 작성(관리자·사용자) | `features/issues/views.py` |
-| `db-admin/sections/{기능}/` | PUT | `{revision, rows}`로 기능 현재값 전체 저장(관리자) | `reporting/views.py` |
+| `operations/current/[?month=YYYY-MM]` | GET | 기준 월의 기능별 데이터·합계·버전·최근 변경 이력(관리자만) | `reporting/views.py` + 각 `feature.py` |
+| `operations/logs/[?section=&month=]` | GET | 변경 이력 최근 200건(관리자만) | `reporting/views.py` |
+| `operations/issues/...`, `operations/issue-comments/...` | POST/PATCH/DELETE | 리전 이슈·댓글 작성(관리자·사용자). 등록 시 본문 `month` | `features/issues/views.py` |
+| `db-admin/sections/{기능}/` | PUT | `{revision, month, rows}`로 기준 월 데이터 전체 저장(관리자) | `reporting/views.py` |
 | `db-admin/common/{regions·services·staff-members}/[{pk}/]` | POST/PATCH/DELETE | 공통데이터 관리(관리자) | `reporting/views.py` |
 | `db-admin/issues/{id}/comments/` | POST | DB 관리 이슈 화면의 댓글(관리자) | `features/issues/admin_views.py` |
 
@@ -49,7 +59,7 @@
 
 - 일반 기능 화면은 관리자에게도 조회 전용입니다. 업무 데이터·댓글·공통데이터 변경은 `/api/db-admin/`에서 **실제 활성 관리자만** 합니다. 개발용 로그인 우회(`DEVELOPMENT_AUTH_BYPASS`)도 쓰기 권한을 주지 않습니다.
 - 예외: 리전 이슈와 댓글은 일반 화면에서 사용자도 작성합니다. 권한은 아래 3절.
-- 기능별 저장은 현재 전체 행을 보냅니다. 기존 행은 `id`를 유지하고 새 행은 생략합니다. 빠진 행은 실제로 삭제하며 연결된 데이터(댓글, 사용 중인 공통데이터)가 있으면 거절합니다.
+- 기능별 저장은 기준 월의 전체 행을 보냅니다(월별 기능). 기존 행은 `id`를 유지하고 새 행은 생략합니다. 다른 달의 `id`는 거절합니다. 그 월에서 빠진 행만 실제로 삭제하고 다른 달 행은 그대로 둡니다. 연결된 데이터(댓글, 사용 중인 공통데이터)가 있으면 거절합니다.
 - 모든 저장은 `revision`을 확인합니다. 다른 저장이 먼저 있었으면 `409`이며 최신 데이터를 다시 불러와 편집합니다. 수량·상태 제약은 서버와 DB가 함께 검사합니다(오류 `400`).
 - 열 이름이 바뀐 뒤 예전 열 이름(`environment_name`, `zone_name` 등)으로 보내는 요청은 거절해 오래 열린 화면이 값을 바꾸지 않게 합니다.
 
@@ -85,3 +95,4 @@
 | `reporting` 0015 | 이슈 작성자 열 |
 | `reporting` 0017 | 인프라 환경(`environment_name`) 열과 값 삭제(삭제 전 백업은 `.artifacts/backups/`) |
 | `reporting` 0018, `core` 0004, 각 기능 앱 0001 | 기능별 모델을 `backend/features/<기능>` 앱으로 이동. DB는 바꾸지 않고 Django 상태만 옮김 |
+| `resources`·`work`·`issues` 0002, `reporting` 0019 | 기준 월(`period_month`) 추가, 기존 행은 2026-11월로 이전, 고유 조합에 월 추가, 변경 이력에 기준 월 열(적용 전 백업은 `.artifacts/backups/`) |

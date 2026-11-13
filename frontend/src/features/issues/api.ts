@@ -12,8 +12,9 @@ export interface IssueComment {
 
 // 리전 이슈 사용자 작성: 관리자는 전체, 사용자는 본인 것만, 옵저버는 조회만 가능합니다.
 const root = "/api/operations";
-export const createIssue = (values: DataRow) =>
-  request<{ revision: number; row: DataRow }>("POST", `${root}/issues/`, values);
+/** 이슈는 등록한 기준 월(month, YYYY-MM)에 속하며 수정해도 월은 바뀌지 않습니다. */
+export const createIssue = (values: DataRow, month: string) =>
+  request<{ revision: number; row: DataRow }>("POST", `${root}/issues/`, { ...values, month });
 export const updateIssue = (id: number, values: DataRow) =>
   request<{ revision: number; row: DataRow }>("PATCH", `${root}/issues/${id}/`, values);
 export const deleteIssue = (id: number) =>

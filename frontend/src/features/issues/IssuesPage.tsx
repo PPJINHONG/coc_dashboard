@@ -25,12 +25,15 @@ const ISSUE_KEYS = [
 export default function IssuesPage({
   rows,
   data,
+  month,
   rowLimit,
   canWrite = false,
   onChanged,
 }: {
   rows: DataRow[];
   data: Bootstrap;
+  /** 새 이슈를 등록할 기준 월(YYYY-MM). 상단바에서 고른 월입니다. */
+  month: string;
   rowLimit?: number;
   /** 리전 이슈 작성 권한(관리자·사용자). 옵저버는 false입니다. */
   canWrite?: boolean;
@@ -87,6 +90,7 @@ export default function IssuesPage({
         <IssueForm
           row={editing}
           data={data}
+          month={month}
           onClose={() => setEditing(null)}
           onSaved={async () => {
             setEditing(null);
@@ -101,11 +105,13 @@ export default function IssuesPage({
 function IssueForm({
   row,
   data,
+  month,
   onClose,
   onSaved,
 }: {
   row: DataRow;
   data: Bootstrap;
+  month: string;
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
@@ -132,7 +138,7 @@ function IssueForm({
           setBusy(true);
           setError(null);
           try {
-            if (isNew) await api.createIssue(form);
+            if (isNew) await api.createIssue(form, month);
             else await api.updateIssue(Number(row.id), form);
             await onSaved();
           } catch (err) {

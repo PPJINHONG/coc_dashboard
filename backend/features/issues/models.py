@@ -1,10 +1,12 @@
 from django.db import models
 from django.db.models import Q
 
-from reporting.models import CurrentRow, StaffMember
+from reporting.models import CurrentRow, StaffMember, month_first_day_check
 
 
 class RegionalIssue(CurrentRow):
+    """리전 이슈. 등록한 기준 월에만 속하며 다음 달로 이어지지 않습니다. 댓글은 이슈의 월을 따릅니다."""
+
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True, default='', db_default='')
     severity = models.CharField(max_length=10, choices=[('critical', '긴급'), ('major', '높음'), ('minor', '보통'), ('info', '안내')], default='minor', db_default='minor')
@@ -18,9 +20,10 @@ class RegionalIssue(CurrentRow):
 
     class Meta:
         db_table = 'ops_regional_issues'
-        db_table_comment = '현재 리전별 운영 이슈·조치'
-        ordering = ['-updated_at', '-id']
+        db_table_comment = '월별 리전 운영 이슈·조치 (등록한 기준 월에 속함)'
+        ordering = ['-period_month', '-updated_at', '-id']
         constraints = [
+            month_first_day_check('issue_month_first_day'),
             models.CheckConstraint(condition=Q(progress_percent__lte=100), name='issue_progress_max_100'),
             models.CheckConstraint(condition=Q(status__in=['open', 'blocked', 'resolved']), name='current_issue_valid_status'),
             models.CheckConstraint(condition=Q(severity__in=['critical', 'major', 'minor', 'info']), name='current_issue_valid_severity'),

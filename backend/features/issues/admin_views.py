@@ -7,6 +7,7 @@ from rest_framework.response import Response
 
 from database_admin.services import log_change
 from database_admin.views import AdminView, payload
+from reporting.months import parse_month
 from reporting.services import actor, bump, check_revision, lock_state, record_log
 from reporting.views import AdminDataView
 
@@ -28,7 +29,7 @@ class CommentsView(AdminDataView):
         identity = actor(request)
         comment = IssueComment.objects.create(issue=issue, content=content.strip(), author_name=identity['actor_name'], author_username=identity['actor_username'])
         bump(state)
-        record_log(request, 'issues', 'comment', f'이슈 #{issue.pk} 댓글 추가')
+        record_log(request, 'issues', 'comment', f'이슈 #{issue.pk} 댓글 추가', month=issue.period_month)
         return Response(CommentSerializer(comment).data, status=201)
 
 
@@ -36,7 +37,11 @@ class AdminCommentsView(AdminView):
     """DB 관리 > 기능별 설정 > 이슈 댓글의 목록·추가·수정·삭제."""
 
     def get(self, request):
-        return Response(AdminCommentSerializer(IssueComment.objects.select_related('issue').all(), many=True).data)
+        # ?month=YYYY-MM이면 그 월 이슈의 댓글만 돌려줍니다. 없으면 전체입니다.
+        comments = IssueComment.objects.select_related('issue').all()
+        if request.query_params.get('month'):
+            comments = comments.filter(issue__period_month=parse_month(request.query_params['month']))
+        return Response(AdminCommentSerializer(comments, many=True).data)
 
     @transaction.atomic
     def post(self, request):
@@ -52,9 +57,10 @@ class AdminCommentsView(AdminView):
         before = AdminCommentSerializer(instance).data if instance else {}
         serializer = AdminCommentSerializer(instance, data=payload(request), partial=instance is not None)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        saved = serializer.save()
         bump(state)
-        record_log(request, 'issues', 'comment_update' if instance else 'comment', '관리자 댓글 저장', before=before, after=serializer.data)
+        record_log(request, 'issues', 'comment_update' if instance else 'comment', '관리자 댓글 저장', before=before, after=serializer.data,
+                   month=saved.issue.period_month)
         log_change(request, 'update' if instance else 'insert', 'ops_issue_comments', {'before': before, 'changes': serializer.data})
         return Response(serializer.data, status=200 if instance else 201)
 
@@ -63,8 +69,9 @@ class AdminCommentsView(AdminView):
         state = lock_state()
         instance = get_object_or_404(IssueComment, pk=pk)
         before = AdminCommentSerializer(instance).data
+        month = instance.issue.period_month
         instance.delete()
         bump(state)
-        record_log(request, 'issues', 'comment_delete', '관리자 댓글 삭제', before=before)
+        record_log(request, 'issues', 'comment_delete', '관리자 댓글 삭제', before=before, month=month)
         log_change(request, 'delete', 'ops_issue_comments', {'before': before})
         return Response(status=204)
