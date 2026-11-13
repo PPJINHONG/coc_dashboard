@@ -42,8 +42,8 @@ export interface Log {
 }
 /**
  * 기준 월 데이터 전체 (/api/operations/current/?month=YYYY-MM).
- * 기능별 행 목록은 기능 이름(resources·staff·work·issues 등)을 키로 들어 있습니다. sectionRows()로 꺼냅니다.
- * 인프라 자원·운영 작업·리전 이슈는 month의 행만, 운영 인력은 월과 관계없이 전체 행입니다.
+ * 기능별 행 목록은 기능 이름(resources·staff·work 등)을 키로 들어 있습니다. sectionRows()로 꺼냅니다.
+ * 인프라 자원·운영 작업은 month의 행만, 운영 인력은 월과 관계없이 전체 행입니다.
  */
 export type Snapshot = {
   revision: number;

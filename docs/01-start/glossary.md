@@ -27,8 +27,8 @@
 | 로그 | 실행 중 남긴 기록 | 실행 실패 이유 확인 |
 | 기능 폴더 | 기능 탭 하나의 화면·서버 코드를 모아 둔 폴더 | `frontend/src/features/resources/`, `backend/features/resources/` |
 | 공통 코드 | 여러 기능이 함께 쓰는 코드 | `frontend/src/app/`, `frontend/src/shared/`, `backend/core/`, `backend/reporting/` |
-| Django 앱 | 서버 코드를 나누는 단위. 앱마다 테이블과 마이그레이션을 따로 가짐 | `backend/features/issues/` |
-| 마이그레이션 | 테이블 구조 변경을 순서대로 적은 파일. 서버가 켜질 때 자동 적용 | `backend/features/issues/migrations/0001_initial.py` |
+| Django 앱 | 서버 코드를 나누는 단위. 앱마다 테이블과 마이그레이션을 따로 가짐 | `backend/features/regional_requests/` |
+| 마이그레이션 | 테이블 구조 변경을 순서대로 적은 파일. 서버가 켜질 때 자동 적용 | `backend/features/regional_requests/migrations/0001_initial.py` |
 | 테스트 | 기능이 예상대로 동작하는지 자동으로 확인하는 코드 | `docker compose exec backend pytest` |
 
 ## Docker에 나오는 말

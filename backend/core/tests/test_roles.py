@@ -40,8 +40,20 @@ def people(db):
     }
 
 
-def issue_body(region, **values):
-    return {"region": region.pk, "title": "디스크 경보", "description": "사용률 91%", "severity": "major", "status": "open", "progress_percent": 10, **values}
+def request_body(region, **values):
+    return {
+        "region": "KR",
+        "title": "디스크 작업 요청",
+        "content_html": "<p>사용률 91% 확인</p>",
+        "requester": "운영팀",
+        "schedule_timezone": "KST",
+        "schedule_start_local": "2026-11-20T10:00",
+        "schedule_end_local": "2026-11-20T11:00",
+        "status": "open",
+        "assignee_regions": ["KR"],
+        "assignee_name": "운영 담당자",
+        **values,
+    }
 
 
 @pytest.mark.django_db
@@ -54,7 +66,7 @@ def test_role_is_exposed_on_me(people):
 @pytest.mark.django_db
 def test_admin_sees_sessions_activity_and_changes_roles(people, region):
     alice = login(people["alice"])
-    alice.post(OPS + "issues/", issue_body(region), format="json")
+    alice.post(OPS + "regional_requests/", request_body(region), format="json")
     admin = login(people["admin"])
     accounts = {row["username"]: row for row in admin.get(ADMIN + "accounts/").data}
     assert accounts["alice@example.com"]["is_online"] is True and accounts["alice@example.com"]["role"] == "user"
@@ -67,10 +79,10 @@ def test_admin_sees_sessions_activity_and_changes_roles(people, region):
     # 권한 변경: 사용자 -> 옵저버 -> 관리자 -> 사용자
     pk = people["alice"].pk
     assert admin.patch(ADMIN + f"accounts/{pk}/", {"role": "observer"}, format="json").data["role"] == "observer"
-    assert alice.post(OPS + "issues/", issue_body(region), format="json").status_code == 403
+    assert alice.post(OPS + "regional_requests/", request_body(region), format="json").status_code == 403
     assert admin.patch(ADMIN + f"accounts/{pk}/", {"role": "admin"}, format="json").data["role"] == "admin"
     assert admin.patch(ADMIN + f"accounts/{pk}/", {"role": "user"}, format="json").data["role"] == "user"
-    assert alice.post(OPS + "issues/", issue_body(region), format="json").status_code == 201
+    assert alice.post(OPS + "regional_requests/", request_body(region), format="json").status_code == 201
 
     # 로그아웃하면 세션이 끝나고 이력에 남습니다.
     alice.post("/api/auth/logout/")
