@@ -15,7 +15,7 @@ export interface SectionConfig {
   /** 첫 번째 필터에 쓰는 열(region 또는 country_code) */
   filterKey: string;
   searchPlaceholder: string;
-  /** 상태 필터를 보여 줍니다(리전 이슈). */
+  /** 상태 필터를 보여 줍니다. */
   statusFilter?: boolean;
   /** 화면 바깥 상자에 더할 클래스(앞에 공백 포함, 예: " staff-page") */
   pageClassName?: string;
@@ -23,13 +23,13 @@ export interface SectionConfig {
   viewSubtitle?: string;
   /** 목록 위 요약(운영 작업의 완료율 카드) */
   Summary?: ComponentType<{ rows: DataRow[] }>;
-  /** 표. 없으면 리전 이슈처럼 화면이 직접 본문을 그립니다. */
+  /** 표. 없으면 화면이 직접 본문을 그립니다. */
   Table?: ComponentType<{ rows: DataRow[]; data: Bootstrap }>;
   /** DB 관리 편집 패널 안내 문구 */
   editorHint: string;
   /** 편집 화면의 행 추가 버튼 문구. 기본 "+ 행 추가" */
   addLabel?: string;
-  /** 편집 화면 모양. 기본 표(table), 리전 이슈는 카드(cards) */
+  /** 편집 화면 모양. 기본 표(table), 카드형 편집은 cards. */
   editLayout?: "table" | "cards";
   /** 행 복사 때 비울 열(예: 같은 인력을 두 번 배치하지 않도록 성명) */
   copyReset?: string[];

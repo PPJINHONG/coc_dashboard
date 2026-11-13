@@ -15,9 +15,9 @@ def test_visitor_preferences_persist_in_db_and_are_private_to_browser():
     assert response.data == {'hidden_tabs': [], 'sidebar_collapsed': False}
     assert response.cookies['coc_navigation']['httponly']
     assert response['Cache-Control'] == 'private, no-store'
-    response = first.patch(URL, {'hidden_tabs': ['staff', 'issues'], 'sidebar_collapsed': True}, format='json')
+    response = first.patch(URL, {'hidden_tabs': ['staff', 'regional_requests'], 'sidebar_collapsed': True}, format='json')
     assert response.status_code == 200, response.data
-    assert NavigationPreference.objects.get().hidden_tabs == ['staff', 'issues']
+    assert NavigationPreference.objects.get().hidden_tabs == ['staff', 'regional_requests']
     assert first.get(URL).data['sidebar_collapsed'] is True
     assert APIClient().get(URL).data == {'hidden_tabs': [], 'sidebar_collapsed': False}
     assert NavigationPreference.objects.count() == 2

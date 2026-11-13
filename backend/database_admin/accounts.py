@@ -106,7 +106,7 @@ class AccountSerializer(serializers.ModelSerializer):
         if role:
             apply_role(instance, role)
         if old_username != instance.username:
-            # 본인 수정·삭제 판단이 끊기지 않도록 작성자 아이디를 저장하는 기능(리전 이슈 등)이 새 아이디로 바꿉니다.
+            # 작성자 아이디 스냅샷을 저장하는 기능이 본인 수정 권한을 이어가도록 알립니다.
             username_changed.send(sender=type(instance), old_username=old_username, new_username=instance.username)
         if password is not None and instance.pk == self.context['request'].user.pk:
             update_session_auth_hash(self.context['request'], instance)

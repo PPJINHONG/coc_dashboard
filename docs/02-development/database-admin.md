@@ -9,10 +9,10 @@ DB 관리 탭과 `/api/db-admin/`은 **실제 로그인한 활성 관리자만**
 | 탭 | 내용 | 화면 코드 |
 | --- | --- | --- |
 | 공통데이터 | 리전·서비스·인력을 하위 탭으로 등록·수정·삭제·행 복사 | `features/database/CommonData.tsx` |
-| 기능별 설정 | 기능별 현재값 편집, 이슈 댓글, 사용자·권한 | 각 기능 `feature.tsx`의 `admin` + `features/database/AccountsAdmin.tsx` |
+| 기능별 설정 | 기능별 현재값 편집, 사용자·권한 | 각 기능 `feature.tsx`의 `admin` + `features/database/AccountsAdmin.tsx` |
 | DB 원본 | 웹에서 쓰는 테이블만 읽기 전용으로 조회 | `features/database/RawTables.tsx` |
 
-기능별 설정의 하위 탭은 각 기능이 등록합니다. 현재 순서는 인프라 자원 → 운영 인력 → 운영 작업 → 리전 이슈 → 이슈 댓글 → 사용자·권한입니다. 새 기능이 `admin`을 등록하면 사용자·권한 앞에 자동으로 추가됩니다. 공통데이터 목록을 기능 입력 화면에 반복해서 두지 않습니다.
+기능별 설정의 하위 탭은 각 기능이 등록합니다. 현재 순서는 인프라 자원 → 운영 인력 → 운영 작업 → 사용자·권한입니다. 새 기능이 `admin`을 등록하면 사용자·권한 앞에 자동으로 추가됩니다. 공통데이터 목록을 기능 입력 화면에 반복해서 두지 않습니다.
 
 ## 2. 기능별 설정
 
@@ -42,8 +42,6 @@ DB 관리 탭과 `/api/db-admin/`은 **실제 로그인한 활성 관리자만**
 | --- | --- | --- | --- |
 | `sections/{기능}/` | PUT | 기능별 기준 월 데이터 저장(본문 `month`, 생략 시 이번 달) | `reporting/admin_urls.py` |
 | `common/{collection}/`, `common/{collection}/{pk}/` | POST / PATCH·DELETE | 공통데이터 | `reporting/admin_urls.py` |
-| `issues/{id}/comments/` | POST | 이슈 화면의 댓글 등록 | `features/issues/admin_urls.py` |
-| `comments/`, `comments/{id}/` | GET·POST / PATCH·DELETE | 이슈 댓글 관리 | `features/issues/admin_urls.py` |
 | `accounts/`, `accounts/{id}/`, `accounts/{id}/activities/` | GET·POST / PATCH·DELETE / GET | 계정·권한·행동 이력 | `database_admin/accounts.py` |
 | (경로 없음: `/api/db-admin/`), `tables/{table}/`, `tables/{table}/rows/` | GET | 원본 테이블 목록·구조·행 | `database_admin/views.py` |
 | `changes/` | GET | 계정·댓글 관리자 변경 이력 | `database_admin/views.py` |

@@ -1,10 +1,9 @@
-# DB 관리 API: 원본 조회(읽기 전용)·계정·공통데이터. 이슈 댓글 관리는 features/issues/tests에 있습니다.
+# DB 관리 API: 원본 조회(읽기 전용)·계정·공통데이터.
 import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
 from database_admin.models import DatabaseChangeLog
-from features.issues.models import RegionalIssue
 from features.resources.models import InfrastructureResource
 from features.staff.models import StaffAssignment
 from features.work.models import WorkSummary
@@ -30,7 +29,7 @@ def client(admin):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize('path', ['', 'accounts/', 'comments/', 'tables/auth_user/', 'tables/auth_user/rows/', 'common/regions/', 'sections/resources/', 'issues/1/comments/'])
+@pytest.mark.parametrize('path', ['', 'accounts/', 'tables/auth_user/', 'tables/auth_user/rows/', 'common/regions/', 'sections/resources/'])
 def test_anonymous_and_non_admin_cannot_access_even_in_development(path):
     client = APIClient()
     assert client.get(ROOT + path).status_code == 403
@@ -42,7 +41,7 @@ def test_anonymous_and_non_admin_cannot_access_even_in_development(path):
 @pytest.mark.django_db
 def test_catalog_only_lists_website_tables_and_raw_data_is_readonly(client):
     names = {table['name'] for table in client.get(ROOT).data['tables']}
-    assert names == {'auth_user', 'ops_regions', 'ops_services', 'ops_staff_members', 'infra_resources', 'ops_staff_assignments', 'ops_work_summaries', 'ops_regional_issues', 'ops_issue_comments', 'user_activity_logs'}
+    assert names == {'auth_user', 'ops_regions', 'ops_services', 'ops_staff_members', 'infra_resources', 'ops_staff_assignments', 'ops_work_summaries', 'ops_regional_requests', 'ops_regional_request_images', 'user_activity_logs'}
     for name in ('django_session', 'django_migrations', 'auth_permission', 'core_post', 'ops_data_state'):
         assert client.get(ROOT + f'tables/{name}/').status_code == 404
     meta = client.get(ROOT + 'tables/ops_regions/').data
@@ -147,17 +146,12 @@ def test_staff_name_only_preserves_links_and_allows_same_name(client):
     pk = response.data['id']
     same_name = client.post(ROOT + 'common/staff-members/', {'staff_name': '운영자'}, format='json')
     assert same_name.status_code == 201 and same_name.data['id'] != pk
-    region = Region.objects.create(region_name='연결 확인')
     StaffAssignment.objects.create(country_code='KR', staff_id=pk, job_title='운영', company_name='회사')
-    issue = RegionalIssue.objects.create(region=region, title='담당자 연결', owner_id=pk)
     response = client.patch(ROOT + f'common/staff-members/{pk}/', {'staff_name': '새 이름'}, format='json')
     assert response.status_code == 200
     snapshot = client.get('/api/operations/current/').data
     assert snapshot['staff'][0]['staff_name'] == '새 이름'
-    assert snapshot['issues'][0]['owner_name'] == '새 이름'
     assert StaffAssignment.objects.get().staff_id == pk
-    issue.refresh_from_db()
-    assert issue.owner_id == pk
     meta = client.get(ROOT + 'tables/ops_staff_members/').data
     assert {col['name'] for col in meta['columns']} == {'id', 'staff_name'}
     raw = client.get(ROOT + 'tables/ops_staff_members/rows/').data['rows']
@@ -178,19 +172,18 @@ def test_region_generated_id_preserves_all_feature_links_when_renamed(client):
     for revision, section, values in [
         (1, 'resources', {'service': 'CCS', 'host_count': 10}),
         (2, 'work', {'work_type': 'request', 'scope': 'infra', 'total_count': 3}),
-        (3, 'issues', {'title': '지역 이슈'}),
     ]:
         response = client.put(ROOT + f'sections/{section}/', {'revision': revision, 'rows': [{'region': pk, **values}]}, format='json')
         assert response.status_code == 200, response.data
     renamed = client.patch(ROOT + f'common/regions/{pk}/', {'region_name': '새 센터'}, format='json')
     assert renamed.status_code == 200 and renamed.data['id'] == pk
-    assert all(model.objects.get().region_id == pk for model in [InfrastructureResource, WorkSummary, RegionalIssue])
+    assert all(model.objects.get().region_id == pk for model in [InfrastructureResource, WorkSummary])
     snapshot = client.get('/api/operations/current/').data
-    assert all(snapshot[section][0]['region'] == pk for section in ['resources', 'work', 'issues'])
+    assert all(snapshot[section][0]['region'] == pk for section in ['resources', 'work'])
     assert client.delete(ROOT + f'common/regions/{pk}/').status_code == 400
     meta = client.get(ROOT + 'tables/ops_regions/').data
     assert {column['name'] for column in meta['columns']} == {'id', 'region_name', 'country_code', 'global_region'}
-    for table in ['infra_resources', 'ops_work_summaries', 'ops_regional_issues']:
+    for table in ['infra_resources', 'ops_work_summaries']:
         columns = {column['name'] for column in client.get(ROOT + f'tables/{table}/').data['columns']}
         assert 'region_id' in columns and 'region_code' not in columns
     assert client.patch(ROOT + f'common/regions/{pk}/', {'id': pk + 100}, format='json').status_code == 400

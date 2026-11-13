@@ -17,7 +17,7 @@ export interface RecordField {
   optional?: boolean;
 }
 
-/** 목록형 관리 화면 설정. 사용자·권한(features/database), 이슈 댓글(features/issues)이 씁니다. */
+/** 목록형 관리 화면 설정. 사용자·권한(features/database) 등이 씁니다. */
 export interface RecordsConfig {
   /** API 경로 /api/db-admin/<collection>/ */
   collection: string;

@@ -5,10 +5,12 @@ export default function Modal({
   title,
   children,
   onClose,
+  className = "",
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -19,7 +21,7 @@ export default function Modal({
   return (
     <dialog
       ref={ref}
-      className="report-modal"
+      className={`report-modal${className ? ` ${className}` : ""}`}
       aria-label={title}
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();

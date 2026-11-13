@@ -41,7 +41,7 @@ docker compose exec backend python manage.py spectacular --validate --fail-on-wa
 
 ## 3. 운영 데이터
 
-현재값 조회(`/api/operations/bootstrap/`, `/api/operations/current/`), 리전 이슈 작성(`/api/operations/issues/...`), 관리자 저장(`/api/db-admin/...`)은 [운영 데이터 설계](operations.md#2-api와-저장)와 [관리자 DB 관리](database-admin.md#5-api)에 정리했습니다.
+현재값 조회(`/api/operations/bootstrap/`, `/api/operations/current/`), 권역별 요청작업(`/api/operations/regional_requests/...`), 관리자 저장(`/api/db-admin/...`)은 [운영 데이터 설계](operations.md#2-api와-저장)와 [관리자 DB 관리](database-admin.md#5-api)에 정리했습니다.
 
 ```bash
 curl http://localhost:8080/api/operations/current/

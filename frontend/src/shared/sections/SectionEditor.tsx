@@ -17,7 +17,7 @@ interface Props {
   onEditing: (editing: boolean) => void;
   onBusy: (busy: boolean) => void;
   onRefresh: () => void;
-  /** 편집 전 조회 본문을 직접 그릴 때(리전 이슈 카드). 없으면 config.Table을 패널에 넣습니다. */
+  /** 편집 전 조회 본문을 직접 그릴 때. 없으면 config.Table을 패널에 넣습니다. */
   renderView?: (rows: DataRow[]) => ReactNode;
 }
 
