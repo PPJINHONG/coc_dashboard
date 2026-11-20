@@ -139,3 +139,7 @@
   .logs-chip-row { grid-template-columns: 1fr; gap: 6px; }
   .logs-row-preview { white-space: normal; }
 }
+
+/* 복구 위험 안내: 색과 함께 "위험도 높음" 글자를 항상 표시합니다. */
+.logs-risk { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--danger); border-radius: 6px; background: #fbecee; color: #9b2f39; font-weight: 600; }
+.logs-risk-badge { padding: 2px 8px; border-radius: 4px; background: var(--danger); color: #fff; font-size: 11px; }
