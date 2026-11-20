@@ -57,14 +57,24 @@ def protect_used_column(sender, instance, **kwargs):
 
 
 @receiver(user_registered)
-def register_staff(sender, request, user, country_code, **kwargs):
-    """회원가입한 사람을 고른 국가의 운영 인력으로 바로 등록하고 계정을 연결합니다."""
-    from .serializers import StaffSerializer
+def register_staff(sender, request, user, country_code, staff=None, **kwargs):
+    """회원가입한 사람을 고른 국가의 운영 인력으로 바로 등록하고 계정을 연결합니다.
 
+    가입 화면에서는 본인이 직접 고칠 수 있는 일반 정보(업무·근무지·PC IP·오토에버·Z 계정)만 받습니다.
+    직책은 팀원으로 시작하고, 직책·소속사·투입일·등급은 관리자·팀장·그룹장이 운영 인력 탭에서 입력합니다.
+    """
+    from .serializers import SIGNUP_FIELDS, SignupStaffSerializer, StaffSerializer
+
+    unknown = set(staff or {}) - set(SIGNUP_FIELDS)
+    if unknown:
+        raise ValidationError({'staff': ['가입 화면에서는 업무·근무지·PC IP·오토에버 계정·Z 계정만 입력할 수 있습니다.']})
+    values = SignupStaffSerializer(data=staff or {}, context={'country_code': country_code})
+    if not values.is_valid():
+        raise ValidationError({'staff': [str(message) for messages in values.errors.values() for message in messages]})
     state = lock_state()
     capture_history(request, 'staff')
     person = StaffAssignment.objects.create(staff=StaffMember.objects.create(staff_name=user.first_name),
-                                            account=user, country_code=country_code)
+                                            account=user, country_code=country_code, job_title='팀원', **values.validated_data)
     bump(state)
     after = dict(StaffSerializer(person).data)
     summary = f'운영 인력 {user.first_name} 회원가입 자동 등록'

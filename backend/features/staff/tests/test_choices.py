@@ -31,7 +31,20 @@ def test_choice_management_only_team_lead_and_above(role, can_manage):
     response = api.post(URL, {'revision': revision(), 'choice': {'kind': 'work_location', 'country_code': 'NA', 'value': '미국 사무실'}}, format='json')
     assert response.status_code == (200 if can_manage else 403)
     response = api.delete(f'{URL}{existing.pk}/', {'revision': revision()}, format='json')
-    assert response.status_code == (200 if can_manage else 403)
+    # 그룹장(KR 관리)은 관리 권역의 근무지만 삭제할 수 있습니다.
+    assert response.status_code == (200 if can_manage or role == 'group_lead' else 403)
+
+
+@pytest.mark.django_db
+def test_group_lead_manages_only_managed_region_work_locations():
+    api = client('group_lead')
+    ok = api.post(URL, {'revision': revision(), 'choice': {'kind': 'work_location', 'country_code': 'KR', 'value': '상암'}}, format='json')
+    assert ok.status_code == 200, ok.data
+    assert all(item['key'] != 'grade' for item in ok.data['items'])
+    assert api.post(URL, {'revision': revision(), 'choice': {'kind': 'work_location', 'country_code': 'EU', 'value': '베를린'}}, format='json').status_code == 403
+    assert api.post(URL, {'revision': revision(), 'choice': {'kind': 'company_name', 'value': '회사'}}, format='json').status_code == 403
+    other = StaffChoice.objects.create(kind='work_location', country_code='NA', value='LA')
+    assert api.delete(f'{URL}{other.pk}/', {'revision': revision()}, format='json').status_code == 403
 
 
 @pytest.mark.django_db

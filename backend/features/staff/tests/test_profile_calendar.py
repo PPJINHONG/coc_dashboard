@@ -168,11 +168,17 @@ def test_responsibilities_follow_country_permission_and_show_names():
     client = login(group)
     def save(values):
         return client.put(ROOT + 'responsibilities/', {'revision': revision(), 'responsibility': values}, format='json')
-    assert save({'country_code': 'EU', 'site_representative': eu.pk}).status_code == 403
-    assert save({'country_code': 'KR', 'site_representative': eu.pk}).status_code == 400
-    assert save({'country_code': 'KR', 'site_representative': kr.pk, 'group_lead': kr.pk}).status_code == 200
+    assert save({'country_code': 'EU', 'group_lead': eu.pk}).status_code == 403
+    assert save({'country_code': 'KR', 'group_lead': eu.pk}).status_code == 400
+    # 현장대리인은 관리자만 지정합니다(관리 권역의 그룹장도 403).
+    assert save({'country_code': 'KR', 'site_representative': kr.pk}).status_code == 403
+    assert save({'country_code': 'KR', 'group_lead': kr.pk}).status_code == 200
     listed = client.get(ROOT + 'options/').data['responsibilities']
-    assert listed[0]['site_representative_name'] == 'group'
+    assert listed[0]['group_lead_name'] == 'group'
+    admin, _ = profile('admin', role='admin')
+    admin_client = login(admin)
+    assert admin_client.put(ROOT + 'responsibilities/', {'revision': revision(), 'responsibility': {'country_code': 'KR', 'site_representative': eu.pk}}, format='json').status_code == 400
+    assert admin_client.put(ROOT + 'responsibilities/', {'revision': revision(), 'responsibility': {'country_code': 'KR', 'site_representative': kr.pk}}, format='json').status_code == 200
 
 
 @pytest.mark.django_db
@@ -184,7 +190,7 @@ def test_trend_uses_deployment_and_company_resignation_and_excludes_unknown_date
     result = login(user).get(ROOT + 'trend/?month=2026-11&country=KR&company=메가존')
     assert result.status_code == 200, result.data
     october = next(item for item in result.data['months'] if item['month'] == '2026-10')
-    assert october == {'month': '2026-10', 'entries': 1, 'exits': 1, 'headcount': 1, 'net': 0}
+    assert october == {'month': '2026-10', 'entries': 1, 'exits': 1, 'headcount': 1, 'net': 0, 'recorded': False}
     assert result.data['missing_dates'] == 0
     assert result.data['companies'] == ['메가존']
     assert login(user).get(ROOT + 'trend/?month=2026-11').data['missing_dates'] == 1
@@ -221,18 +227,66 @@ def test_explicit_account_link_syncs_names_and_member_updates_are_shared():
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize('today,values,with_event,expected', [
-    (date(2026, 11, 13), {}, False, ('scheduled', '근무 예정')),           # 금요일
-    (date(2026, 11, 14), {}, False, ('off', '휴무')),                      # 토요일
-    (date(2026, 11, 13), {}, True, ('leave', '연차')),
-    (date(2026, 11, 13), {'deployment_date': date(2026, 12, 1)}, False, ('off', '휴무')),
-    (date(2026, 11, 13), {'resignation_date': date(2026, 11, 12)}, False, ('retired', '퇴사')),
+@pytest.mark.parametrize('moment,values,with_event,hours,expected', [
+    ('2026-11-13 10:00', {}, False, None, ('on_duty', '출근')),               # 금요일, 기본 09~18시
+    ('2026-11-13 19:00', {}, False, None, ('off_duty', '퇴근')),
+    ('2026-11-14 10:00', {}, False, None, ('off_duty', '퇴근')),              # 토요일
+    ('2026-11-13 19:00', {}, False, ('17:00', '00:00'), ('on_duty', '출근')),  # EU처럼 자정에 끝나는 근무
+    ('2026-11-13 16:00', {}, False, ('17:00', '00:00'), ('off_duty', '퇴근')),
+    ('2026-11-13 08:00', {}, False, ('07:00', '16:00'), ('on_duty', '출근')),
+    ('2026-11-13 10:00', {}, True, None, ('leave', '연차')),
+    ('2026-11-13 10:00', {'deployment_date': date(2026, 12, 1)}, False, None, ('planned', '투입 예정')),
+    ('2026-11-13 10:00', {'resignation_date': date(2026, 11, 12)}, False, None, ('retired', '퇴사')),
 ])
-def test_work_status_is_estimated_from_local_date_and_calendar(monkeypatch, today, values, with_event, expected):
-    monkeypatch.setattr('features.staff.serializers.local_today', lambda country: today)
+def test_work_status_uses_region_work_hours_and_local_time(monkeypatch, moment, values, with_event, hours, expected):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    from features.staff.models import StaffResponsibility
+    now = datetime.fromisoformat(moment).replace(tzinfo=ZoneInfo('Asia/Seoul'))
+    monkeypatch.setattr('features.staff.serializers.local_today', lambda country: now.date())
+    monkeypatch.setattr('features.staff.serializers.local_now', lambda country: now)
     user, person = profile('worker', **values)
+    if hours:
+        StaffResponsibility.objects.create(country_code='KR', work_start=hours[0], work_end=hours[1])
     if with_event:
-        StaffCalendarEvent.objects.create(assignment=person, country_code='KR', kind='leave', start_date=today, end_date=today)
+        StaffCalendarEvent.objects.create(assignment=person, country_code='KR', kind='leave', start_date=now.date(), end_date=now.date())
     row = next(item for item in login(user).get('/api/operations/current/').data['staff'] if item['id'] == person.pk)
     assert (row['work_status'], row['current_status']) == expected
     assert row['status_detail']
+
+
+@pytest.mark.django_db
+def test_region_work_hours_are_validated_and_scoped_to_managed_country():
+    group, _ = profile('group', role='group_lead')
+    api = login(group)
+    ok = api.put(ROOT + 'responsibilities/', {'revision': revision(), 'responsibility': {'country_code': 'KR', 'work_start': '08:30', 'work_end': '17:30'}}, format='json')
+    assert ok.status_code == 200, ok.data
+    assert (ok.data['responsibility']['work_start'], ok.data['responsibility']['work_end']) == ('08:30:00', '17:30:00')
+    assert api.put(ROOT + 'responsibilities/', {'revision': revision(), 'responsibility': {'country_code': 'KR', 'work_start': '09:00', 'work_end': None}}, format='json').status_code == 400
+    assert api.put(ROOT + 'responsibilities/', {'revision': revision(), 'responsibility': {'country_code': 'EU', 'work_start': '09:00', 'work_end': '18:00'}}, format='json').status_code == 403
+
+
+@pytest.mark.django_db
+def test_display_role_uses_assigned_team_and_group_leads():
+    from features.staff.models import StaffResponsibility
+    user, lead = profile('lead')
+    _, group = profile('group')
+    _, titled = profile('titled', job_title='팀장')
+    StaffResponsibility.objects.create(country_code='KR', team_lead=lead, group_lead=group)
+    StaffResponsibility.objects.create(country_code='EU', group_lead=titled)
+    rows = {item['id']: item['display_role'] for item in login(user).get('/api/operations/current/').data['staff']}
+    assert (rows[lead.pk], rows[group.pk], rows[titled.pk]) == ('team_lead', 'group_lead', 'team_lead')
+
+
+
+@pytest.mark.django_db
+def test_trend_uses_headcount_records_for_recorded_months_only():
+    from features.staff.models import StaffHeadcountRecord
+    user, _ = profile('viewer', deployment_date=date(2026, 11, 1))
+    StaffHeadcountRecord.objects.create(period_month=date(2026, 10, 1), country_code='KR', headcount=8, entries=3)
+    StaffHeadcountRecord.objects.create(period_month=date(2026, 10, 1), country_code='EU', headcount=7, entries=2)
+    months = {item['month']: item for item in login(user).get(ROOT + 'trend/?month=2026-11').data['months']}
+    assert (months['2026-10']['headcount'], months['2026-10']['entries'], months['2026-10']['recorded']) == (15, 5, True)
+    assert (months['2026-11']['headcount'], months['2026-11']['recorded']) == (1, False)
+    eu = {item['month']: item for item in login(user).get(ROOT + 'trend/?month=2026-11&country=EU').data['months']}
+    assert eu['2026-10']['headcount'] == 7

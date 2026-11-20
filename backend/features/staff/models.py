@@ -62,6 +62,9 @@ class StaffResponsibility(models.Model):
     site_representative = models.ForeignKey(StaffAssignment, null=True, blank=True, on_delete=models.SET_NULL, related_name='represented_countries')
     team_lead = models.ForeignKey(StaffAssignment, null=True, blank=True, on_delete=models.SET_NULL, related_name='led_teams')
     group_lead = models.ForeignKey(StaffAssignment, null=True, blank=True, on_delete=models.SET_NULL, related_name='led_groups')
+    # 한국 시간(KST) 기준 근무 시간. 다음 권역의 출근 시간이 이 권역의 퇴근 시간입니다. 비어 있으면 09:00~18:00입니다.
+    work_start = models.TimeField(null=True, blank=True, db_comment='출근 시간 (KST)')
+    work_end = models.TimeField(null=True, blank=True, db_comment='퇴근 시간 (KST)')
     updated_at = models.DateTimeField(auto_now=True, db_default=models.functions.Now())
 
     class Meta:
@@ -102,3 +105,22 @@ class StaffChoice(models.Model):
 
     def get_kind_display(self):
         return self.column.label if self.column_id else {'company_name': '소속사', 'work_location': '근무지', 'grade': '등급'}.get(self.kind, self.kind)
+
+
+class StaffHeadcountRecord(models.Model):
+    """월별 권역 인원 기록. 기록이 있는 달은 인력 추이에 이 값을 쓰고, 없는 달은 투입일·퇴사일로 계산합니다."""
+
+    period_month = models.DateField(db_comment='기준 월 (그 달 1일)')
+    country_code = models.CharField(max_length=2, choices=[('KR', 'KR'), ('EU', 'EU'), ('NA', 'NA')])
+    headcount = models.PositiveIntegerField(db_comment='그 달 말 운영 인원')
+    entries = models.PositiveIntegerField(default=0, db_default=0, db_comment='그 달 투입 인원')
+    exits = models.PositiveIntegerField(default=0, db_default=0, db_comment='그 달 퇴사 인원')
+
+    class Meta:
+        db_table = 'ops_staff_headcount_records'
+        db_table_comment = '월별 권역 운영 인원 기록'
+        ordering = ['period_month', 'country_code']
+        constraints = [
+            models.UniqueConstraint(fields=['period_month', 'country_code'], name='unique_staff_headcount_month_country'),
+            models.CheckConstraint(condition=Q(country_code__in=['KR', 'EU', 'NA']), name='staff_headcount_valid_country'),
+        ]

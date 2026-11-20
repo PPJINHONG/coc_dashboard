@@ -67,8 +67,10 @@ class RegisterView(APIView):
             with transaction.atomic():
                 user = serializer.save()
                 redeem_invite(invite_token, user)
+                staff = request.data.get("staff") if hasattr(request.data, "get") else None
                 user_registered.send(sender=RegisterView, request=request, user=user,
-                                     country_code=serializer.validated_data["country_code"])
+                                     country_code=serializer.validated_data["country_code"],
+                                     staff=staff if isinstance(staff, dict) else {})
         except IntegrityError:
             return Response({"username": ["이미 사용 중인 이메일 아이디입니다."]}, status=400)
         login(request, user)

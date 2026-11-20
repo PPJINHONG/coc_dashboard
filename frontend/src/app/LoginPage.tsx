@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { ApiError, MSG_SERVER, type FieldErrors } from '../shared/api/client';
+import { ApiError, MSG_SERVER, request, type FieldErrors } from '../shared/api/client';
 import { checkInvite, clearInviteFromUrl, inviteTokenFromUrl } from '../shared/api/invites';
 import { useAuth } from '../shared/auth/AuthContext';
 import AccountField from '../shared/components/AccountField';
@@ -49,6 +49,14 @@ function AccessForm({
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [country, setCountry] = useState('');
+  // 운영 인력에 함께 등록할 본인 정보(선택). 근무지는 국가별로 등록된 값만 고릅니다.
+  const [staff, setStaff] = useState<Record<string, string>>({});
+  const [places, setPlaces] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    if (!signingUp || invite.kind !== 'valid' || !inviteToken) return;
+    request<{ work_locations: Record<string, string[]> }>('GET', `/api/operations/staff/signup-options/${encodeURIComponent(inviteToken)}/`)
+      .then((value) => setPlaces(value.work_locations)).catch(() => setPlaces({}));
+  }, [signingUp, invite.kind, inviteToken]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -68,7 +76,8 @@ function AccessForm({
     onBusyChange(true);
     try {
       if (signingUp) {
-        await register({ name: name.trim(), username: username.trim(), password, country_code: country, invite: inviteToken ?? '' });
+        await register({ name: name.trim(), username: username.trim(), password, country_code: country, invite: inviteToken ?? '',
+          staff: Object.fromEntries(Object.entries(staff).map(([key, value]) => [key, value.trim()]).filter(([, value]) => value)) });
         clearInviteFromUrl();
       } else await login(username.trim(), password);
     } catch (err) {
@@ -153,6 +162,22 @@ function AccessForm({
               <p className="field-hint" id="country_code-hint">가입하면 이 국가의 운영 인력으로 바로 등록됩니다.</p>
               <ErrorMessage id="country_code-error" message={fieldErrors.country_code?.join(' ')} />
             </div>
+          )}
+          {signingUp && (
+            <fieldset className="account-staff">
+              <legend>운영 인력 정보 <small>선택 · 가입 후 운영 인력 탭에서 수정할 수 있습니다</small></legend>
+              <div className="field account-field">
+                <label htmlFor="work_location">근무지</label>
+                <select id="work_location" value={staff.work_location ?? ''} disabled={!country} onChange={(e) => setStaff({ ...staff, work_location: e.target.value })}>
+                  <option value="">{country ? (places[country]?.length ? '선택 안 함' : '등록된 근무지 없음') : '국가를 먼저 선택하세요'}</option>
+                  {(places[country] ?? []).map((value) => <option key={value} value={value}>{value}</option>)}
+                </select>
+              </div>
+              {([['job_description', '업무', 500], ['pc_ip', 'PC IP', 45], ['autoever_account', '오토에버 계정', 40], ['z_account', 'Z 계정', 40]] as const).map(([key, label, max]) => (
+                <AccountField key={key} id={key} name={key} label={label} maxLength={max} value={staff[key] ?? ''} onChange={(e) => setStaff({ ...staff, [key]: e.target.value })} />
+              ))}
+              <ErrorMessage message={fieldErrors.staff?.join(' ')} />
+            </fieldset>
           )}
           <button type="submit" className="btn btn-primary account-submit" disabled={submitting}>
             {submitting ? (signingUp ? '가입 중…' : '로그인 중…') : (signingUp ? '회원가입' : '로그인')}

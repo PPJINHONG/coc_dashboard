@@ -158,3 +158,8 @@
 .access-screen .invite-banner strong { color: var(--text-strong); font-weight: 600; }
 .access-screen .invite-banner-warn { border-color: #e5b26b; background: #fff8ec; color: #7a4a08; }
 .access-screen .invite-privacy { margin: -8px 0 0; font-size: 12px; line-height: 1.5; color: var(--text); opacity: 0.8; }
+
+.access-screen .account-staff { display: grid; gap: 16px; margin: 0; padding: 16px 0 0; border: 0; border-top: 1px solid var(--border); }
+.access-screen .account-staff legend { padding: 0 0 4px; font-size: 13px; font-weight: 600; }
+.access-screen .account-staff legend small { display: block; margin-top: 4px; font-size: 11px; font-weight: 400; }
+.access-screen .account-field select:disabled { cursor: not-allowed; }

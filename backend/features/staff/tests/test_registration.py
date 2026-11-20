@@ -39,3 +39,19 @@ def test_signup_requires_valid_country(invite, country):
     assert response.status_code == 400
     assert 'country_code' in response.data
     assert not StaffAssignment.objects.exists()
+
+
+def test_signup_saves_self_staff_fields_and_checks_country_work_location(invite):
+    from features.staff.models import StaffChoice
+    StaffChoice.objects.create(kind='work_location', country_code='NA', value='LA 오피스')
+    options = APIClient().get(f'/api/operations/staff/signup-options/{TOKEN}/').data
+    assert options['work_locations']['NA'] == ['LA 오피스']
+    assert APIClient().get('/api/operations/staff/signup-options/wrong-token/').status_code == 404
+    bad = signup(country_code='KR', staff={'work_location': 'LA 오피스'})
+    assert bad.status_code == 400 and 'staff' in bad.data
+    assert signup(country_code='NA', staff={'job_title': '팀장'}).status_code == 400
+    assert not StaffAssignment.objects.exists()
+    response = signup(country_code='NA', staff={'work_location': 'LA 오피스', 'job_description': '네트워크 운영', 'pc_ip': '10.0.0.5', 'z_account': 'z123'})
+    assert response.status_code == 201, response.data
+    person = StaffAssignment.objects.get()
+    assert (person.work_location, person.job_description, person.pc_ip, person.z_account, person.job_title) == ('LA 오피스', '네트워크 운영', '10.0.0.5', 'z123', '팀원')
