@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 from django.db.models import Q
+import uuid
 
 from reporting.models import StaffMember
 
@@ -10,7 +11,8 @@ class StaffAssignment(models.Model):
                                   related_name='staff_profile', db_comment='직접 연결한 회원 계정')
     deployment_date = models.DateField(null=True, blank=True, db_comment='운영 업무 투입일')
     resignation_date = models.DateField(null=True, blank=True, db_comment='회사 퇴사일 (마지막 재직일)')
-    grade = models.CharField(max_length=2, blank=True, default='', db_default='', choices=[(f'L{i}', f'L{i}') for i in range(1, 5)])
+    grade = models.CharField(max_length=40, blank=True, default='', db_default='')
+    custom_values = models.JSONField(default=dict, blank=True, db_default={})
     country_code = models.CharField(max_length=2, choices=[('KR', 'KR'), ('EU', 'EU'), ('NA', 'NA')])
     updated_at = models.DateTimeField(auto_now=True, db_default=models.functions.Now())
     staff = models.ForeignKey(StaffMember, db_column='staff_member_id', on_delete=models.PROTECT)
@@ -31,7 +33,6 @@ class StaffAssignment(models.Model):
         constraints = [
             models.UniqueConstraint(fields=['staff'], name='unique_current_staff_assignment'),
             models.CheckConstraint(condition=Q(country_code__in=['KR', 'EU', 'NA']), name='current_staff_valid_country'),
-            models.CheckConstraint(condition=Q(grade__in=['', 'L1', 'L2', 'L3', 'L4']), name='staff_valid_grade'),
             models.CheckConstraint(condition=Q(deployment_date__isnull=True) | Q(resignation_date__isnull=True) | Q(resignation_date__gte=models.F('deployment_date')), name='staff_valid_employment_dates'),
         ]
 
@@ -39,7 +40,8 @@ class StaffAssignment(models.Model):
 class StaffCalendarEvent(models.Model):
     assignment = models.ForeignKey(StaffAssignment, on_delete=models.PROTECT, related_name='calendar_events')
     country_code = models.CharField(max_length=2, choices=[('KR', 'KR'), ('EU', 'EU'), ('NA', 'NA')])
-    kind = models.CharField(max_length=20, choices=[('leave', '휴가'), ('marriage_leave', '결혼휴가'), ('long_leave', '장기휴가')])
+    # 일정 대분류. 오늘 걸친 일정의 이름이 운영 인력의 현재 상태로 표시됩니다.
+    kind = models.CharField(max_length=20, choices=[('leave', '연차'), ('marriage_leave', '결혼휴가')])
     title = models.CharField(max_length=100, blank=True, default='', db_default='')
     start_date = models.DateField()
     end_date = models.DateField()
@@ -51,7 +53,7 @@ class StaffCalendarEvent(models.Model):
         constraints = [
             models.CheckConstraint(condition=Q(end_date__gte=models.F('start_date')), name='staff_calendar_valid_dates'),
             models.CheckConstraint(condition=Q(country_code__in=['KR', 'EU', 'NA']), name='staff_calendar_valid_country'),
-            models.CheckConstraint(condition=Q(kind__in=['leave', 'marriage_leave', 'long_leave']), name='staff_calendar_valid_kind'),
+            models.CheckConstraint(condition=Q(kind__in=['leave', 'marriage_leave']), name='staff_calendar_valid_kind_v2'),
         ]
 
 
@@ -68,8 +70,22 @@ class StaffResponsibility(models.Model):
         constraints = [models.CheckConstraint(condition=Q(country_code__in=['KR', 'EU', 'NA']), name='staff_responsibility_valid_country')]
 
 
+def staff_column_key():
+    return 'custom_' + uuid.uuid4().hex
+
+
+class StaffColumn(models.Model):
+    key = models.CharField(max_length=40, unique=True, default=staff_column_key, editable=False)
+    label = models.CharField(max_length=80, unique=True)
+
+    class Meta:
+        db_table = 'ops_staff_columns'
+        ordering = ['id']
+
+
 class StaffChoice(models.Model):
-    kind = models.CharField(max_length=20, choices=[('company_name', '소속사'), ('work_location', '근무지')])
+    kind = models.CharField(max_length=40)
+    column = models.ForeignKey(StaffColumn, null=True, blank=True, on_delete=models.PROTECT)
     country_code = models.CharField(max_length=2, blank=True, default='', db_default='')
     value = models.CharField(max_length=150)
 
@@ -78,7 +94,11 @@ class StaffChoice(models.Model):
         ordering = ['kind', 'country_code', 'value', 'id']
         constraints = [
             models.UniqueConstraint(fields=['kind', 'country_code', 'value'], name='unique_staff_choice'),
-            models.CheckConstraint(condition=Q(kind__in=['company_name', 'work_location']), name='staff_choice_valid_kind'),
+            models.CheckConstraint(condition=(Q(column__isnull=True, kind__in=['company_name', 'work_location', 'grade']) |
+                                              Q(column__isnull=False, kind__startswith='custom_')), name='staff_choice_valid_kind_v2'),
             models.CheckConstraint(condition=Q(country_code__in=['', 'KR', 'EU', 'NA']), name='staff_choice_valid_country'),
-            models.CheckConstraint(condition=Q(kind='company_name', country_code='') | Q(kind='work_location', country_code__in=['KR', 'EU', 'NA']), name='staff_choice_country_scope'),
+            models.CheckConstraint(condition=Q(kind='work_location', country_code__in=['KR', 'EU', 'NA']) | (~Q(kind='work_location') & Q(country_code='')), name='staff_choice_country_scope_v2'),
         ]
+
+    def get_kind_display(self):
+        return self.column.label if self.column_id else {'company_name': '소속사', 'work_location': '근무지', 'grade': '등급'}.get(self.kind, self.kind)

@@ -56,7 +56,7 @@ def _csrf_client():
 
 
 def _registration(**overrides):
-    return {"name": "홍길동", "username": "member@example.com", "password": NEW_PASSWORD, "invite": INVITE, **overrides}
+    return {"name": "홍길동", "username": "member@example.com", "password": NEW_PASSWORD, "invite": INVITE, "country_code": "KR", **overrides}
 
 
 @pytest.mark.django_db

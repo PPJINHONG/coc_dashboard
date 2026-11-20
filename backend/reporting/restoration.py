@@ -32,8 +32,15 @@ def restoration_plan(log):
         if model is None:
             raise ValidationError('데이터 구조가 변경되어 자동 복구할 수 없습니다.')
         current = model.objects.select_for_update().filter(pk=change['pk']).first()
+        current_data = raw_row(current) if current else None
+        # 추가 마이그레이션의 새 필드가 기본값인 경우 기존 이력도 계속 복구합니다.
+        # 새 필드에 실제 값이 입력됐다면 원본 일치 검사에서 충돌로 처리합니다.
+        if current_data is not None and change['after'] is not None:
+            for field in model._meta.concrete_fields:
+                if field.attname not in change['after'] and (field.has_default() or field.null) and current_data.get(field.attname) == field.get_default():
+                    current_data.pop(field.attname, None)
         if ((current is None) != (change['after'] is None) or
-                meaningful(raw_row(current) if current else None) != meaningful(change['after'])):
+                meaningful(current_data) != meaningful(change['after'])):
             raise Conflict('이 변경 이후 같은 데이터가 수정되었습니다. 이후 이력을 먼저 확인해 주세요.')
     for file in log.restore_data.get('files', []):
         model = models.get(file['model'])

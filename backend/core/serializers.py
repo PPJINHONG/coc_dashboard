@@ -86,14 +86,16 @@ class AccountSerializer(serializers.ModelSerializer):
 
 class RegisterSerializer(AccountSerializer):
     password = serializers.CharField(write_only=True, trim_whitespace=False, max_length=128)
+    # 가입과 함께 운영 인력으로 등록할 국가입니다. 계정에는 저장하지 않고 user_registered 신호로 넘깁니다.
+    country_code = serializers.ChoiceField(choices=("KR", "EU", "NA"), write_only=True,
+                                           error_messages={"required": "국가를 선택해 주세요.", "invalid_choice": "국가는 KR·EU·NA 중에서 선택해 주세요."})
 
     class Meta(AccountSerializer.Meta):
-        fields = AccountSerializer.Meta.fields + ("password",)
+        fields = AccountSerializer.Meta.fields + ("password", "country_code")
 
     def create(self, validated_data):
-        return get_user_model().objects.create_user(
-            **validated_data, email=validated_data["username"]
-        )
+        values = {key: value for key, value in validated_data.items() if key != "country_code"}
+        return get_user_model().objects.create_user(**values, email=values["username"])
 
 
 class MeSerializer(AccountSerializer):

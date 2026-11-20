@@ -385,3 +385,18 @@ def test_removed_issue_history_is_not_shown_or_restored(setup):
                                    before_data={'id': 1, 'title': '기존 이슈'}, restore_data={'changes': [{'model': 'issues.regionalissue', 'pk': '1', 'before': {}, 'after': None}]})
     assert client(users['admin']).get(URL).data['results'] == []
     assert preview(users['admin'], old).status_code == 400
+
+
+def test_changes_are_paired_and_filtered_by_action_and_period(setup):
+    users, regions = setup
+    rows = save_resources(users['admin'], [resource(regions['KR'])])
+    save_resources(users['admin'], [{**rows[0], 'host_count': 5}])
+    data = client(users['team_lead']).get(URL).data
+    assert data['actions'] == {'update': 2}
+    latest = data['results'][0]
+    assert [(item['model'], item['before']['host_count'], item['after']['host_count']) for item in latest['changes']] == [('resources.infrastructureresource', 1, 5)]
+    assert client(users['team_lead']).get(URL + '?action=delete').data['count'] == 0
+    assert client(users['team_lead']).get(URL + '?action=update&days=1').data['count'] == 2
+    ChangeLog.objects.update(created_at='2020-01-01T00:00:00Z')
+    assert client(users['team_lead']).get(URL + '?days=30').data['count'] == 0
+    assert client(users['team_lead']).get(URL + '?days=2').status_code == 400

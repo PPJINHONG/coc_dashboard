@@ -18,6 +18,7 @@ from reporting.services import lock_state, check_revision, bump, record_log
 from .models import StaffAssignment, StaffCalendarEvent, StaffResponsibility, StaffChoice
 from .permissions import can_view_grade, owns_profile
 from .serializers import CalendarSerializer, ResponsibilitySerializer, local_today
+from .items import choice_rows, item_catalog
 
 
 @method_decorator(csrf_protect, name='dispatch')
@@ -57,7 +58,8 @@ class StaffOptionsView(StaffView):
             'can_edit_calendar': bool(profile and owns_profile(request.user, profile)),
             'can_view_grade': can_view_grade(request.user),
             'can_manage_choices': can_manage_members(request.user),
-            'choices': list(StaffChoice.objects.values('id', 'kind', 'country_code', 'value')),
+            'choices': choice_rows(can_view_grade(request.user)),
+            'items': item_catalog(can_view_grade(request.user)),
             'accounts': accounts,
             'responsibilities': ResponsibilitySerializer(StaffResponsibility.objects.select_related(
                 'site_representative__staff', 'team_lead__staff', 'group_lead__staff'), many=True).data,
@@ -149,7 +151,7 @@ class ResponsibilityView(StaffView):
         capture_history(request, 'staff')
         instance = StaffResponsibility.objects.filter(pk=raw['country_code']).first()
         before = dict(ResponsibilitySerializer(instance).data) if instance else None
-        serializer = ResponsibilitySerializer(instance, data=raw)
+        serializer = ResponsibilitySerializer(instance, data=raw, partial=instance is not None)
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
         after = dict(ResponsibilitySerializer(instance).data)

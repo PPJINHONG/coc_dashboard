@@ -51,7 +51,7 @@ def test_options_empty_by_default_and_deleting_option_preserves_existing_people(
 @pytest.mark.django_db
 def test_choice_validation_revision_and_restoration():
     api = client('admin')
-    for values in [{'kind': 'grade', 'value': 'L5'}, {'kind': 'work_location', 'country_code': 'JP', 'value': '사무실'}, {'kind': 'company_name', 'value': ' '}, {'kind': 'company_name', 'value': 'x' * 101}]:
+    for values in [{'kind': 'unknown', 'value': 'L5'}, {'kind': 'work_location', 'country_code': 'JP', 'value': '사무실'}, {'kind': 'company_name', 'value': ' '}, {'kind': 'company_name', 'value': 'x' * 101}]:
         assert api.post(URL, {'revision': 0, 'choice': values}, format='json').status_code == 400
     values = {'kind': 'work_location', 'country_code': 'KR', 'value': '한국 사무실'}
     assert api.post(URL, {'revision': 0, 'choice': values}, format='json').status_code == 200

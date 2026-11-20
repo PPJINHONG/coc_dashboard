@@ -1,12 +1,17 @@
 """명시적으로 연결한 회원·인력의 성명만 동기화합니다. 이름으로 계정을 연결하지 않습니다."""
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_delete
+from django.db.models.deletion import ProtectedError
 from django.dispatch import receiver
 from rest_framework.exceptions import ValidationError
 
+from core.roles import record_activity
+from core.signals import user_registered
+from reporting.history import capture_history
 from reporting.models import ChangeLog, StaffMember
-from .models import StaffAssignment
+from reporting.services import bump, lock_state, record_log
+from .models import StaffAssignment, StaffColumn
 
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
@@ -43,3 +48,27 @@ def restored_staff_name(sender, instance, created, **kwargs):
     for change in instance.restore_data.get('changes', []):
         if change.get('model') == StaffMember._meta.label_lower and change.get('after'):
             get_user_model().objects.filter(staff_profile__staff_id=change['after']['id']).update(first_name=change['after']['staff_name'])
+
+
+@receiver(pre_delete, sender=StaffColumn)
+def protect_used_column(sender, instance, **kwargs):
+    if StaffAssignment.objects.filter(custom_values__has_key=instance.key).exists():
+        raise ProtectedError('인력에 값이 저장된 추가 열은 제거할 수 없습니다.', [instance])
+
+
+@receiver(user_registered)
+def register_staff(sender, request, user, country_code, **kwargs):
+    """회원가입한 사람을 고른 국가의 운영 인력으로 바로 등록하고 계정을 연결합니다."""
+    from .serializers import StaffSerializer
+
+    state = lock_state()
+    capture_history(request, 'staff')
+    person = StaffAssignment.objects.create(staff=StaffMember.objects.create(staff_name=user.first_name),
+                                            account=user, country_code=country_code)
+    bump(state)
+    after = dict(StaffSerializer(person).data)
+    summary = f'운영 인력 {user.first_name} 회원가입 자동 등록'
+    # 가입 요청은 아직 로그인 전이므로 이력의 변경자를 가입한 본인으로 남깁니다.
+    log = record_log(request, 'staff', 'create', summary, after=after)
+    ChangeLog.objects.filter(pk=log.pk).update(actor_name=user.first_name, actor_username=user.username)
+    record_activity(request, 'create', summary, 'staff', str(person.pk), after=after, user=user)

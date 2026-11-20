@@ -59,6 +59,7 @@
 - 인프라 수량은 Host·VM·Compute Rack(`compute_rack_count`)·Storage Rack(`storage_count`)이며 고유 조합은 기준 월·리전·서비스(`unique_monthly_resource_service`)다. 운영 작업은 기준 월·리전·작업유형·범위(`unique_monthly_work_scope`)다. 상단 세 번째 카드는 Rack(Compute + Storage 합계)이고 요약 그래프는 수량 내림차순이다. 환경 열은 없다.
 - 리전의 `global_region`(전체 리전)은 `country_code`에서 DB가 계산하는 생성 열이다(KR·CN=내수, EU=유럽, NA=북미, 그 외 NULL). 아직 화면·API에서 사용하지 않는다.
 - 운영 인력은 국가(KR·EU·NA)·성명·직책·소속사·업무·근무지·PC IP(`pc_ip`)·오토에버 계정(`autoever_account`)·Z 계정(`z_account`)을 편집하며 리전 대신 국가 코드를 저장한다. 직책·소속사는 비워 둘 수 있다. 운영 인력 탭 편집의 성명은 이름으로 입력하고 새 행은 인력 공통데이터를 새로 만든다.
+- 현장대리인은 직책과 별도 지정이며 직책 옆 배지로 표시한다. 상단 권역 카드에는 팀장·그룹장만 둔다. 운영 인력의 항목 추가에서 관리자·팀장이 값·추가 열을 관리한다. 추가 열 값은 `StaffAssignment.custom_values`에 저장하고 그룹장은 관리 국가 인력만 편집한다. 등급 항목·사용 현황도 관리자·팀장만 조회한다. 항목 삭제는 기존 인력 값을 바꾸지 않으며 사용 중인 추가 열은 복구로도 제거하지 않는다.
 
 ## 화면 디자인과 개인 설정
 
