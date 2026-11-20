@@ -7,7 +7,6 @@ import Modal from "../../shared/components/Modal";
 import { saveStaffPerson, saveResponsibility, type StaffOptions } from "./api";
 import { staffEditFields, staffFields, WORK_STATUSES } from "./fields";
 import { exportCsv } from "../../shared/fields";
-import StaffCalendar from "./StaffCalendar";
 import StaffTable, { sortStaff } from "./StaffTable";
 import Panel from "../../shared/components/Panel";
 import Icon from "../../shared/components/Icon";
@@ -162,7 +161,6 @@ export default function StaffDirectory(props: StaffPageProps & { options: StaffO
         <StaffTable rows={filtered.slice((current - 1) * 30, current * 30)} counts={groupCounts} columns={columns} data={data} onEdit={rows.some((person) => person.can_edit) ? open : undefined} />
         <div className="staff-pagination"><span>{filtered.length}명{region || status || search ? ` · 전체 ${rows.length}명 중` : ""}</span><div className="actions"><button className="btn btn-sm" disabled={current <= 1} onClick={() => setPage(current - 1)}>이전</button><span>{current} / {pages}</span><button className="btn btn-sm" disabled={current >= pages} onClick={() => setPage(current + 1)}>다음</button></div></div>
       </Panel>
-      <StaffCalendar {...props} country={region} onCountry={(value) => pick({ region: value })} />
       {choicesOpen && <StaffChoices items={options.items} columnLabels={allColumns.map(field => field.label)} revision={snapshot.revision} refresh={refresh} setBusy={setBusy} onClose={() => setChoicesOpen(false)} />}
       {draft && <Modal title={draft.id ? "운영 인력 정보 수정" : "운영 인력 추가"} onClose={close}>
         <form className="staff-person-form" onSubmit={(event) => { event.preventDefault(); void save(); }}>

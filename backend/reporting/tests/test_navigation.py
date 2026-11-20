@@ -29,9 +29,9 @@ def test_member_preferences_are_individual_and_do_not_require_admin():
     second_user = get_user_model().objects.create_user(username='second@example.com')
     first = APIClient(); first.force_login(first_user)
     second = APIClient(); second.force_login(second_user)
-    assert first.patch(URL, {'hidden_tabs': ['work', 'logs']}, format='json').status_code == 200
+    assert first.patch(URL, {'hidden_tabs': ['resources', 'logs']}, format='json').status_code == 200
     assert second.get(URL).data['hidden_tabs'] == []
-    assert first.get(URL).data['hidden_tabs'] == ['work', 'logs']
+    assert first.get(URL).data['hidden_tabs'] == ['resources', 'logs']
     assert NavigationPreference.objects.get(user=first_user).browser_key is None
     assert NavigationPreference.objects.get(user=second_user).hidden_tabs == []
 
@@ -50,7 +50,7 @@ def test_invalid_preferences_and_required_navigation_cannot_be_hidden(values):
 @pytest.mark.django_db
 def test_show_all_tabs_restores_navigation():
     client = APIClient(); client.get(URL)
-    assert client.patch(URL, {'hidden_tabs': ['staff', 'staff', 'work']}, format='json').data['hidden_tabs'] == ['staff', 'work']
+    assert client.patch(URL, {'hidden_tabs': ['staff', 'staff', 'resources']}, format='json').data['hidden_tabs'] == ['staff', 'resources']
     assert client.patch(URL, {'hidden_tabs': []}, format='json').status_code == 200
     assert client.get(URL).data['hidden_tabs'] == []
 

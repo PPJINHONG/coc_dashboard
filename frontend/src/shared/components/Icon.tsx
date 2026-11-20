@@ -17,7 +17,6 @@ export type IconName =
   | "refresh"
   | "eye"
   | "panel"
-  | "download"
   | "sort"
   | "globe"
   | "layers"
@@ -54,7 +53,6 @@ const paths: Record<IconName, string[]> = {
     "M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0",
   ],
   panel: ["M3 3h18v18H3zM9 3v18"],
-  download: ["M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"],
   sort: ["M8 4v16m-4-4 4 4 4-4M16 20V4m-4 4 4-4 4 4"],
   globe: [
     "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18",

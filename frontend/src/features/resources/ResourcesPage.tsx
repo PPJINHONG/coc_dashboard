@@ -1,9 +1,17 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ApiError } from "../../shared/api/client";
 import type { Bootstrap, DataRow } from "../../shared/api/operations";
+import ErrorMessage from "../../shared/components/ErrorMessage";
 import Icon from "../../shared/components/Icon";
-import { exportCsv } from "../../shared/fields";
-import { resourceFields } from "./fields";
-import ResourceSummary from "./ResourceSummary";
+import {
+  createResource,
+  deleteResource,
+  updateResource,
+  type ResourceInput,
+} from "./api";
+import ResourceForm from "./ResourceForm";
+import ResourceTopology from "./ResourceTopology";
+import { areaCode, areaOrder } from "./resourceMetrics";
 
 type SortKey =
   | "region"
@@ -38,15 +46,25 @@ const date = (value: unknown) =>
       })
     : "—";
 
-/** 인프라 자원 화면. 리포트에서는 reportMode로 페이지당 15개만 보여 줍니다. */
+/** 인프라 자원 화면. */
 export default function ResourcesPage({
   rows,
   data,
-  reportMode = false,
+  month = "",
+  revision = 0,
+  canManage,
+  refresh,
+  setDirty,
+  setBusy: setPageBusy,
 }: {
   rows: DataRow[];
   data: Bootstrap;
-  reportMode?: boolean;
+  month?: string;
+  revision?: number;
+  canManage: boolean;
+  refresh: () => Promise<void>;
+  setDirty: (dirty: boolean) => void;
+  setBusy: (busy: boolean) => void;
 }) {
   const [query, setQuery] = useState("");
   const [country, setCountry] = useState("");
@@ -56,23 +74,31 @@ export default function ResourcesPage({
   const [direction, setDirection] = useState<1 | -1>(1);
   const [page, setPage] = useState(0),
     [selectedLimit, setLimit] = useState(30);
-  const limit = reportMode ? 15 : selectedLimit;
+  const [editMode, setEditMode] = useState(false);
+  const [editor, setEditor] = useState<DataRow | "new" | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [formDirty, setFormDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const limit = selectedLimit;
   const regionInfo = (id: number | undefined) =>
     data.regions.find((item) => item.id === id);
   const regionName = (id: number | undefined) => regionInfo(id)?.region_name ?? "미등록 리전";
-  const serviceName = (code: unknown) =>
-    data.services.find((item) => item.service_code === code)?.service_name ??
-    String(code);
-  const countries = [
+  const serviceName = (value: unknown) => String(value ?? "—");
+  const services = [...new Set(rows.map((row) => String(row.service ?? "")).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right, "ko", { numeric: true }));
+  const groupCode = (code?: string) => areaCode(code);
+  const activeCountries = [
     ...new Set(
-      rows.map((row) => regionInfo(row.region)?.country_code).filter(Boolean),
+      rows.map((row) => groupCode(regionInfo(row.region)?.country_code)).filter(Boolean),
     ),
   ] as string[];
+  const countries = areaOrder(activeCountries);
   // 국가 탭은 상단 그래프와 자원 목록에 함께 적용합니다.
   const countryRows = useMemo(
     () =>
       country
-        ? rows.filter((row) => regionInfo(row.region)?.country_code === country)
+        ? rows.filter((row) => groupCode(regionInfo(row.region)?.country_code) === country)
         : rows,
     [rows, data, country],
   );
@@ -133,6 +159,106 @@ export default function ResourcesPage({
     setSort(key);
     setPage(0);
   }
+  const onFormDirty = useCallback(
+    (dirty: boolean) => {
+      setFormDirty(dirty);
+      setDirty(dirty);
+    },
+    [setDirty],
+  );
+  useEffect(() => () => setDirty(false), [setDirty]);
+  useEffect(() => {
+    if (!canManage) {
+      setEditMode(false);
+      setEditor(null);
+      setDeleteConfirm(null);
+      onFormDirty(false);
+    }
+  }, [canManage, onFormDirty]);
+
+  function discardEditor() {
+    if (saving) return false;
+    if (formDirty && !window.confirm("입력 중인 내용을 취소하시겠습니까?")) return false;
+    setEditor(null);
+    onFormDirty(false);
+    setError("");
+    return true;
+  }
+
+  function closeEditor() {
+    discardEditor();
+  }
+
+  function leaveEditMode() {
+    if (!discardEditor()) return;
+    setDeleteConfirm(null);
+    setEditMode(false);
+  }
+
+  async function saveResource(values: ResourceInput) {
+    setSaving(true);
+    setPageBusy(true);
+    setError("");
+    try {
+      if (editor !== "new" && editor?.id != null) {
+        await updateResource(Number(editor.id), revision, month, values);
+      } else {
+        await createResource(revision, month, values);
+      }
+      setEditor(null);
+      setDeleteConfirm(null);
+      onFormDirty(false);
+      try {
+        await refresh();
+      } catch {
+        setError("저장은 완료했지만 화면을 갱신하지 못했습니다. 새로고침해 주세요.");
+      }
+    } catch (cause) {
+      const fieldError =
+        cause instanceof ApiError
+          ? Object.values(cause.fieldErrors).flat()[0]
+          : undefined;
+      setError(
+        fieldError ||
+          (cause instanceof Error
+            ? cause.message
+            : "인프라 자원을 저장하지 못했습니다."),
+      );
+    } finally {
+      setSaving(false);
+      setPageBusy(false);
+    }
+  }
+
+  async function removeResource(row: DataRow) {
+    if (row.id == null) return;
+    setSaving(true);
+    setPageBusy(true);
+    setError("");
+    try {
+      await deleteResource(Number(row.id), revision, month);
+      setDeleteConfirm(null);
+      try {
+        await refresh();
+      } catch {
+        setError("삭제는 완료했지만 화면을 갱신하지 못했습니다. 새로고침해 주세요.");
+      }
+    } catch (cause) {
+      const fieldError =
+        cause instanceof ApiError
+          ? Object.values(cause.fieldErrors).flat()[0]
+          : undefined;
+      setError(
+        fieldError ||
+          (cause instanceof Error
+            ? cause.message
+            : "인프라 자원을 삭제하지 못했습니다."),
+      );
+    } finally {
+      setSaving(false);
+      setPageBusy(false);
+    }
+  }
   return (
     <div className="infrastructure-page">
       <header className="page-heading">
@@ -141,14 +267,8 @@ export default function ResourcesPage({
           <h1>인프라 자원</h1>
           <p>리전과 서비스별 컴퓨팅·Rack 자원의 현재 현황입니다.</p>
         </div>
-        <button
-          className="btn"
-          onClick={() => exportCsv("resources", resourceFields(data), filtered)}
-        >
-          <Icon name="download" size={16} />
-          CSV 내보내기
-        </button>
       </header>
+      {error && !editor && <ErrorMessage message={error} />}
       <div
         className="inventory-country-tabs resource-country-tabs"
         role="group"
@@ -180,14 +300,14 @@ export default function ResourcesPage({
             <span>
               {
                 rows.filter(
-                  (row) => regionInfo(row.region)?.country_code === code,
+                  (row) => groupCode(regionInfo(row.region)?.country_code) === code,
                 ).length
               }
             </span>
           </button>
         ))}
       </div>
-      <ResourceSummary rows={countryRows} data={data} country={country} />
+      <ResourceTopology rows={countryRows} data={data} month={month} revision={revision} country={country} />
       <section className="inventory-panel panel">
         <header className="inventory-panel-heading">
           <div className="inventory-title">
@@ -195,6 +315,41 @@ export default function ResourcesPage({
             <h2>자원 목록</h2>
           </div>
           <div className="inventory-toolbar">
+            {canManage && (
+              <div className="resource-edit-mode-controls">
+                {editMode && (
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    disabled={Boolean(editor) || saving || !data.regions.length}
+                    title={!data.regions.length ? "리전을 먼저 등록하세요." : undefined}
+                    onClick={() => {
+                      setEditor("new");
+                      setDeleteConfirm(null);
+                      setError("");
+                    }}
+                  >
+                    ＋ 행 추가
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={`btn btn-sm${editMode ? " btn-primary" : ""}`}
+                  disabled={saving}
+                  aria-pressed={editMode}
+                  onClick={() => {
+                    if (editMode) leaveEditMode();
+                    else {
+                      setEditMode(true);
+                      setDeleteConfirm(null);
+                      setError("");
+                    }
+                  }}
+                >
+                  {editMode ? "편집 종료" : "편집"}
+                </button>
+              </div>
+            )}
             <label className="search-control">
               <Icon name="search" size={16} />
               <input
@@ -220,7 +375,7 @@ export default function ResourcesPage({
                 >
                   <option value="">전체 리전</option>
                   {data.regions
-                    .filter((item) => !country || item.country_code === country)
+                    .filter((item) => !country || groupCode(item.country_code) === country)
                     .map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.region_name}
@@ -239,9 +394,9 @@ export default function ResourcesPage({
                   }}
                 >
                   <option value="">전체 서비스</option>
-                  {data.services.map((item) => (
-                    <option key={item.service_code} value={item.service_code}>
-                      {item.service_name}
+                  {services.map((value) => (
+                    <option key={value} value={value}>
+                      {value}
                     </option>
                   ))}
                 </select>
@@ -271,6 +426,7 @@ export default function ResourcesPage({
               <col className="rack-col" />
               <col className="remarks-col" />
               <col className="date-col" />
+              {editMode && <col className="resource-action-col" />}
             </colgroup>
             <thead>
               <tr className="grid-groups">
@@ -289,6 +445,11 @@ export default function ResourcesPage({
                 <th colSpan={2} scope="colgroup">
                   운영 정보
                 </th>
+                {editMode && (
+                  <th rowSpan={2} scope="col" className="resource-action-head">
+                    관리
+                  </th>
+                )}
               </tr>
               <tr>
                 {COLUMNS.map((column) => (
@@ -318,47 +479,117 @@ export default function ResourcesPage({
               </tr>
             </thead>
             <tbody>
-              {visible.map((row, index) => (
-                <tr key={row.id}>
-                  <th className="grid-gutter" scope="row">
-                    {currentPage * limit + index + 1}
-                  </th>
-                  <td className="resource-region">
-                    <span
-                      className={`country-tag country-${regionInfo(row.region)?.country_code.toLowerCase()}`}
-                    >
-                      {regionInfo(row.region)?.country_code ?? "—"}
-                    </span>
-                    <span>{regionName(row.region)}</span>
-                  </td>
-                  <td>
-                    <span
-                      className={`service-tag ${row.service === "CCS" ? "service-ccs" : ""}`}
-                    >
-                      <i />
-                      {serviceName(row.service)}
-                    </span>
-                  </td>
-                  {QUANTITY_KEYS.map((key) => (
-                    <td
-                      key={key}
-                      className={`numeric ${row[key] == null ? "is-null" : ""}`}
-                      title={row[key] == null ? "수량 미입력" : undefined}
-                    >
-                      {number(row[key])}
+              {editor && (
+                <ResourceForm
+                  key={editor === "new" ? "new" : String(editor.id)}
+                  row={editor === "new" ? null : editor}
+                  data={data}
+                  month={month}
+                  busy={saving}
+                  error={error}
+                  onSubmit={saveResource}
+                  onCancel={closeEditor}
+                  onDirty={onFormDirty}
+                />
+              )}
+              {visible
+                .filter(
+                  (row) =>
+                    editor === "new" || !editor || row.id !== editor.id,
+                )
+                .map((row, index) => (
+                  <tr key={row.id}>
+                    <th className="grid-gutter" scope="row">
+                      {currentPage * limit + index + 1}
+                    </th>
+                    <td className="resource-region">
+                      <span
+                        className={`country-tag country-${regionInfo(row.region)?.country_code.toLowerCase()}`}
+                      >
+                        {regionInfo(row.region)?.country_code ?? "—"}
+                      </span>
+                      <span>{regionName(row.region)}</span>
                     </td>
-                  ))}
-                  <td className="resource-remarks">
-                    <span title={String(row.remarks || "")}>
-                      {String(row.remarks || "—")}
-                    </span>
-                  </td>
-                  <td className="resource-date">{date(row.updated_at)}</td>
-                </tr>
-              ))}
-              {!visible.length && (
+                    <td>
+                      <span
+                        className={`service-tag ${row.service === "CCS" ? "service-ccs" : ""}`}
+                      >
+                        <i />
+                        {serviceName(row.service)}
+                      </span>
+                    </td>
+                    {QUANTITY_KEYS.map((key) => (
+                      <td
+                        key={key}
+                        className={`numeric ${row[key] == null ? "is-null" : ""}`}
+                        title={row[key] == null ? "수량 미입력" : undefined}
+                      >
+                        {number(row[key])}
+                      </td>
+                    ))}
+                    <td className="resource-remarks">
+                      <span title={String(row.remarks || "")}>
+                        {String(row.remarks || "—")}
+                      </span>
+                    </td>
+                    <td className="resource-date">{date(row.updated_at)}</td>
+                    {editMode && (
+                      <td className="resource-action">
+                        <div className="resource-row-actions">
+                          {deleteConfirm === row.id ? (
+                            <>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-danger"
+                                disabled={saving}
+                                onClick={() => void removeResource(row)}
+                              >
+                                삭제 확인
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-sm"
+                                disabled={saving}
+                                onClick={() => setDeleteConfirm(null)}
+                              >
+                                취소
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                className="btn btn-sm"
+                                disabled={Boolean(editor) || saving}
+                                onClick={() => {
+                                  setEditor(row);
+                                  setDeleteConfirm(null);
+                                  setError("");
+                                }}
+                              >
+                                수정
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-danger"
+                                disabled={Boolean(editor) || saving}
+                                onClick={() => {
+                                  setDeleteConfirm(Number(row.id));
+                                  setError("");
+                                }}
+                              >
+                                삭제
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              {!visible.length && !editor && (
                 <tr>
-                  <td colSpan={9}>
+                  <td colSpan={editMode ? 10 : 9}>
                     <div className="table-empty">
                       <Icon name="search" size={26} />
                       <strong>조회된 자원이 없습니다.</strong>
@@ -383,7 +614,7 @@ export default function ResourcesPage({
                         : "—"}
                     </td>
                   ))}
-                  <td colSpan={2} className="total-note">
+                  <td colSpan={editMode ? 3 : 2} className="total-note">
                     미입력 수량은 합계에서 제외
                   </td>
                 </tr>
@@ -411,7 +642,7 @@ export default function ResourcesPage({
                   setPage(0);
                 }}
               >
-                {(reportMode ? [15] : [30, 50, 100]).map((value) => (
+                {[30, 50, 100].map((value) => (
                   <option key={value} value={value}>
                     {value}개
                   </option>

@@ -1,4 +1,4 @@
-/* DB 관리: 가로 탭·공통데이터·DB 원본 조회·사용자 행동 이력. */
+/* DB 관리: 허용된 DB 원본 테이블의 읽기 전용 조회. */
 .db-workspace {
   display: flex;
   flex-direction: column;
@@ -73,42 +73,6 @@
   flex-direction: column;
   gap: 23px;
   min-width: 0;
-}
-.db-feature-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 5px;
-  background: #f2f5f7;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  align-self: flex-start;
-}
-.db-feature-tabs .btn {
-  min-height: 31px;
-  border-color: transparent;
-  background: transparent;
-  color: var(--muted);
-  font-size: 11px;
-  padding: 6px 12px;
-  box-shadow: none;
-}
-.db-feature-tabs .btn:hover:not(:disabled) {
-  color: var(--muted);
-  background: #fafcfd;
-}
-.db-feature-tabs .btn[aria-pressed="true"] {
-  background: #fff;
-  border-color: var(--border);
-  color: var(--text);
-  box-shadow: 0 1px 3px #273e4d05;
-}
-.db-admin-content .section-head h1 {
-  font-size: 20px;
-  font-weight: 600;
-}
-.db-admin-content .section-sub {
-  font-size: 11px;
 }
 .db-layout {
   display: grid;
@@ -298,13 +262,6 @@
   }
   .db-primary-tabs button {
     font-size: 11px;
-  }
-  .db-feature-tabs {
-    gap: 3px;
-  }
-  .db-feature-tabs .btn {
-    padding-inline: 8px;
-    font-size: 10px;
   }
   .db-page-head h1 {
     font-size: 23px;

@@ -15,7 +15,8 @@ class RegionalRequest(models.Model):
         (STATUS_IN_PROGRESS, "In Progress"),
         (STATUS_COMPLETED, "Completed"),
     ]
-    TIMEZONE_CHOICES = [("UTC", "미국 (UTC)"), ("KST", "한국 (KST)"), ("CET", "유럽 (CET)")]
+    TIMEZONE_CHOICES = [("UTC", "미국 (UTC)"), ("KST", "한국 (KST)"), ("CET", "유럽 (CET)"),
+                        ("Europe/Berlin", "유럽 (CET/CEST)"), ("America/Los_Angeles", "북미 (PST/PDT)")]
     REGION_CHOICES = (("KR", "KR"), ("NA", "NA"), ("EU", "EU"))
     ASSIGNEE_REGION_CHOICES = ("KR", "NA", "EU")
 
@@ -25,7 +26,7 @@ class RegionalRequest(models.Model):
     content_html = models.TextField()
     requester = models.CharField(max_length=200)
     requested_at = models.DateTimeField(default=timezone.now, db_index=True)
-    schedule_timezone = models.CharField(max_length=3, choices=TIMEZONE_CHOICES)
+    schedule_timezone = models.CharField(max_length=32, choices=TIMEZONE_CHOICES)
     schedule_start = models.DateTimeField(db_index=True)
     schedule_end = models.DateTimeField()
     status = models.CharField(max_length=15, choices=STATUS_CHOICES, default=STATUS_OPEN, db_default=STATUS_OPEN)
@@ -51,7 +52,7 @@ class RegionalRequest(models.Model):
             models.CheckConstraint(condition=Q(region__in=["KR", "NA", "EU"]), name="regional_request_valid_region"),
             models.CheckConstraint(condition=Q(schedule_end__gt=F("schedule_start")), name="regional_request_schedule_order"),
             models.CheckConstraint(condition=Q(status__in=["open", "in_progress", "completed"]), name="regional_request_valid_status"),
-            models.CheckConstraint(condition=Q(schedule_timezone__in=["UTC", "KST", "CET"]), name="regional_request_valid_timezone"),
+            models.CheckConstraint(condition=Q(schedule_timezone__in=["UTC", "KST", "CET", "Europe/Berlin", "America/Los_Angeles"]), name="regional_request_valid_timezone"),
         ]
 
 

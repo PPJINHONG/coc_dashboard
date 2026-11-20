@@ -7,8 +7,7 @@ from django.db import IntegrityError, connection, transaction
 from rest_framework.test import APIClient
 
 from features.resources.models import InfrastructureResource
-from features.work.models import WorkSummary
-from reporting.models import ChangeLog, Region, Service
+from reporting.models import ChangeLog, Region
 from reporting.months import current_month
 
 ROOT = '/api/operations/'
@@ -30,7 +29,6 @@ def client(db):
 @pytest.fixture
 def base(db):
     Region.objects.create(id=101, region_name='테스트 리전')
-    Service.objects.create(service_code='TEST', service_name='테스트 서비스')
 
 
 def resource(**values):
@@ -87,22 +85,12 @@ def test_invalid_month_is_rejected(client, base, month):
 
 
 @pytest.mark.django_db
-def test_work_unique_per_month(client, base):
-    row = {'region': 101, 'work_type': 'request', 'scope': 'infra', 'total_count': 5, 'completed_count': 3}
-    assert save(client, 'work', [row], 0, '2026-08').status_code == 200
-    assert save(client, 'work', [row, row], 1, '2026-09').status_code == 400
-    assert save(client, 'work', [row], 1, '2026-09').status_code == 200
-    assert WorkSummary.objects.count() == 2
-    assert client.get(ROOT + 'current/?month=2026-09').data['totals']['work_total'] == 5
-
-
-@pytest.mark.django_db
 def test_change_logs_record_month_and_filter(client, base):
     assert save(client, 'resources', [resource()], 0, '2026-08').status_code == 200
-    assert client.post(ADMIN + 'common/services/', {'service_code': 'TWO', 'service_name': '둘'}, format='json').status_code == 201
+    assert client.patch(ADMIN + 'common/regions/101/', {'region_name': '수정 리전'}, format='json').status_code == 200
     log = ChangeLog.objects.get(section='resources')
     assert log.period_month == date(2026, 8, 1)
-    assert ChangeLog.objects.get(section='services').period_month is None
+    assert ChangeLog.objects.get(section='regions').period_month is None
     logs = client.get(ROOT + 'logs/?month=2026-08').data['results']
     assert [entry['month'] for entry in logs] == ['2026-08']
 
@@ -119,4 +107,4 @@ def test_staff_section_has_no_month(client, base):
 @pytest.mark.django_db
 def test_database_rejects_month_not_on_first_day(base):
     with pytest.raises(IntegrityError), transaction.atomic():
-        InfrastructureResource.objects.create(period_month=date(2026, 8, 15), region_id=101, service_id='TEST')
+        InfrastructureResource.objects.create(period_month=date(2026, 8, 15), region_id=101, service='TEST')

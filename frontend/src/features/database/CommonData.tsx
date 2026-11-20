@@ -7,20 +7,17 @@ import { errorMessage } from "../../shared/errors";
 import * as api from "./api";
 import type { MasterKind } from "./api";
 
-/** 행 복사: 이름에 "(복사)"를 붙이고 서비스 코드는 새로 입력하게 비웁니다. 내부 ID는 복사하지 않습니다. */
+/** 행 복사: 편집값만 가져오고 내부 ID는 복사하지 않습니다. */
 function copyCommonRow(kind: MasterKind, row: Record<string, unknown>) {
   if (kind === "staff-members") return { staff_name: row.staff_name };
-  const copy = { ...row };
-  delete copy.id;
-  if (kind === "services") copy.service_code = "";
-  const name = kind === "regions" ? "region_name" : "service_name";
-  copy[name] = `${String(row[name]).slice(0, 75)} (복사)`;
-  return copy;
+  return {
+    region_name: `${String(row.region_name).slice(0, 75)} (복사)`,
+    country_code: row.country_code,
+  };
 }
 
 const LABELS: Record<MasterKind, string> = {
   regions: "리전",
-  services: "서비스",
   "staff-members": "인력",
 };
 function MasterForm({
@@ -54,24 +51,9 @@ function MasterForm({
             max: 10,
           },
         ]
-      : kind === "services"
-        ? [
-            {
-              key: "service_code",
-              label: "서비스 코드",
-              placeholder: "NEW-SERVICE",
-              max: 40,
-            },
-            {
-              key: "service_name",
-              label: "서비스 이름",
-              placeholder: "서비스 이름",
-              max: 80,
-            },
-          ]
-        : [
-            { key: "staff_name", label: "이름", placeholder: "성명", max: 100 },
-          ];
+      : [
+          { key: "staff_name", label: "이름", placeholder: "성명", max: 100 },
+        ];
   const [form, setForm] = useState<Record<string, unknown>>(
     initial
       ? copyMode
@@ -112,8 +94,7 @@ function MasterForm({
               kind,
               values,
               initial && !copyMode
-                ? ((initial.id ??
-                    initial.service_code) as string | number)
+                ? (initial.id as string | number)
                 : undefined,
             );
             await onSaved();
@@ -134,11 +115,6 @@ function MasterForm({
                 placeholder={field.placeholder}
                 maxLength={field.max}
                 type="text"
-                disabled={
-                  Boolean(initial) &&
-                  !copyMode &&
-                  field.key === "service_code"
-                }
                 onChange={(event) =>
                   setForm((current) => ({
                     ...current,
@@ -150,7 +126,7 @@ function MasterForm({
             </label>
           ))}
           <p className="field-hint">
-            공통데이터는 필요한 기능에서 같은 원본을 사용합니다. 연결된 데이터가
+            리전과 인력은 필요한 기능에서 같은 원본을 사용합니다. 연결된 데이터가
             있는 항목은 삭제할 수 없습니다.
           </p>
           <ErrorMessage message={error} />
@@ -163,7 +139,7 @@ function MasterForm({
   );
 }
 
-/** DB 관리 > 공통데이터: 리전·서비스·인력을 한 번 등록하고 여러 기능이 같은 원본을 씁니다. */
+/** 화면에 연결하지 않은 호환용 리전·인력 공통데이터 편집기입니다. */
 export default function CommonData({
   data,
   onSaved,
@@ -209,14 +185,6 @@ export default function CommonData({
       ],
     },
     {
-      kind: "services",
-      rows: data.services as unknown as Record<string, unknown>[],
-      columns: [
-        ["service_code", "서비스 코드"],
-        ["service_name", "서비스 이름"],
-      ],
-    },
-    {
       kind: "staff-members",
       rows: data.staff_members as unknown as Record<string, unknown>[],
       columns: [["staff_name", "이름"]],
@@ -228,7 +196,7 @@ export default function CommonData({
         <div>
           <h1>공통데이터</h1>
           <p className="section-sub">
-            리전·서비스·인력은 한 번 등록하고 필요한 기능에서 함께 사용합니다.
+            리전과 인력은 한 번 등록하고 필요한 기능에서 함께 사용합니다.
           </p>
         </div>
       </header>
@@ -276,9 +244,7 @@ export default function CommonData({
                 <tbody>
                   {rows.map((row) => (
                     <tr
-                      key={String(
-                        row.id ?? row.service_code,
-                      )}
+                      key={String(row.id)}
                     >
                       {columns.map(([key]) => (
                         <td key={key}>{String(row[key])}</td>
@@ -327,9 +293,7 @@ export default function CommonData({
         >
           <p>
             {String(
-              remove.row.region_name ??
-                remove.row.service_name ??
-                remove.row.staff_name,
+              remove.row.region_name ?? remove.row.staff_name,
             )}{" "}
             항목을 삭제하시겠습니까? 연결된 데이터가 있으면 삭제할 수 없습니다.
           </p>
@@ -351,8 +315,7 @@ export default function CommonData({
                 try {
                   await api.deleteMaster(
                     remove.kind,
-                    (remove.row.id ??
-                      remove.row.service_code) as string | number,
+                    remove.row.id as string | number,
                   );
                   await onSaved();
                   setRemove(null);

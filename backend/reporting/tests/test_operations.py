@@ -6,7 +6,7 @@ from django.db import connection
 from rest_framework.test import APIClient
 
 from features.resources.models import InfrastructureResource
-from reporting.models import ChangeLog, DataState, Region, Service
+from reporting.models import ChangeLog, DataState, Region
 
 ROOT = '/api/operations/'
 ADMIN = '/api/db-admin/'
@@ -27,7 +27,6 @@ def client(db):
 @pytest.fixture
 def base(db):
     Region.objects.create(id=101, region_name='테스트 리전')
-    Service.objects.create(service_code='TEST', service_name='테스트 서비스')
 
 
 def resource(**values):
@@ -41,20 +40,21 @@ def save(client, section, rows, revision=0):
 @pytest.mark.django_db
 def test_first_setup_is_empty_and_manual_reference_data_is_shared(client):
     bootstrap = client.get(ROOT + 'bootstrap/').data
-    assert bootstrap['regions'] == [] and bootstrap['services'] == [] and bootstrap['staff_members'] == []
+    assert bootstrap['regions'] == [] and bootstrap['staff_members'] == []
+    assert 'services' not in bootstrap
     assert 'weeks' not in bootstrap and 'current_week' not in bootstrap
     snapshot = client.get(ROOT + 'current/').data
     assert snapshot['resources'] == []
     assert 'week' not in snapshot and 'kubernetes' not in snapshot
     client.force_login(get_user_model().objects.create_user(username='setup@example.com', is_staff=True))
-    for collection, values in [('regions', {'region_name': '테스트 리전'}), ('services', {'service_code': 'TEST', 'service_name': '테스트 서비스'})]:
-        assert client.post(ADMIN + f'common/{collection}/', values, format='json').status_code == 201
+    assert client.post(ADMIN + 'common/regions/', {'region_name': '테스트 리전'}, format='json').status_code == 201
+    assert client.post(ADMIN + 'common/services/', {'service_code': 'TEST', 'service_name': '테스트 서비스'}, format='json').status_code == 400
     assert Region.objects.get().region_name == '테스트 리전'
-    assert save(client, 'resources', [resource(region=Region.objects.get().pk)], revision=2).status_code == 200
+    assert save(client, 'resources', [resource(region=Region.objects.get().pk)], revision=1).status_code == 200
     assert InfrastructureResource.objects.get().host_count == 12
     snapshot = client.get(ROOT + 'current/').data
     assert snapshot['totals']['hosts'] == 12 and snapshot['totals']['missing_vm_rows'] == 1
-    assert snapshot['revision'] == 3
+    assert snapshot['revision'] == 2
 
 
 @pytest.mark.django_db
@@ -80,15 +80,13 @@ def test_latest_values_and_revision_conflict(client, base):
 
 
 @pytest.mark.django_db
-def test_common_data_edit_and_delete_respect_foreign_keys(client, base):
+def test_common_region_edit_respects_foreign_keys(client, base):
     client.force_login(get_user_model().objects.create_user(username='setup@example.com', is_staff=True))
     assert save(client, 'resources', [resource()]).status_code == 200
     assert client.delete(ADMIN + 'common/regions/101/').status_code == 400
     assert client.patch(ADMIN + 'common/regions/101/', {'region_name': '변경한 리전'}, format='json').status_code == 200
     assert Region.objects.get().region_name == '변경한 리전'
     assert InfrastructureResource.objects.exists()
-    assert client.post(ADMIN + 'common/services/', {'service_code': 'EMPTY', 'service_name': '미사용'}, format='json').status_code == 201
-    assert client.delete(ADMIN + 'common/services/EMPTY/').status_code == 204
 
 
 @pytest.mark.django_db

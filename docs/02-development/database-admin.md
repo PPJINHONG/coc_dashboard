@@ -2,46 +2,29 @@
 
 [문서 목록](../README.md) · [운영 데이터 설계](operations.md)
 
-DB 관리 탭과 `/api/db-admin/`은 **실제 로그인한 활성 관리자만** 씁니다. 개발용 로그인 우회도 적용하지 않습니다. 화면 코드는 `frontend/src/features/database/`, 서버 코드는 `backend/database_admin/`과 각 기능 앱의 `admin_urls.py`입니다.
+DB 관리 탭과 `/api/db-admin/`은 **실제 로그인한 활성 관리자만** 씁니다. 개발용 로그인 우회도 적용하지 않습니다. 화면 코드는 `frontend/src/features/database/`, 서버 코드는 `backend/database_admin/`과 `reporting/admin_urls.py`입니다.
 
-## 1. 본문 위 가로 탭
+## 1. DB 관리 화면
 
-| 탭 | 내용 | 화면 코드 |
-| --- | --- | --- |
-| 공통데이터 | 리전·서비스·인력을 하위 탭으로 등록·수정·삭제·행 복사 | `features/database/CommonData.tsx` |
-| 기능별 설정 | 아직 기능 탭으로 옮기지 않은 현재값 편집 | 각 기능 `feature.tsx`의 `admin` |
-| DB 원본 | 웹에서 쓰는 테이블만 읽기 전용으로 조회 | `features/database/RawTables.tsx` |
-
-기능별 설정의 하위 탭은 각 기능이 등록합니다. 운영 인력은 운영 인력 탭으로, 사용자·권한은 관리 메뉴의 회원정보 탭으로 옮겼으므로 여기에는 표시하지 않습니다. 다른 기능은 담당 작업자가 자체 탭에 수정 기능을 연결하면서 개별적으로 옮깁니다. 공통데이터 목록을 기능 입력 화면에 반복해서 두지 않습니다.
-
-## 2. 기능별 설정
-
-- 편집 화면은 조회 상태로 열리고 **편집 → 변경사항 저장**을 눌러야 DB에 반영됩니다. 삭제한 행은 저장할 때 실제로 삭제됩니다.
-- 편집 중에는 다른 탭으로 이동할 때 확인 창이 뜹니다.
-- 인프라 수량은 Host·VM·Compute Rack·Storage Rack을 입력합니다. 리전의 전체 리전은 자동 계산이라 입력하지 않습니다.
-- 회원정보는 관리자·팀장용 별도 탭에서 이름·이메일 아이디·비밀번호·역할·관리 권역·계정 상태를 관리합니다. 본인과 동급·상위 역할은 조회만 하며 하위 역할에만 변경할 수 있습니다. 로그인 상태는 만료되지 않은 세션 수로 표시하며 별도 이력 버튼 대신 변경 이력 탭의 회원정보 항목에서 변경을 확인합니다. 관리자·팀장의 관리 권역은 `ALL`입니다.
-- 새 비밀번호는 검증 후 해시로만 저장하고 응답·이력에 넣지 않습니다. 자세한 역할 제한과 API는 [회원정보](operations.md#회원정보)를 참고하세요.
-
-## 3. 행 복사
-
-행 복사는 편집 초안만 만들고 저장 전에는 DB가 바뀌지 않습니다. ID·시각·비밀번호·연결 댓글은 복사하지 않습니다.
-
-- 공통데이터: 서비스는 새 코드를 입력하고 이름에 "(복사)"가 붙습니다. 리전은 이름·국가, 인력은 이름만 복사합니다.
-- 기능별: 인프라는 리전·서비스, 작업은 리전·구분·대상을 확인한 뒤 저장합니다. 중복 조합은 서버가 전체를 거절합니다. 운영 인력과 회원정보는 별도 탭의 등록 팝업을 쓰며 행 복사는 제공하지 않습니다.
-
-## 4. DB 원본
+DB 관리 화면은 `features/database/RawTables.tsx`를 사용해 웹에서 쓰는 DB 원본 목록을 바로 표시합니다. 공통데이터와 기능별 설정 메뉴는 제공하지 않습니다.
 
 허용 목록은 각 앱 `feature.py`의 `tables`에서 모읍니다(계정 `core`, 공통데이터 `reporting`, 기능 테이블은 각 기능 앱). 세션·마이그레이션·권한 내부 테이블과 게시판·대시보드 테이블은 보여 주지 않습니다.
 
 검색·정렬·페이지 조회와 열·자료형·기본값·기본키·제약조건 조회만 제공합니다. **행·열·테이블 구조 모두 읽기 전용**이며 쓰기 API는 없습니다(쓰기 요청은 `405`). 비밀번호·토큰 같은 민감한 값과 그 기본값은 숨깁니다.
 
-## 5. API
+## 2. 기능 데이터 편집
+
+기능 데이터의 등록·수정·삭제 화면은 필요한 기능 탭에 둡니다. 인프라 자원은 평상시에 관리자와 사용자가 같은 읽기 전용 표를 보며, 실제 활성 관리자만 자원 목록 상단의 편집 버튼으로 편집 모드에 들어가 행을 추가·수정·삭제합니다.
+
+공통데이터 화면은 DB 관리에 연결하지 않습니다. 기존 `CommonData.tsx`와 `/api/db-admin/common/` API는 호환을 위해 유지합니다.
+
+## 3. API
 
 | 경로 (`/api/db-admin/` 아래) | 방식 | 내용 | 코드 |
 | --- | --- | --- | --- |
-| `sections/{기능}/` | PUT | 기능별 기준 월 데이터 저장(본문 `month`, 생략 시 이번 달) | `reporting/admin_urls.py` |
-| `common/{collection}/`, `common/{collection}/{pk}/` | POST / PATCH·DELETE | 공통데이터 | `reporting/admin_urls.py` |
-| `accounts/`, `accounts/{id}/`, `accounts/{id}/activities/` | GET·POST / PATCH·DELETE / GET | 계정·권한·행동 이력 | `database_admin/accounts.py` |
+| `sections/{기능}/` | PUT | 기능별 기준 월 데이터 일괄 저장. DB 관리 화면에는 연결하지 않습니다. | `reporting/admin_urls.py` |
+| `common/{regions·staff-members}/`, `common/{regions·staff-members}/{pk}/` | POST / PATCH·DELETE | 호환용 리전·인력 공통데이터 관리 API. 화면에는 연결하지 않습니다. | `reporting/admin_urls.py` |
+| `accounts/`, `accounts/{id}/`, `accounts/{id}/activities/` | GET·POST / PATCH·DELETE / GET | 기존 계정·권한·행동 이력 API | `database_admin/accounts.py` |
 | (경로 없음: `/api/db-admin/`), `tables/{table}/`, `tables/{table}/rows/` | GET | 원본 테이블 목록·구조·행 | `database_admin/views.py` |
 | `changes/` | GET | 계정·댓글 관리자 변경 이력 | `database_admin/views.py` |
 

@@ -1,6 +1,6 @@
-"""운영 공통 모델: 리전·서비스·인력 공통데이터, 동시 수정 버전, 변경 이력, 개인 화면 설정.
+"""운영 공통 모델: 리전·인력 공통데이터, 동시 수정 버전, 변경 이력, 개인 화면 설정.
 
-기능별 테이블(인프라 자원·운영 작업은 월별, 운영 인력은 현재값)은 backend/features/<기능>/models.py에 있습니다.
+기능별 테이블(인프라 자원은 월별, 운영 인력은 현재값)은 backend/features/<기능>/models.py에 있습니다.
 """
 
 from django.db import models
@@ -30,16 +30,6 @@ class Region(models.Model):
         db_table = 'ops_regions'
         db_table_comment = '리전 공통데이터'
         ordering = ['region_name', 'id']
-
-
-class Service(models.Model):
-    service_code = models.CharField(max_length=40, primary_key=True)
-    service_name = models.CharField(max_length=80, unique=True)
-
-    class Meta:
-        db_table = 'ops_services'
-        db_table_comment = '인프라 서비스 공통데이터'
-        ordering = ['service_code']
 
 
 class StaffMember(models.Model):

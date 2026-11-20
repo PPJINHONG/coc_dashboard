@@ -4,7 +4,7 @@ import { changePreview, describeLog } from "./LogData";
 import type { HistoryLog } from "./api";
 
 export const ACTIONS: Record<string, string> = { create: "등록", update: "수정", delete: "삭제", restore: "복구" };
-const MASTER: Record<string, string> = { regions: "리전", services: "서비스", "staff-members": "인력 공통데이터" };
+const MASTER: Record<string, string> = { regions: "리전", "staff-members": "인력 공통데이터" };
 
 export function relativeTime(value: string, now = Date.now()) {
   const minutes = Math.floor((now - new Date(value).getTime()) / 60_000);

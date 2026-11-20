@@ -12,14 +12,14 @@
 | --- | --- | --- |
 | 인프라 자원 탭 | `features/resources/` | `features/resources/` |
 | 운영 인력 탭 | `features/staff/` | `features/staff/` |
-| 운영 작업 탭 | `features/work/` | `features/work/` |
 | 권역별 요청작업 탭·티켓·본문 이미지 | `features/regional_requests/` | `features/regional_requests/` |
-| 리포트 탭 | `features/report/` | (기능별 데이터를 모아 보여 줌) |
+| 권역별 작업공지 탭 | `features/regional_notices/` | `features/regional_notices/` |
+| 리포트 탭(본문 비어 있음) | `features/report/` | — |
 | 변경 이력 탭 | `features/logs/` | `reporting/` (ChangeLog) |
-| DB 관리 탭(공통데이터·DB 원본·사용자·권한) | `features/database/` | `database_admin/`, `reporting/` |
+| DB 관리 탭(DB 원본 읽기 전용) | `features/database/` | `database_admin/`, `reporting/` |
 | 사이드바·상단바·홈 카드·탭 관리 | `app/` | `reporting/navigation.py` |
 | 로그인·회원가입·팀원 초대 | `app/LoginPage.tsx`, `app/InviteDialog.tsx` | `core/`, `invites/` |
-| 리전·서비스·인력 공통데이터 | `shared/api/operations.ts`, `features/database/CommonData.tsx` | `reporting/models.py` |
+| 리전·인력 공통데이터(편집 화면 미연결) | `shared/api/operations.ts`, `features/database/api.ts` | `reporting/models.py` |
 | 버튼·입력·표·모달 같은 공통 부품과 색상 | `shared/components/`, `shared/styles/` | — |
 | 권한(관리자·옵저버·사용자)·행동 이력 | — | `core/roles.py`, `core/models.py` |
 | 게시판·대시보드 API(화면 미연결) | — | `features/board/`, `features/dashboard/` |
@@ -41,8 +41,8 @@ frontend/src/
 │  └─ *.css                 뼈대·홈·탭 관리·초대·로그인 스타일
 ├─ features/                기능별 폴더 (담당자가 따로 고치는 곳)
 │  ├─ registry.ts           features/*/feature.tsx를 자동으로 모음 (고치지 않음)
-│  ├─ resources/ staff/ work/ regional_requests/ report/ logs/ database/
-│  │  ├─ feature.tsx        이 기능의 등록 정보: 탭 이름·아이콘·순서·홈 카드·리포트·DB 관리 탭·화면
+│  ├─ resources/ staff/ regional_requests/ regional_notices/ report/ logs/ database/
+│  │  ├─ feature.tsx        이 기능의 등록 정보: 탭 이름·아이콘·순서·홈 카드·화면
 │  │  ├─ fields.ts          표·입력 열 정의 (있는 기능만)
 │  │  ├─ *.tsx              이 기능의 화면 부품
 │  │  ├─ api.ts             이 기능만 쓰는 API (있는 기능만)
@@ -51,9 +51,9 @@ frontend/src/
    ├─ api/                  서버 요청(client), 로그인, 초대, 공통데이터·현재값(operations), 목록 관리(records)
    ├─ auth/                 로그인 상태(AuthContext), 관리자 로그인 폼
    ├─ components/           Icon·Panel·Modal·DataTable·FieldInput·ErrorMessage 등
-   ├─ sections/             현재값 목록 화면(SectionPage)·DB 관리 편집(SectionEditor)·목록 관리(RecordsAdmin)
+   ├─ sections/             현재값 목록 화면(SectionPage)과 필터
    ├─ feature.ts            feature.tsx가 따르는 형식(FeatureDefinition)
-   ├─ fields.ts             열 정의 도구(셀 표시·빈 행·행 복사·CSV)
+   ├─ fields.ts             열 정의와 셀 표시 도구
    └─ styles/               tokens.css(색·글꼴), base.css(버튼·입력), sections.css(표·필터·모달)
 ```
 
@@ -68,15 +68,14 @@ frontend/src/
 | `hideable: false` | 탭 관리에서 숨길 수 없음(기본은 숨김 가능) |
 | `english`, `description`, `homeCount` | 홈의 전체 기능 카드와 탭 관리 목록 |
 | `featured` | 홈의 주요 기능 카드(미리보기 포함) |
-| `report` | 리포트 화면에 들어갈 요약과 순서 |
-| `admin` | DB 관리 → 기능별 설정의 하위 탭 |
-| `Page` | 탭을 눌렀을 때 보이는 화면 |
+| `subpages` | 활성 기능 아래 사이드 탭과 `#tab=<id>&view=<subpage>` 주소. 기본 화면은 `id: ""`로 등록 |
+| `Page` | 탭을 눌렀을 때 보이는 기본 화면 |
 
 `Page`는 공통데이터(`data`), 현재값(`snapshot`), 로그인 사용자(`user`), 이동(`navigate`), 다시 불러오기(`refresh`), 편집 중 표시(`setDirty`)를 받습니다. 형식은 `shared/feature.ts`에 있습니다.
 
 ### 화면 코드 규칙
 
-- 기능 폴더는 `shared/`만 가져다 씁니다. **다른 기능 폴더를 import하지 않습니다.** 다른 기능의 내용이 필요하면 `Page`가 받는 `features` 목록을 씁니다(리포트·DB 관리가 이 방식).
+- 기능 폴더는 `shared/`만 가져다 씁니다. **다른 기능 폴더를 import하지 않습니다.** 다른 기능의 내용이 필요하면 `Page`가 받는 `features` 목록을 씁니다(변경 이력 화면이 이 방식).
 - 기능 전용 스타일은 기능 폴더의 CSS에 두고, 클래스 이름은 기능 고유의 이름(예: `inventory-…`, `staff-…`)으로 시작합니다. 여러 기능이 쓰는 모양은 `shared/styles/`를 고칩니다.
 - 기능 ID는 폴더 이름과 같게 둡니다. 다르면 브라우저 콘솔에 오류가 표시됩니다.
 
@@ -88,14 +87,14 @@ backend/
 │  ├─ settings.py           features/ 아래 앱을 자동 등록
 │  └─ urls.py               공통 주소 + 기능 앱 urls.py·admin_urls.py 자동 연결
 ├─ core/                    공통: 로그인·회원가입·내 정보, 권한(roles.py), 행동 이력(UserActivity), admin 계정 생성
-├─ reporting/               공통: 리전·서비스·인력 공통데이터, 동시 수정 버전, 변경 이력, 현재값 조회, 탭 설정
+├─ reporting/               공통: 리전·인력 공통데이터, 동시 수정 버전, 변경 이력, 현재값 조회, 탭 설정
 │  ├─ registry.py           각 앱 feature.py를 모으는 장치 (Feature·Section 형식)
 │  └─ admin_urls.py         /api/db-admin/sections/·common/ (관리자 저장)
 ├─ database_admin/          공통: DB 원본 조회(읽기 전용), 사용자·권한 관리
 ├─ invites/                 공통: 팀원 초대 링크
 └─ features/                기능별 Django 앱 (담당자가 따로 고치는 곳)
    ├─ __init__.py           apps.py가 있는 하위 폴더를 찾는 함수 (고치지 않음)
-   ├─ resources/ staff/ work/ regional_requests/
+   ├─ resources/ staff/ regional_requests/ regional_notices/
    │  ├─ apps.py            앱 등록 정보 (label = 폴더 이름)
    │  ├─ models.py          이 기능의 테이블
    │  ├─ migrations/        이 기능의 테이블 변경 기록 (앱마다 따로 번호가 붙음)
@@ -144,7 +143,7 @@ FEATURE = Feature(
    docker compose run --rm --no-deps -v "$PWD/backend:/app" --entrypoint python backend manage.py makemigrations backup
    ```
 2. 서버: 목록 저장·조회가 필요하면 `serializers.py`와 `feature.py`(`sections`, `tabs`, `tables`)를, 별도 API가 필요하면 `urls.py`를 둡니다. 설정·주소 파일은 고치지 않습니다.
-3. 화면: `frontend/src/features/backup/feature.tsx`를 만들고 `id: "backup"`, 메뉴 이름·아이콘·`order`·`Page`를 적습니다. 목록형이면 `shared/sections/SectionPage`와 `SectionAdmin`을 재사용합니다.
+3. 화면: `frontend/src/features/backup/feature.tsx`를 만들고 `id: "backup"`, 메뉴 이름·아이콘·`order`·`Page`를 적습니다. 목록형이면 `shared/sections/SectionPage`를 재사용합니다.
 4. 테스트: `backend/features/backup/tests/`에 둡니다.
 5. 반영·확인: `docker compose down` → `docker compose up --build -d` 후 사이드바·홈·탭 관리·DB 관리에 나타나는지 확인합니다.
 

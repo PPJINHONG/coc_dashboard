@@ -6,12 +6,11 @@
 
 ## 1. 웹에서 확인
 
-- 일반 기능 탭: 인프라 자원·운영 작업은 기준 월별, 운영 인력은 현재값 조회. 권역별 요청작업은 KST 요청일 기준 월별로 조회하고 관리자·사용자가 등록합니다. 월 구조는 [운영 데이터 설계](operations.md#기준-월).
-- 관리자 **DB 관리 → 기능별 설정**: 업무 데이터와 사용자·권한 관리.
-- 관리자 **DB 관리 → DB 원본**: 같은 원본 테이블을 읽기 전용으로 확인.
+- 일반 기능 탭: 인프라 자원·권역별 작업공지는 기준 월별, 운영 인력은 현재값을 조회합니다. 인프라 자원과 권역별 작업공지는 관리자만 기능 탭에서 생성·수정·삭제합니다. 권역별 요청작업은 KST 요청일 기준 월별로 조회하고 관리자·사용자가 등록합니다. 월 구조는 [운영 데이터 설계](operations.md#기준-월).
+- 관리자 **DB 관리**: 허용된 원본 테이블을 읽기 전용으로 확인합니다. 공통데이터 편집 화면은 제공하지 않습니다.
 - `http://localhost:8080/api/operations/current/?month=YYYY-MM`: 기준 월 데이터와 합계(로그인 필요, 월 생략 시 이번 달).
 
-공통데이터와 수량은 자동으로 넣지 않습니다. 새 설치에서는 관리자가 DB 관리 → 공통데이터에서 리전·서비스·인력을 먼저 등록합니다.
+공통데이터와 수량은 자동으로 넣지 않습니다. 리전·인력 관리 API는 호환을 위해 `/api/db-admin/common/`에 유지하지만 DB 관리 화면에는 연결하지 않습니다. 인프라 서비스는 자원 표에서 직접 입력합니다.
 
 ## 2. 직접 DB 접속
 
@@ -40,10 +39,10 @@ docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 | --- | --- |
 | 인프라 자원 `infra_resources` | `features/resources` |
 | 운영 인력 배치 `ops_staff_assignments` | `features/staff` |
-| 운영 작업 `ops_work_summaries` | `features/work` |
+| 권역별 작업공지 `ops_regional_notices` | `features/regional_notices` |
 | 권역별 요청작업·이미지 `ops_regional_requests`, `ops_regional_request_images` | `features/regional_requests` |
 | 게시판 `core_post` 등, 대시보드 `core_dashboardpanel` | `features/board`, `features/dashboard` |
-| 리전·서비스·인력·변경 이력·탭 설정 | `reporting` (공통 앱, 한 번에 한 사람) |
+| 리전·인력·변경 이력·탭 설정 | `reporting` (공통 앱, 한 번에 한 사람) |
 | 행동 이력 `user_activity_logs` | `core` (공통 앱) |
 | 초대 `auth_invites` | `invites` (공통 앱) |
 

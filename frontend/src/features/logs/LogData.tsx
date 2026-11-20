@@ -64,7 +64,7 @@ export function describeLog(log: Log, data: Bootstrap, people: Record<string, st
     // 운영 인력 배치 번호(현장대리인·팀장·그룹장·일정 소유자)는 현재 인력 목록의 이름으로 보여 줍니다.
     if (["site_representative_id", "team_lead_id", "group_lead_id", "assignment_id"].includes(key)) return people[String(value)] ?? "이전 인력";
     if (key === "account_id") return "회원 계정 연결";
-    if (key === "service") return data.services.find((item) => item.service_code === value)?.service_name ?? String(value);
+    if (key === "service") return String(value);
     if (key === "status" && log.section === "regional_requests") return ({ open: "Open", in_progress: "In Progress", completed: "Completed" } as Record<string, string>)[String(value)] ?? String(value);
     if (key === "assignee_regions" && Array.isArray(value)) return value.join(" · ") || "—";
     if (key === "content_html") {

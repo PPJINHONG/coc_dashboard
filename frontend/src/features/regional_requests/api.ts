@@ -1,8 +1,9 @@
+import type { ScheduleRegion } from "../../shared/regionalTime";
 import { ApiError, getCookie, request } from "../../shared/api/client";
 
 export type RequestStatus = "open" | "in_progress" | "completed";
-export type ScheduleTimezone = "UTC" | "KST" | "CET";
-export type AssigneeRegion = "KR" | "NA" | "EU";
+export type ScheduleTimezone = "UTC" | "KST" | "CET" | "Europe/Berlin" | "America/Los_Angeles";
+export type AssigneeRegion = ScheduleRegion;
 
 export interface RequestImage {
   id: number;
@@ -23,6 +24,13 @@ export interface RegionalRequest {
   timezone_label: string;
   schedule_start: string;
   schedule_end: string;
+  assignee_schedules: {
+    region: AssigneeRegion;
+    start: string;
+    end: string;
+    start_zone: string;
+    end_zone: string;
+  }[];
   schedule_start_display: string;
   schedule_end_display: string;
   status: RequestStatus;
@@ -42,7 +50,6 @@ export interface RegionalRequestInput {
   title: string;
   content_html: string;
   requester: string;
-  schedule_timezone: ScheduleTimezone;
   schedule_start_local: string;
   schedule_end_local: string;
   status: RequestStatus;

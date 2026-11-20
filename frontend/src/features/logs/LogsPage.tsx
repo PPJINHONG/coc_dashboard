@@ -13,7 +13,7 @@ import LogData from "./LogData";
 export default function LogsPage({ data, snapshot, user, features, refresh, setBusy }: FeaturePageProps) {
   const labels = Object.fromEntries([
     ...features.map((item) => [item.id, item.label]),
-    ["regions", "리전 공통데이터"], ["services", "서비스 공통데이터"], ["staff-members", "인력 공통데이터"],
+    ["regions", "리전 공통데이터"], ["staff-members", "인력 공통데이터"],
   ]);
   const people = Object.fromEntries(sectionRows(snapshot, "staff").map((row) => [String(row.id), String(row.staff_name ?? "")]));
   const [section, setSection] = useState("");

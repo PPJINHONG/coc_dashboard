@@ -86,9 +86,8 @@ export default function RawTables() {
   return (
     <div className="db-workspace">
       <p className="report-notice">
-        웹에서 사용하는 업무·계정 테이블만 표시합니다. 이 화면은 읽기 전용이며,
-        변경은 ‘기능별 설정’에서 진행하세요. 비밀번호 등 보호된 값은 표시하지
-        않습니다.
+        웹에서 사용하는 업무·계정 테이블만 표시합니다. 이 화면은 읽기 전용입니다.
+        비밀번호 등 보호된 값은 표시하지 않습니다.
       </p>
       <ErrorMessage message={error} />
       <div className="db-layout">

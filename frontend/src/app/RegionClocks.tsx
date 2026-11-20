@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
+import { REGION_TIME } from "../shared/regionalTime";
 import Icon from "../shared/components/Icon";
 import "./region-clocks.css";
 
 /** 3권역 표준시. 한국 → 유럽(독일) → 북미(얼바인) 순으로 보여 줍니다. 서머타임은 브라우저 시간대 정보로 자동 반영합니다. */
 const ZONES = [
-  { id: "kr", region: "한국", city: "서울", timeZone: "Asia/Seoul", abbr: ["KST", "KST"] },
-  { id: "eu", region: "유럽", city: "독일", timeZone: "Europe/Berlin", abbr: ["CET", "CEST"] },
-  { id: "na", region: "북미", city: "얼바인", timeZone: "America/Los_Angeles", abbr: ["PST", "PDT"] },
+  { id: "kr", region: "한국", city: "서울", timeZone: REGION_TIME.KR.zone, abbr: ["KST", "KST"] },
+  { id: "eu", region: "유럽", city: "독일", timeZone: REGION_TIME.EU.zone, abbr: ["CET", "CEST"] },
+  { id: "na", region: "북미", city: "얼바인", timeZone: REGION_TIME.NA.zone, abbr: ["PST", "PDT"] },
 ] as const;
 
 const partsFormat = new Map<string, Intl.DateTimeFormat>();

@@ -14,10 +14,10 @@ from rest_framework.exceptions import ValidationError
 
 from core.roles import ROLE_GROUP_LEAD, ROLE_TEAM_LEAD, is_admin, managed_countries, user_role
 from . import registry
-from .models import ChangeLog, Region, Service, StaffMember
+from .models import ChangeLog, Region, StaffMember
 
 
-MASTER_MODELS = {'regions': Region, 'services': Service, 'staff-members': StaffMember}
+MASTER_MODELS = {'regions': Region, 'staff-members': StaffMember}
 
 
 def history_models(section):
@@ -174,7 +174,7 @@ def visible_history(user, params=None, limit=None):
     role = user_role(user)
     unrestricted = is_admin(user) or role == ROLE_TEAM_LEAD
     countries = set(managed_countries(user)) if role == ROLE_GROUP_LEAD else set()
-    queryset = ChangeLog.objects.exclude(section='issues').select_related('restoration')
+    queryset = ChangeLog.objects.exclude(section__in=('issues', 'work', 'services')).select_related('restoration')
     if not unrestricted and role != ROLE_GROUP_LEAD:
         queryset = queryset.filter(actor_username__iexact=user.username)
     if params.get('month'):

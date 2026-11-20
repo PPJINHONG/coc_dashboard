@@ -54,10 +54,12 @@ function isToday(ticket: RegionalRequest) {
   return dayKey(ticket.schedule_start) === dayKey(new Date());
 }
 
-function scheduleText(ticket: RegionalRequest) {
-  const start = ticket.schedule_start_display.replace("T", " ");
-  const end = ticket.schedule_end_display.replace("T", " ");
-  return `${start} – ${end} ${ticket.schedule_timezone}`;
+function ScheduleLines({ ticket }: { ticket: RegionalRequest }) {
+  return ticket.assignee_schedules.map(({ region, start, end, start_zone, end_zone }) => {
+    const startText = start.slice(0, 16).replace("T", " ");
+    const endText = end.slice(0, 16).replace("T", " ");
+    return <span key={region}>{region} · {startText}{start_zone !== end_zone && ` ${start_zone}`} – {endText} {end_zone}</span>;
+  });
 }
 
 function statusCounts(rows: RegionalRequest[]) {
@@ -264,7 +266,7 @@ export default function RegionalRequestsPage({ snapshot, user, setDirty }: Featu
                     </span>
                     <span className="regional-request-ticket-schedule">
                       <small>작업 일정</small>
-                      <span>{scheduleText(ticket)}</span>
+                      <ScheduleLines ticket={ticket} />
                       {today && <b>TODAY</b>}
                     </span>
                     <span className="regional-request-ticket-content"><small>작업 내용</small><span>{plainContent(ticket.content_html)}</span></span>
@@ -303,7 +305,7 @@ export default function RegionalRequestsPage({ snapshot, user, setDirty }: Featu
 
               <div className="regional-request-detail-grid">
                 <section><span>Requester</span><strong>{selected.requester}</strong></section>
-                <section><span>작업 일정</span><strong>{scheduleText(selected)}</strong></section>
+                <section><span>작업 일정</span><strong className="regional-request-schedule-lines"><ScheduleLines ticket={selected} /></strong></section>
                 <section><span>담당 권역</span><strong>{selected.assignee_regions.length ? selected.assignee_regions.join(" · ") : "미지정"}</strong></section>
                 <section><span>담당자</span><strong>{selected.assignee_name || "미지정"}</strong></section>
               </div>

@@ -8,9 +8,9 @@ export interface FeaturePageProps {
   data: Bootstrap;
   snapshot: Snapshot;
   user: User | null;
-  /** 등록된 전체 기능. 리포트·DB 관리처럼 다른 기능을 모아 보여 줄 때 씁니다. 다른 기능 폴더를 직접 import하지 않습니다. */
+  /** 등록된 전체 기능. 변경 이력처럼 기능 목록을 모아 보여 줄 때 씁니다. 다른 기능 폴더를 직접 import하지 않습니다. */
   features: FeatureDefinition[];
-  navigate: (tab: string) => void;
+  navigate: (tab: string, view?: string) => void;
   /** 공통데이터와 현재값을 다시 불러옵니다. */
   refresh: () => Promise<void>;
   /** 저장하지 않은 편집이 있으면 true. 다른 탭으로 이동할 때 확인 창을 띄웁니다. */
@@ -19,25 +19,10 @@ export interface FeaturePageProps {
   setBusy: (busy: boolean) => void;
 }
 
-/** 홈 카드·리포트 칸이 받는 값 */
+/** 홈 카드가 받는 값 */
 export interface FeatureDataProps {
   data: Bootstrap;
   snapshot: Snapshot;
-}
-
-/** DB 관리 > 기능별 설정의 하위 탭이 받는 값 */
-export interface AdminTabProps {
-  data: Bootstrap;
-  snapshot: Snapshot;
-  onChanged: () => Promise<void>;
-  onEditing: (editing: boolean) => void;
-  onBusy: (busy: boolean) => void;
-}
-
-export interface AdminTab {
-  id: string;
-  label: string;
-  Editor: ComponentType<AdminTabProps>;
 }
 
 /**
@@ -67,9 +52,7 @@ export interface FeatureDefinition {
   homeCount?: (snapshot: Snapshot) => string;
   /** 홈 "주요 기능"에 넣을 때 순서·넓은 카드 여부·미리보기 */
   featured?: { order: number; wide?: boolean; Preview: ComponentType<FeatureDataProps> };
-  /** 리포트 화면에 넣을 때 순서와 요약 화면 */
-  report?: { order: number; Summary: ComponentType<FeatureDataProps> };
-  /** DB 관리 > 기능별 설정에 추가할 하위 탭 */
-  admin?: AdminTab[];
+  /** 활성 기능 아래 사이드 탭. 기본 화면은 id를 빈 문자열로 등록합니다. */
+  subpages?: { id: string; label: string; Page: ComponentType<FeaturePageProps> }[];
   Page: ComponentType<FeaturePageProps>;
 }

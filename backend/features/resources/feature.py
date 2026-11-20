@@ -8,7 +8,7 @@ SECTION = Section(
     model=InfrastructureResource,
     serializer=ResourceSerializer,
     unique_fields=('region', 'service'),
-    related=('region', 'service'),
+    related=('region',),
 )
 
 

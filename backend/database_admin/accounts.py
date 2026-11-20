@@ -1,4 +1,4 @@
-"""DB 관리 > 기능별 설정 > 사용자·권한: 계정 추가·수정·삭제와 계정별 행동 이력."""
+"""기존 관리자 계정 API: 계정 추가·수정·삭제와 계정별 행동 이력."""
 
 from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.password_validation import validate_password
