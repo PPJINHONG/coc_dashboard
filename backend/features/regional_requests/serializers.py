@@ -1,17 +1,20 @@
 import re
-from datetime import datetime, timedelta, timezone as datetime_timezone
+from datetime import timedelta, timezone as datetime_timezone
+from zoneinfo import ZoneInfo
 from html.parser import HTMLParser
 
 import nh3
 from django.utils import timezone
 from rest_framework import serializers
 
+from core.regional_time import REGION_ZONES, regional_instant
 from core.roles import can_write, is_admin
 
 from .models import RegionalRequest, RegionalRequestImage
 
 
 TIMEZONES = {
+    **{zone: ZoneInfo(zone) for zone in REGION_ZONES.values()},
     "UTC": datetime_timezone.utc,
     "KST": datetime_timezone(timedelta(hours=9), "KST"),
     "CET": datetime_timezone(timedelta(hours=1), "CET"),
@@ -68,16 +71,6 @@ def sanitize_content(value):
     return cleaned, list(dict.fromkeys(inspector.image_ids))
 
 
-def parse_local(value, timezone_code, field_name):
-    try:
-        parsed = datetime.fromisoformat(value)
-    except (TypeError, ValueError) as exc:
-        raise serializers.ValidationError({field_name: "날짜와 시간을 확인하세요."}) from exc
-    if parsed.tzinfo is not None:
-        raise serializers.ValidationError({field_name: "화면에서 선택한 현지 시간 형식으로 입력하세요."})
-    return parsed.replace(tzinfo=TIMEZONES[timezone_code]).astimezone(datetime_timezone.utc)
-
-
 def local_value(value, timezone_code):
     if value is None:
         return None
@@ -98,6 +91,7 @@ class RegionalRequestImageSerializer(serializers.ModelSerializer):
 class RegionalRequestSerializer(serializers.ModelSerializer):
     month = serializers.SerializerMethodField()
     region_name = serializers.CharField(source="get_region_display", read_only=True)
+    assignee_schedules = serializers.SerializerMethodField()
     schedule_start_local = serializers.CharField(write_only=True, required=False)
     schedule_end_local = serializers.CharField(write_only=True, required=False)
     schedule_start_display = serializers.SerializerMethodField()
@@ -115,11 +109,11 @@ class RegionalRequestSerializer(serializers.ModelSerializer):
             "id", "month", "region", "region_name", "title", "content_html", "requester",
             "requested_at", "schedule_timezone", "timezone_label", "schedule_start", "schedule_end",
             "schedule_start_local", "schedule_end_local", "schedule_start_display", "schedule_end_display",
-            "status", "status_label", "assignee_regions", "assignee_name", "author_name",
+            "status", "status_label", "assignee_schedules", "assignee_regions", "assignee_name", "author_name",
             "images", "can_edit_content", "can_update_assignment", "can_delete", "updated_at",
         ]
         read_only_fields = [
-            "id", "requested_at", "schedule_start", "schedule_end", "author_name", "updated_at",
+            "id", "requested_at", "schedule_start", "schedule_end", "schedule_timezone", "author_name", "updated_at",
         ]
         extra_kwargs = {
             "title": {"allow_blank": False},
@@ -134,6 +128,18 @@ class RegionalRequestSerializer(serializers.ModelSerializer):
 
     def get_schedule_end_display(self, obj):
         return local_value(obj.schedule_end, obj.schedule_timezone)
+
+    def get_assignee_schedules(self, obj):
+        schedules = []
+        for country in obj.assignee_regions or [obj.region]:
+            zone = ZoneInfo(REGION_ZONES[country])
+            start = obj.schedule_start.astimezone(zone)
+            end = obj.schedule_end.astimezone(zone)
+            schedules.append({
+                "region": country, "start": start.isoformat(timespec="minutes"), "end": end.isoformat(timespec="minutes"),
+                "start_zone": start.tzname(), "end_zone": end.tzname(),
+            })
+        return schedules
 
     def get_can_edit_content(self, obj):
         request = self.context.get("request")
@@ -177,19 +183,18 @@ class RegionalRequestSerializer(serializers.ModelSerializer):
         return value.strip()
 
     def validate(self, attrs):
-        timezone_code = attrs.get("schedule_timezone") or getattr(self.instance, "schedule_timezone", None)
-        if timezone_code not in TIMEZONES:
-            raise serializers.ValidationError({"schedule_timezone": "시간대를 선택하세요."})
-
         start_local = attrs.pop("schedule_start_local", None)
         end_local = attrs.pop("schedule_end_local", None)
         if self.instance is None and (start_local is None or end_local is None):
             raise serializers.ValidationError({"schedule_start_local": "작업 시작과 종료 시간을 입력하세요."})
         if (start_local is None) != (end_local is None):
             raise serializers.ValidationError({"schedule_start_local": "작업 시작과 종료 시간을 함께 입력하세요."})
+        country = attrs.get("region") or getattr(self.instance, "region", None)
+        if start_local is not None or "region" in attrs:
+            attrs["schedule_timezone"] = "KST" if country == "KR" else REGION_ZONES[country]
         if start_local is not None:
-            attrs["schedule_start"] = parse_local(start_local, timezone_code, "schedule_start_local")
-            attrs["schedule_end"] = parse_local(end_local, timezone_code, "schedule_end_local")
+            for field, value in (("schedule_start", start_local), ("schedule_end", end_local)):
+                attrs[field] = regional_instant(value, country, f"{field}_local", getattr(self.instance, field, None))
 
         start = attrs.get("schedule_start") or getattr(self.instance, "schedule_start", None)
         end = attrs.get("schedule_end") or getattr(self.instance, "schedule_end", None)

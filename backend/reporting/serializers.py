@@ -1,18 +1,12 @@
 from rest_framework import serializers
 
-from .models import ChangeLog, Region, Service, StaffMember
+from .models import ChangeLog, Region, StaffMember
 
 
 class RegionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Region
         fields = ['id', 'region_name', 'country_code']
-
-
-class ServiceSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Service
-        fields = ['service_code', 'service_name']
 
 
 class StaffMemberSerializer(serializers.ModelSerializer):

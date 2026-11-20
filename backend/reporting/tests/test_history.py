@@ -14,7 +14,7 @@ from core.signals import username_changed
 from features.regional_requests.models import RegionalRequest, RegionalRequestImage
 from features.resources.models import InfrastructureResource
 from features.staff.models import StaffAssignment, StaffCalendarEvent
-from reporting.models import ChangeLog, DataState, Region, Service, StaffMember
+from reporting.models import ChangeLog, DataState, Region, StaffMember
 from reporting.months import current_month
 
 URL = '/api/operations/logs/'
@@ -32,7 +32,6 @@ def setup(db, settings, tmp_path):
         apply_role(user, role if role != 'other' else 'user', ['KR'] if role == 'group_lead' else [])
         users[role] = user
     regions = {country: Region.objects.create(region_name=f'{country} 리전', country_code=country) for country in ('KR', 'EU', 'NA')}
-    Service.objects.create(service_code='TEST', service_name='테스트')
     return users, regions
 
 
@@ -379,10 +378,15 @@ def test_missing_image_backup_blocks_restore_without_partial_rows(setup, django_
     assert not RegionalRequest.objects.exists() and not RegionalRequestImage.objects.exists()
 
 
-def test_removed_issue_history_is_not_shown_or_restored(setup):
+@pytest.mark.parametrize('section, model', [
+    ('issues', 'issues.regionalissue'),
+    ('work', 'work.worksummary'),
+    ('services', 'reporting.service'),
+])
+def test_removed_feature_history_is_not_shown_or_restored(setup, section, model):
     users, _ = setup
-    old = ChangeLog.objects.create(section='issues', action='delete', actor_name='과거 작성자',
-                                   before_data={'id': 1, 'title': '기존 이슈'}, restore_data={'changes': [{'model': 'issues.regionalissue', 'pk': '1', 'before': {}, 'after': None}]})
+    old = ChangeLog.objects.create(section=section, action='delete', actor_name='과거 작성자',
+                                   before_data={'id': 1, 'title': '기존 데이터'}, restore_data={'changes': [{'model': model, 'pk': '1', 'before': {}, 'after': None}]})
     assert client(users['admin']).get(URL).data['results'] == []
     assert preview(users['admin'], old).status_code == 400
 

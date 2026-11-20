@@ -59,6 +59,7 @@ const DEFAULT_PREFERENCE: NavigationPreference = {
 export default function AppShell() {
   const { user, logout } = useAuth();
   const [tab, setTab] = useState<string>(initialTab);
+  const [view, setView] = useState(() => new URLSearchParams(window.location.hash.slice(1)).get("view") ?? "");
   const [data, setData] = useState<Bootstrap | null>(null),
     [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [preference, setPreference] = useState(DEFAULT_PREFERENCE);
@@ -120,7 +121,10 @@ export default function AppShell() {
   }, [tab, user, preference.hidden_tabs]);
   useEffect(() => {
     const back = () => {
-      if (!dirty && !busy) setTab(initialTab());
+      if (!dirty && !busy) {
+        setTab(initialTab());
+        setView(new URLSearchParams(window.location.hash.slice(1)).get("view") ?? "");
+      }
     };
     window.addEventListener("popstate", back);
     return () => window.removeEventListener("popstate", back);
@@ -130,11 +134,12 @@ export default function AppShell() {
     if (dirty) setConfirm(() => action);
     else action();
   }
-  function navigate(next: string) {
+  function navigate(next: string, nextView = "") {
     guarded(() => {
       setDirty(false);
       setTab(next);
-      window.history.pushState(null, "", `#tab=${next}`);
+      setView(nextView);
+      window.history.pushState(null, "", `#tab=${next}${nextView ? `&view=${nextView}` : ""}`);
       window.scrollTo({ top: 0, behavior: "instant" });
     });
   }
@@ -198,27 +203,51 @@ export default function AppShell() {
     );
   const current = TABS.find((item) => item.id === tab)!;
   const feature = FEATURES.find((item) => item.id === tab);
+  const subpage = feature?.subpages?.find((item) => item.id === view);
+  const Page = subpage?.Page ?? feature?.Page;
   const visibleTabs = TABS.filter(
     (item) =>
       !preference.hidden_tabs.includes(item.id) &&
       canAccessTab(item.id, user),
   );
   const collapsed = preference.sidebar_collapsed;
-  const navButton = (item: (typeof TABS)[number]) => (
-    <button
-      key={item.id}
-      className={`nav-item${tab === item.id ? " active" : ""}`}
-      aria-label={item.label}
-      aria-current={tab === item.id ? "page" : undefined}
-      disabled={busy}
-      onClick={() => navigate(item.id)}
-      title={collapsed ? item.label : undefined}
-    >
-      <Icon name={item.icon} size={18} />
-      <span>{item.label}</span>
-      {isManagementTab(item.id) && <Icon name="shield" size={12} />}
-    </button>
-  );
+  const selectedView = subpage?.id ?? "";
+  const navButton = (item: (typeof TABS)[number]) => {
+    const children = "subpages" in item ? item.subpages : undefined;
+    return (
+      <div className="sidebar-nav-entry" key={item.id}>
+        <button
+          className={`nav-item${tab === item.id ? " active" : ""}`}
+          aria-label={item.label}
+          aria-current={tab === item.id ? (subpage ? "location" : "page") : undefined}
+          disabled={busy}
+          onClick={() => navigate(item.id)}
+          title={collapsed ? item.label : undefined}
+        >
+          <Icon name={item.icon} size={18} />
+          <span>{item.label}</span>
+          {isManagementTab(item.id) && <Icon name="shield" size={12} />}
+        </button>
+        {tab === item.id && item.id !== "home" && children?.length && !collapsed ? (
+          <div className="sidebar-subnav" role="group" aria-label={`${item.label} 하위 메뉴`}>
+            {children.map((child) => (
+              <button
+                type="button"
+                key={child.id || "default"}
+                className={`sidebar-subitem${selectedView === child.id ? " active" : ""}`}
+                aria-current={selectedView === child.id ? "page" : undefined}
+                disabled={busy}
+                onClick={() => navigate(item.id, child.id)}
+              >
+                <i aria-hidden="true" />
+                <span>{child.label}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
   return (
     <div
       className={`app-shell report-shell${collapsed ? " sidebar-collapsed" : ""}`}
@@ -347,6 +376,7 @@ export default function AppShell() {
               <button onClick={() => navigate("home")}>워크스페이스</button>
               <Icon name="chevron" size={12} />
               <strong>{current.label}</strong>
+              {subpage && <><Icon name="chevron" size={12} /><strong>{subpage.label}</strong></>}
             </nav>
           </div>
           <div className="topbar-actions">
@@ -413,8 +443,8 @@ export default function AppShell() {
               manageTabs={() => setManageTabs(true)}
             />
           )}
-          {feature && canAccessTab(feature.id, user) && (
-            <feature.Page
+          {Page && feature && canAccessTab(feature.id, user) && (
+            <Page
               data={data}
               snapshot={snapshot}
               user={user}

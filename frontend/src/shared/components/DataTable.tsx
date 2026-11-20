@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { DataRow } from "../api/operations";
 import { cell, type Field } from "../fields";
 
-/** 표 끝에 붙이는 계산 열(예: 운영 작업의 미완료·완료율). 숫자처럼 오른쪽 정렬합니다. */
+/** 표 끝에 붙이는 계산 열. 숫자처럼 오른쪽 정렬합니다. */
 export interface ExtraColumn {
   label: string;
   value: (row: DataRow) => ReactNode;

@@ -10,10 +10,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from . import registry
-from .models import ChangeLog, Region, Service, StaffMember
+from .models import ChangeLog, Region, StaffMember
 from .months import month_label, parse_month, request_month
 from .permissions import OperationsAdministrator, ReportingPermission, can_manage
-from .serializers import ChangeLogSerializer, RegionSerializer, ServiceSerializer, StaffMemberSerializer
+from .serializers import ChangeLogSerializer, RegionSerializer, StaffMemberSerializer
 from .services import bump, check_revision, lock_state, record_log
 from .history import capture_history, visible_history
 
@@ -41,7 +41,6 @@ class BootstrapView(ReportingView):
     def get(self, request):
         return Response({
             'regions': RegionSerializer(Region.objects.all(), many=True).data,
-            'services': ServiceSerializer(Service.objects.all(), many=True).data,
             'staff_members': StaffMemberSerializer(StaffMember.objects.all(), many=True).data,
             'can_manage': can_manage(request),
             'development_mode': settings.DEVELOPMENT_AUTH_BYPASS,
@@ -174,9 +173,9 @@ class SectionView(AdminDataView):
 
 
 class MasterDataView(AdminDataView):
-    """리전·서비스·인력 공통데이터 추가·수정·삭제."""
+    """리전·인력 공통데이터 추가·수정·삭제."""
 
-    models = {'regions': (Region, RegionSerializer), 'services': (Service, ServiceSerializer), 'staff-members': (StaffMember, StaffMemberSerializer)}
+    models = {'regions': (Region, RegionSerializer), 'staff-members': (StaffMember, StaffMemberSerializer)}
 
     def get_instance(self, model, pk):
         if pk is None:
@@ -219,7 +218,7 @@ class MasterDataView(AdminDataView):
         if collection not in self.models:
             raise ValidationError('알 수 없는 공통데이터입니다.')
         if not can_manage(request):
-            raise PermissionDenied('리전·서비스 공통데이터는 관리자만 수정할 수 있습니다.')
+            raise PermissionDenied('공통데이터는 관리자만 수정할 수 있습니다.')
         state = lock_state()
         model, serializer_class = self.models[collection]
         capture_history(request, collection)

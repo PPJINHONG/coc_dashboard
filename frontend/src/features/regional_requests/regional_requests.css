@@ -155,7 +155,7 @@
 .regional-request-ticket-grid {
   display: grid;
   grid-template-columns: 178px minmax(280px, 1fr) 170px 210px 150px;
-  grid-template-rows: 78px 58px;
+  grid-template-rows: minmax(78px, auto) 58px;
   align-items: stretch;
 }
 .regional-request-ticket-grid > span:not(.regional-request-ticket-region-status) {
@@ -334,6 +334,8 @@
 .regional-request-detail-grid section:last-child { border-right: 0; }
 .regional-request-detail-grid span { color: var(--muted); font-size: 10px; }
 .regional-request-detail-grid strong { color: var(--text-strong); font-size: 12px; font-weight: 580; }
+.regional-request-schedule-lines { display: grid; gap: 4px; }
+.regional-request-detail-grid .regional-request-schedule-lines > span { font: inherit; color: inherit; }
 .regional-request-detail-grid small { color: #1f548d; font-size: 10px; }
 .regional-request-content { flex: 1; min-height: 260px; padding: 18px 20px; border: 1px solid var(--border); border-radius: 7px; background: #fff; }
 .regional-request-content h3 { margin: 0 0 12px; font-size: 13px; font-weight: 620; }

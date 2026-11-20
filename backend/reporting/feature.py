@@ -5,7 +5,6 @@ FEATURE = Feature(
     tabs=('report', 'logs'),
     tables={
         'ops_regions': '공통 리전',
-        'ops_services': '인프라 서비스',
         'ops_staff_members': '인력 기준정보',
     },
 )

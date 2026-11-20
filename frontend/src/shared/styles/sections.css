@@ -186,39 +186,6 @@
   margin-left: auto;
   padding-bottom: 10px;
 }
-.report-editor-fieldset {
-  border: 0;
-  margin: 0;
-  padding: 0;
-  min-width: 0;
-}
-.report-edit-table td {
-  padding: 7px;
-  vertical-align: top;
-}
-.report-edit-table input,
-.report-edit-table select,
-.report-edit-table textarea {
-  min-width: 110px;
-  padding: 7px 8px;
-  font-size: 11px;
-  background: #fff;
-}
-.report-edit-table input[type="number"] {
-  min-width: 80px;
-  width: 88px;
-}
-.report-edit-table textarea {
-  min-width: 180px;
-}
-.report-editor-foot {
-  padding: 15px 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 15px;
-  border-top: 1px solid var(--border);
-}
 .report-modal {
   position: fixed;
   inset: 0;

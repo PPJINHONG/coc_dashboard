@@ -1,13 +1,13 @@
 # DB 관리 API: 원본 조회(읽기 전용)·계정·공통데이터.
 import pytest
 from django.contrib.auth import get_user_model
+from django.db import connection
 from rest_framework.test import APIClient
 
 from database_admin.models import DatabaseChangeLog
 from features.resources.models import InfrastructureResource
 from features.staff.models import StaffAssignment
-from features.work.models import WorkSummary
-from reporting.models import Region, Service, StaffMember
+from reporting.models import Region, StaffMember
 
 ROOT = '/api/db-admin/'
 
@@ -41,7 +41,11 @@ def test_anonymous_and_non_admin_cannot_access_even_in_development(path):
 @pytest.mark.django_db
 def test_catalog_only_lists_website_tables_and_raw_data_is_readonly(client):
     names = {table['name'] for table in client.get(ROOT).data['tables']}
-    assert names == {'auth_user', 'ops_regions', 'ops_services', 'ops_staff_members', 'infra_resources', 'ops_staff_assignments', 'ops_staff_calendar_events', 'ops_staff_responsibilities', 'ops_staff_choices', 'ops_staff_columns', 'ops_staff_headcount_records', 'ops_work_summaries', 'ops_regional_requests', 'ops_regional_request_images', 'user_activity_logs'}
+    assert names == {'auth_user', 'ops_regions', 'ops_staff_members', 'infra_resources', 'ops_staff_assignments', 'ops_staff_calendar_events', 'ops_staff_responsibilities', 'ops_staff_choices', 'ops_staff_columns', 'ops_staff_headcount_records', 'ops_regional_notices', 'ops_regional_requests', 'ops_regional_request_images', 'user_activity_logs'}
+    assert 'ops_services' not in connection.introspection.table_names()
+    assert 'services' not in client.get('/api/operations/bootstrap/').data
+    assert client.post(ROOT + 'common/services/', {'service_code': 'NEW', 'service_name': '새 서비스'}, format='json').status_code == 400
+    assert 'ops_work_summaries' not in connection.introspection.table_names()
     for name in ('django_session', 'django_migrations', 'auth_permission', 'core_post', 'ops_data_state'):
         assert client.get(ROOT + f'tables/{name}/').status_code == 404
     meta = client.get(ROOT + 'tables/ops_regions/').data
@@ -119,7 +123,6 @@ def test_admin_feature_writes_require_csrf(admin):
 @pytest.mark.django_db
 @pytest.mark.parametrize('collection,table,values,changed_field,changed_value,bootstrap_key,pk_field', [
     ('regions', 'ops_regions', {'region_name': '새 리전'}, 'region_name', '수정 리전', 'regions', 'id'),
-    ('services', 'ops_services', {'service_code': 'NEW', 'service_name': '새 서비스'}, 'service_name', '수정 서비스', 'services', 'service_code'),
     ('staff-members', 'ops_staff_members', {'staff_name': '새 인력'}, 'staff_name', '수정 인력', 'staff_members', 'id'),
 ])
 def test_common_data_has_no_usage_status_and_crud_still_shares_source(client, collection, table, values, changed_field, changed_value, bootstrap_key, pk_field):
@@ -169,24 +172,20 @@ def test_region_generated_id_preserves_all_feature_links_when_renamed(client):
     assert created.status_code == 201, created.data
     pk = created.data['id']
     assert isinstance(pk, int) and set(created.data) == {'id', 'region_name', 'country_code'}
-    Service.objects.create(service_code='CCS', service_name='CCS')
-    for revision, section, values in [
-        (1, 'resources', {'service': 'CCS', 'host_count': 10}),
-        (2, 'work', {'work_type': 'request', 'scope': 'infra', 'total_count': 3}),
-    ]:
-        response = client.put(ROOT + f'sections/{section}/', {'revision': revision, 'rows': [{'region': pk, **values}]}, format='json')
-        assert response.status_code == 200, response.data
+    response = client.put(ROOT + 'sections/resources/', {'revision': 1, 'rows': [{'region': pk, 'service': 'CCS', 'host_count': 10}]}, format='json')
+    assert response.status_code == 200, response.data
     renamed = client.patch(ROOT + f'common/regions/{pk}/', {'region_name': '새 센터'}, format='json')
     assert renamed.status_code == 200 and renamed.data['id'] == pk
-    assert all(model.objects.get().region_id == pk for model in [InfrastructureResource, WorkSummary])
+    assert InfrastructureResource.objects.get().region_id == pk
     snapshot = client.get('/api/operations/current/').data
-    assert all(snapshot[section][0]['region'] == pk for section in ['resources', 'work'])
+    assert snapshot['resources'][0]['region'] == pk
+    assert 'work' not in snapshot and 'work_total' not in snapshot['totals']
+    assert client.put(ROOT + 'sections/work/', {'revision': 2, 'rows': []}, format='json').status_code == 400
     assert client.delete(ROOT + f'common/regions/{pk}/').status_code == 400
     meta = client.get(ROOT + 'tables/ops_regions/').data
     assert {column['name'] for column in meta['columns']} == {'id', 'region_name', 'country_code', 'global_region'}
-    for table in ['infra_resources', 'ops_work_summaries']:
-        columns = {column['name'] for column in client.get(ROOT + f'tables/{table}/').data['columns']}
-        assert 'region_id' in columns and 'region_code' not in columns
+    columns = {column['name'] for column in client.get(ROOT + 'tables/infra_resources/').data['columns']}
+    assert 'region_id' in columns and 'region_code' not in columns
     assert client.patch(ROOT + f'common/regions/{pk}/', {'id': pk + 100}, format='json').status_code == 400
     unused = client.post(ROOT + 'common/regions/', {'region_name': '미사용 센터'}, format='json').data['id']
     assert unused != pk

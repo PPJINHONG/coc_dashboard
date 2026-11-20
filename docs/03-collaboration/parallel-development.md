@@ -13,9 +13,9 @@ frontend/src/features/<기능>/     화면
 backend/features/<기능>/          서버 (모델·마이그레이션·API·테스트)
 ```
 
-- 작업을 나눌 때 **기능 폴더 단위로 담당**을 정합니다. 예: A는 `resources`·`work`, B는 `regional_requests`·`staff`.
+- 작업을 나눌 때 **기능 폴더 단위로 담당**을 정합니다. 예: A는 `resources`·`regional_notices`, B는 `regional_requests`·`staff`.
 - 내 담당 기능 폴더 안의 파일은 상대와 상의 없이 고칩니다. 상대 폴더의 파일은 고치지 않습니다.
-- 새 기능은 새 폴더를 만들기만 하면 메뉴·홈·탭 관리·리포트·DB 관리·API 주소에 자동으로 연결됩니다. 공통 목록 파일이 없으므로 두 사람이 동시에 새 기능을 추가해도 같은 줄을 고치지 않습니다.
+- 새 기능은 새 폴더를 만들기만 하면 메뉴·홈·탭 관리·API 주소에 자동으로 연결됩니다. 공통 목록 파일이 없으므로 두 사람이 동시에 새 기능을 추가해도 같은 줄을 고치지 않습니다.
 - 기능 폴더는 다른 기능 폴더를 import하지 않습니다. 그래서 한 사람의 변경이 상대 기능을 깨뜨리지 않습니다.
 
 ## 2. 함께 쓰는 파일은 먼저 알리고 작게 고칩니다
@@ -26,7 +26,7 @@ backend/features/<기능>/          서버 (모델·마이그레이션·API·테
 | --- | --- |
 | `frontend/src/app/` | 사이드바·상단바·홈 레이아웃 |
 | `frontend/src/shared/` | 공통 부품(DataTable, Modal), `feature.ts` 형식, 공통 스타일 |
-| `backend/core/`, `backend/reporting/`, `backend/database_admin/`, `backend/invites/` | 로그인·권한, 공통데이터(리전·서비스·인력), DB 관리 |
+| `backend/core/`, `backend/reporting/`, `backend/database_admin/`, `backend/invites/` | 로그인·권한, 공통데이터(리전·인력), DB 관리 |
 | `backend/config/`, `compose.yaml`, `compose.prod.yaml`, `.github/` | 설정·실행·CI |
 | `AGENTS.md`, `.codex/`, `docs/` | 지침·문서 (자기 기능 설명은 해당 문서 절만 고칩니다) |
 
@@ -36,7 +36,7 @@ backend/features/<기능>/          서버 (모델·마이그레이션·API·테
 
 - 테이블 구조 변경은 **그 기능 앱의 마이그레이션**으로만 합니다. 앱마다 번호가 따로 붙으므로 A가 `resources/0002`, B가 `regional_requests/0002`를 만들어도 충돌하지 않습니다.
 - `db/init/*.sql`은 신규 설치용 고정 기준선입니다. 고치지 않습니다.
-- 공통 앱(`reporting`의 리전·서비스·인력, `core`)의 마이그레이션은 한 번에 한 사람만 만듭니다. 두 사람이 같은 앱에 마이그레이션을 만들면 같은 번호(예: `0019`)가 둘 생겨 서버가 시작하지 못합니다.
+- 공통 앱(`reporting`의 리전·인력, `core`)의 마이그레이션은 한 번에 한 사람만 만듭니다. 두 사람이 같은 앱에 마이그레이션을 만들면 같은 번호(예: `0021`)가 둘 생겨 서버가 시작하지 못합니다.
 - 같은 앱에 마이그레이션이 둘 생겼다면(자동 검사 `test_no_pending_migrations` 실패) 나중에 합치는 사람이 자기 브랜치에서 아래 명령으로 합치기 마이그레이션을 만들고 커밋합니다.
 
   ```bash

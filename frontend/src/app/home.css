@@ -42,7 +42,6 @@
 .feature-card[data-feature="report"] { --card-accent: #7094c0; --card-edge: #b8cbe4; }
 .feature-card[data-feature="resources"] { --card-accent: #7a87b4; --card-edge: #c3cae1; }
 .feature-card[data-feature="staff"] { --card-accent: #9082ad; --card-edge: #d0c6df; }
-.feature-card[data-feature="work"] { --card-accent: #7396b0; --card-edge: #b9cfdf; }
 .feature-card[data-feature="regional_requests"] { --card-accent: #587fae; --card-edge: #a9bfd9; }
 .feature-card[data-feature="logs"] { --card-accent: #8290a9; --card-edge: #c8d1df; }
 .feature-card[data-feature="database"] { --card-accent: #6f839f; --card-edge: #bfccde; }
@@ -130,10 +129,6 @@
 .preview-row > span { padding: 7px; border-right: 1px solid #d3deeb; border-bottom: 1px solid #d3deeb; }
 .preview-row-head { background: #edf3fb; }
 .preview-no-data { padding: 22px; font-size: 11px; }
-.overview-preview { display: flex; align-items: center; justify-content: center; height: 100%; gap: 20px; color: var(--text); transform: rotate(-8deg) scale(1.02); }
-.overview-preview > div { display: flex; flex-direction: column; gap: 5px; width: 130px; }
-.overview-preview span { display: flex; align-items: center; justify-content: space-between; padding: 4px 10px; border: 1px solid #d9e2f0; border-radius: 3px; background: #fff; font-size: 10px; }
-.overview-preview b { font-weight: 500; color: var(--text); }
 @media (max-width: 1150px) {
   .featured-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .feature-card.featured-card-wide { grid-column: 1 / -1; min-height: 210px; }

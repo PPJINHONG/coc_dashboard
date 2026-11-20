@@ -1,35 +1,28 @@
 import { useState, type FormEvent } from "react";
+import { changeScheduleRegion, nextHour, regionalInput, scheduleZoneLabel } from "../../shared/regionalTime";
+import { ApiError } from "../../shared/api/client";
 import ErrorMessage from "../../shared/components/ErrorMessage";
 import type {
   AssigneeRegion,
   RegionalRequest,
   RegionalRequestInput,
   RequestStatus,
-  ScheduleTimezone,
 } from "./api";
 import RichTextEditor from "./RichTextEditor";
 
 
 type Mode = "create" | "content" | "assignment";
 
-function localInput(date: Date) {
-  const offset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
-}
-
 function defaults(): RegionalRequestInput {
-  const start = new Date();
-  start.setMinutes(0, 0, 0);
-  start.setHours(start.getHours() + 1);
+  const start = nextHour();
   const end = new Date(start.getTime() + 60 * 60_000);
   return {
     region: "KR",
     title: "",
     content_html: "<p></p>",
     requester: "",
-    schedule_timezone: "KST",
-    schedule_start_local: localInput(start),
-    schedule_end_local: localInput(end),
+    schedule_start_local: regionalInput(start, "KR"),
+    schedule_end_local: regionalInput(end, "KR"),
     status: "open",
     assignee_regions: [],
     assignee_name: "",
@@ -42,9 +35,8 @@ function fromTicket(ticket: RegionalRequest): RegionalRequestInput {
     title: ticket.title,
     content_html: ticket.content_html,
     requester: ticket.requester,
-    schedule_timezone: ticket.schedule_timezone,
-    schedule_start_local: ticket.schedule_start_display,
-    schedule_end_local: ticket.schedule_end_display,
+    schedule_start_local: regionalInput(ticket.schedule_start, ticket.region),
+    schedule_end_local: regionalInput(ticket.schedule_end, ticket.region),
     status: ticket.status,
     assignee_regions: ticket.assignee_regions,
     assignee_name: ticket.assignee_name,
@@ -75,6 +67,15 @@ export default function RequestForm({
     onDirty(true);
   }
 
+  function changeRequestRegion(region: AssigneeRegion) {
+    setValues((current) => ({
+      ...current, region,
+      schedule_start_local: changeScheduleRegion(current.schedule_start_local, current.region, region, ticket?.schedule_start),
+      schedule_end_local: changeScheduleRegion(current.schedule_end_local, current.region, region, ticket?.schedule_end),
+    }));
+    onDirty(true);
+  }
+
   function toggleRegion(value: AssigneeRegion) {
     change(
       "assignee_regions",
@@ -98,63 +99,38 @@ export default function RequestForm({
       await onSubmit({ ...values, assignee_name: unassigned ? "" : values.assignee_name });
       onDirty(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "요청작업을 저장하지 못했습니다.");
+      const fieldError = cause instanceof ApiError && Object.values(cause.fieldErrors).flat()[0];
+      setError(fieldError || (cause instanceof Error ? cause.message : "요청작업을 저장하지 못했습니다."));
     } finally {
       setSaving(false);
     }
   }
 
+  const startZone = scheduleZoneLabel(values.schedule_start_local, values.region, ticket?.schedule_start);
+  const endZone = scheduleZoneLabel(values.schedule_end_local, values.region, ticket?.schedule_end);
   return (
     <form className={`regional-request-form${assignmentOnly ? " is-assignment-only" : ""}`} onSubmit={submit}>
       <fieldset disabled={saving}>
         {!assignmentOnly && (
-          <>
-            <div className="regional-request-form-grid regional-request-basic-grid">
-              <label>
-                <span>리전</span>
-                <select value={values.region} onChange={(event) => change("region", event.target.value as AssigneeRegion)} required>
-                  <option value="KR">KR</option>
-                  <option value="NA">NA</option>
-                  <option value="EU">EU</option>
-                </select>
-              </label>
-              <label>
-                <span>Requester</span>
-                <input value={values.requester} maxLength={200} onChange={(event) => change("requester", event.target.value)} required />
-              </label>
-              <label className="regional-request-form-wide">
-                <span>제목</span>
-                <input value={values.title} maxLength={200} onChange={(event) => change("title", event.target.value)} required />
-              </label>
-            </div>
-            <div className="regional-request-schedule-box">
-              <div className="regional-request-section-title"><strong>작업 일정</strong></div>
-              <div className="regional-request-form-grid regional-request-schedule-grid">
-                <label>
-                  <span>시간대</span>
-                  <select value={values.schedule_timezone} onChange={(event) => change("schedule_timezone", event.target.value as ScheduleTimezone)}>
-                    <option value="UTC">미국 · UTC</option>
-                    <option value="KST">한국 · KST</option>
-                    <option value="CET">유럽 · CET</option>
-                  </select>
-                </label>
-                <label>
-                  <span>시작 시간</span>
-                  <input type="datetime-local" value={values.schedule_start_local} onChange={(event) => change("schedule_start_local", event.target.value)} required />
-                </label>
-                <label>
-                  <span>종료 시간</span>
-                  <input type="datetime-local" value={values.schedule_end_local} onChange={(event) => change("schedule_end_local", event.target.value)} required />
-                </label>
-              </div>
-            </div>
-            <div className="regional-request-content-field">
-              <span>내용</span>
-              <RichTextEditor value={values.content_html} onChange={(value) => change("content_html", value)} />
-            </div>
-          </>
+          <div className="regional-request-form-grid regional-request-basic-grid">
+            <label>
+              <span>리전</span>
+              <select value={values.region} onChange={(event) => changeRequestRegion(event.target.value as AssigneeRegion)} required>
+                <option value="KR">KR</option>
+                <option value="NA">NA</option>
+                <option value="EU">EU</option>
+              </select>
+            </label>
+            <label>
+              <span>Requester</span>
+              <input value={values.requester} maxLength={200} onChange={(event) => change("requester", event.target.value)} required />
+            </label>
+            <label className="regional-request-form-wide">
+              <span>제목</span>
+              <input value={values.title} maxLength={200} onChange={(event) => change("title", event.target.value)} required />
+            </label>
+          </div>
         )}
-
         <div className="regional-request-assignment-box">
           <div className="regional-request-section-title"><strong>상태 및 담당</strong></div>
           <div className="regional-request-form-grid regional-request-assignment-grid">
@@ -195,6 +171,32 @@ export default function RequestForm({
             </div>
           </div>
         </div>
+        {!assignmentOnly && (
+          <>
+            <div className="regional-request-schedule-box">
+              <div className="regional-request-section-title"><strong>작업 일정</strong></div>
+              <div className="regional-request-form-grid regional-request-schedule-grid">
+                <label>
+                  <span>시간대</span>
+                  <input value={startZone === endZone ? startZone : `${startZone} → ${endZone}`} readOnly />
+                </label>
+                <label>
+                  <span>시작 시간</span>
+                  <input type="datetime-local" value={values.schedule_start_local} onChange={(event) => change("schedule_start_local", event.target.value)} required />
+                </label>
+                <label>
+                  <span>종료 시간</span>
+                  <input type="datetime-local" value={values.schedule_end_local} onChange={(event) => change("schedule_end_local", event.target.value)} required />
+                </label>
+              </div>
+            </div>
+            <div className="regional-request-content-field">
+              <span>내용</span>
+              <RichTextEditor value={values.content_html} onChange={(value) => change("content_html", value)} />
+            </div>
+          </>
+        )}
+
       </fieldset>
       {error && <ErrorMessage message={error} />}
       <div className="actions regional-request-form-actions">
