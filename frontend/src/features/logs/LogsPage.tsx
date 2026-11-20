@@ -121,13 +121,12 @@ export default function LogsPage({ data, snapshot, user, features, refresh, setB
       <div className="logs-chip-row"><span>기간</span><div className="logs-chips" role="group" aria-label="변경 기간">
         {[["", "전체"], ["1", "오늘"], ["7", "최근 7일"], ["30", "최근 30일"]].map(([value, label]) => <button key={value} aria-pressed={days === value} disabled={restoring} onClick={() => setDays(value)}>{label}</button>)}
       </div></div>
-      <div className="logs-chip-row"><span>변경자</span><div className="logs-chips" role="group" aria-label="변경한 사용자">
-        <button aria-pressed={!actor} disabled={restoring} onClick={() => setActor("")}>전체</button>
-        {catalog?.actors.map((item) => <button key={item.id} aria-pressed={actor === item.id} disabled={restoring} onClick={() => setActor(item.id)}>{item.name}</button>)}
-      </div></div>
       <div className="logs-chip-row logs-extra"><span>추가 조건</span><div className="logs-extra-fields">
         <label>리전<select value={region} disabled={restoring} onChange={(event) => setRegion(event.target.value)}>
           <option value="">전체 리전</option>{catalog?.regions.map((item) => <option key={item.id} value={item.id}>{item.region_name}</option>)}
+        </select></label>
+        <label>변경자<select value={actor} disabled={restoring} onChange={(event) => setActor(event.target.value)}>
+          <option value="">전체 변경자</option>{catalog?.actors.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select></label>
         <label>기준 월<select value={selectedMonth ? "selected" : "all"} disabled={restoring} onChange={(event) => setSelectedMonth(event.target.value === "selected")}>
           <option value="all">전체 기간</option><option value="selected">{snapshot.month} 월별 데이터</option>
@@ -160,18 +159,19 @@ export default function LogsPage({ data, snapshot, user, features, refresh, setB
         <button className="btn btn-primary" onClick={() => setDetail(null)}>닫기</button>
       </div>
     </Modal>}
-    {target && <Modal title={step === 1 ? "정말 복구하시겠습니까?" : "복구 최종 확인"} onClose={() => { if (!restoring) setTarget(null); }}>
+    {target && <Modal title={step === 1 ? "변경 복구" : "정말 해당 변경사항을 복구하시겠습니까?"} onClose={() => { if (!restoring) setTarget(null); }}>
       <div className="logs-restore-body">
+        <p className="logs-risk"><span className="logs-risk-badge">위험도 높음</span>복구 이후에는 롤백할 수 없습니다.</p>
         <p><strong>{labels[target.section] ?? target.section}</strong> · {localDate(target.created_at)}</p>
         <p>{target.summary}</p>
-        <p>{step === 1 ? "이 변경에서 바뀐 데이터를 변경 전 상태로 되돌립니다." : "한 번 더 확인해 주세요. 아래 확인 버튼을 누르면 복구를 실행합니다."}</p>
+        <p>{step === 1 ? "이 변경에서 바뀐 데이터를 변경 전 상태로 되돌립니다." : "아래 버튼을 누르면 즉시 복구를 실행하며, 복구한 내용은 다시 되돌릴 수 없습니다."}</p>
         {preview && <p>{preview.month ? `${preview.month} 기준 · ` : ""}관련 데이터 {preview.affected_count}건을 복구하며, 등록한 항목은 삭제되고 삭제한 항목은 복원됩니다.</p>}
         <ErrorMessage message={restoreError} />
         {restoring && <p role="status">{preview ? "복구하는 중입니다…" : "복구 가능 여부를 확인하는 중입니다…"}</p>}
         <div className="actions">
           <button className="btn" disabled={restoring} onClick={() => setTarget(null)}>취소</button>
-          {step === 1 ? <button className="btn btn-primary" disabled={!preview || restoring} onClick={() => setStep(2)}>확인 · 다음 단계</button> :
-            <button className="btn btn-danger" disabled={!preview || restoring} onClick={confirmRestore}>최종 확인 · 복구 실행</button>}
+          {step === 1 ? <button className="btn btn-primary" disabled={!preview || restoring} onClick={() => setStep(2)}>다음</button> :
+            <button className="btn btn-danger" disabled={!preview || restoring} onClick={confirmRestore}>복구 실행</button>}
         </div>
       </div>
     </Modal>}

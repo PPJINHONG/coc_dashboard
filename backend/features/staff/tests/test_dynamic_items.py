@@ -129,7 +129,7 @@ def test_column_validation_stale_revision_and_no_row_data_loss():
 
 @pytest.mark.django_db
 def test_site_representative_is_independent_and_updates_preserve_leaders():
-    client, _ = api('group_lead')
+    client, _ = api('admin')
     leader = person('그룹장', job_title='그룹장')
     representative = person('현장 대표', job_title='책임')
     StaffResponsibility.objects.create(country_code='KR', team_lead=leader, group_lead=leader)
@@ -146,7 +146,7 @@ def test_site_representative_is_independent_and_updates_preserve_leaders():
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize('title,role,expected', [('팀장','user','team_lead'), ('그룹장','user','group_lead'), ('책임','user','user'), ('책임','observer','observer')])
+@pytest.mark.parametrize('title,role,expected', [('팀장','user','team_lead'), ('그룹장','user','group_lead'), ('책임','user','user'), ('책임','observer','user')])
 def test_row_tone_follows_role_and_does_not_change_edit_permission(title, role, expected):
     viewer, account = api(role)
     row = person(account=account, job_title=title)

@@ -22,6 +22,8 @@ export interface Registration {
   /** 가입과 함께 운영 인력으로 등록할 국가 */
   country_code: string;
   invite: string;
+  /** 운영 인력에 함께 저장할 본인 정보(업무·근무지·PC IP·오토에버·Z 계정). 비운 항목은 보내지 않습니다. */
+  staff?: Record<string, string>;
 }
 
 export function register(data: Registration): Promise<User> {

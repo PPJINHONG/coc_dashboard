@@ -38,13 +38,14 @@ export function staffFields(data: Bootstrap, withGrade = false): Field[] {
 }
 
 /**
- * 오늘(권역 현지 날짜)의 근무 상태. 서버가 일정·투입일·퇴사일·주말로 계산합니다.
- * 출근 기록이 없으므로 근무중이 아니라 근무 예정으로 표시합니다.
+ * 권역 현지 날짜·시각과 권역 근무 시간(권역 설정, 미등록 시 09:00~18:00)으로 서버가 계산한 상태입니다.
+ * 실제 출퇴근 기록이 아니라 근무 시간표 기준입니다.
  */
 export const WORK_STATUSES = [
-  { value: "scheduled", label: "근무 예정" },
+  { value: "on_duty", label: "출근" },
+  { value: "off_duty", label: "퇴근" },
   { value: "leave", label: "휴가" },
-  { value: "off", label: "휴무" },
+  { value: "planned", label: "투입 예정" },
   { value: "retired", label: "퇴사" },
 ];
 
@@ -61,8 +62,8 @@ const ACCESS_FIELDS: Field[] = [
  */
 export function staffEditFields(countries: string[], role?: string | null, currentTitle?: string): Field[] {
   const level = role === "admin" ? 4 : role === "team_lead" ? 3 : role === "group_lead" ? 2 : 1;
-  const titles = ["책임", "그룹장", "팀장", "관리자"].slice(0, level);
-  if (currentTitle && !["책임", "그룹장", "팀장", "관리자"].includes(currentTitle)) titles.push(currentTitle);
+  const titles = ["팀원", ...["책임", "그룹장", "팀장", "관리자"].slice(0, level)];
+  if (currentTitle && !titles.includes(currentTitle) && !["그룹장", "팀장", "관리자"].includes(currentTitle)) titles.push(currentTitle);
   return [
     {
       key: "country_code",
@@ -72,7 +73,7 @@ export function staffEditFields(countries: string[], role?: string | null, curre
       default: countries[0],
     },
     { key: "staff_name", label: "성명" },
-    { key: "job_title", label: "직책", type: "select", default: "책임", options: [{ value: "", label: "미등록" }, ...titles.map((title) => ({ value: title, label: title }))] },
+    { key: "job_title", label: "직책", type: "select", default: "팀원", options: [{ value: "", label: "미등록" }, ...titles.map((title) => ({ value: title, label: title }))] },
     { key: "company_name", label: "소속사", default: "" },
     { key: "deployment_date", label: "업무 투입일", nullable: true },
     { key: "resignation_date", label: "회사 퇴사일", nullable: true },

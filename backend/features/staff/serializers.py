@@ -1,3 +1,4 @@
+from datetime import datetime, time
 from zoneinfo import ZoneInfo
 from django.utils import timezone
 from rest_framework import serializers
@@ -7,7 +8,7 @@ from reporting.serializers import RowSerializer
 from .models import StaffAssignment, StaffCalendarEvent, StaffResponsibility, StaffChoice
 from .permissions import can_edit_person, can_manage_person, can_view_grade, owns_profile
 from .items import BASE_GRADES, validate_custom_values
-from core.roles import user_role, staff_edit_countries
+from core.roles import is_admin, user_role, staff_edit_countries
 
 
 EDIT_FIELDS = ['country_code', 'job_title', 'company_name', 'job_description', 'work_location', 'pc_ip', 'autoever_account', 'z_account',
@@ -17,8 +18,26 @@ TIMEZONES = {'KR': 'Asia/Seoul', 'NA': 'America/Los_Angeles', 'EU': 'Europe/Berl
 DOMAINS = {'KR': '내수', 'NA': '북미', 'EU': '유럽'}
 
 
+# 권역 설정에 근무 시간이 없을 때의 기본값(KST)
+DEFAULT_HOURS = (time(9), time(18))
+
+
+def local_now(country):
+    return timezone.now().astimezone(ZoneInfo(TIMEZONES[country]))
+
+
 def local_today(country):
-    return timezone.now().astimezone(ZoneInfo(TIMEZONES[country])).date()
+    return local_now(country).date()
+
+
+def local_now_for(country):
+    now, today = local_now(country), local_today(country)
+    return now if now.date() == today else datetime.combine(today, now.time(), now.tzinfo)
+
+
+def on_duty(start, end, moment):
+    # 퇴근 시간이 출근 시간보다 이르면 자정을 넘기는 근무로 봅니다.
+    return start <= moment < end if start < end else (moment >= start or moment < end)
 
 
 class StaffSerializer(RowSerializer):
@@ -63,14 +82,27 @@ class StaffSerializer(RowSerializer):
         return self.context['_site_representatives'].get(obj.country_code) == obj.pk
 
     def get_display_role(self, obj):
+        # 옵저버(읽기 전용 계정)는 운영 인력 화면에서 따로 표시하지 않고 일반 인력으로 보여 줍니다.
         role = user_role(obj.account) if obj.account_id else None
-        if role == 'observer' or obj.job_title == '옵저버':
-            return 'observer'
-        return {'팀장': 'team_lead', '그룹장': 'group_lead', '책임': 'user', '관리자': 'admin'}.get(obj.job_title, role or 'user')
+        role = None if role == 'observer' else role
+        titled = {'팀장': 'team_lead', '그룹장': 'group_lead', '책임': 'user', '관리자': 'admin'}.get(obj.job_title, role or 'user')
+        # 권역 카드에서 팀장·그룹장으로 지정된 사람은 직책이 비어 있어도 그 역할로 표시합니다. 더 높은 쪽을 씁니다.
+        if '_leads' not in self.context:
+            leads = {}
+            for team, group in StaffResponsibility.objects.values_list('team_lead_id', 'group_lead_id'):
+                if group:
+                    leads.setdefault(group, 'group_lead')
+                if team:
+                    leads[team] = 'team_lead'
+            self.context['_leads'] = leads
+        assigned = self.context['_leads'].get(obj.pk)
+        rank = ['user', 'group_lead', 'team_lead', 'admin']
+        return max(titled, assigned or 'user', key=lambda value: rank.index(value) if value in rank else 0)
 
     def get_can_set_site_representative(self, obj):
+        # 현장대리인 지정은 관리자만 정보 수정 화면에서 합니다.
         request = self.context.get('request')
-        return bool(request and obj.country_code in staff_edit_countries(request.user))
+        return bool(request and is_admin(request.user))
 
     def get_global_region(self, obj):
         return DOMAINS[obj.country_code]
@@ -79,7 +111,7 @@ class StaffSerializer(RowSerializer):
         return 'retired' if obj.resignation_date and obj.resignation_date < local_today(obj.country_code) else 'employed'
 
     def work_state(self, obj):
-        """오늘(권역 현지 날짜)의 근무 상태. 출근 기록이 없으므로 근무중이 아니라 근무 예정으로만 추정합니다."""
+        """권역 현지 날짜·시각과 권역 근무 시간으로 계산한 상태. 실제 출퇴근 기록이 아니라 근무 시간표 기준입니다."""
         cache = self.context.setdefault('_work_states', {})
         if obj.pk not in cache:
             today = local_today(obj.country_code)
@@ -87,13 +119,24 @@ class StaffSerializer(RowSerializer):
             if self.get_employment_status(obj) == 'retired':
                 state = ('retired', '퇴사', f'{obj.resignation_date} 퇴사')
             elif obj.deployment_date and obj.deployment_date > today:
-                state = ('off', '휴무', f'{obj.deployment_date} 업무 투입 예정')
+                state = ('planned', '투입 예정', f'{obj.deployment_date} 업무 투입')
             elif event:
                 state = ('leave', event.get_kind_display(), f'{event.get_kind_display()} · {event.start_date} ~ {event.end_date}')
-            elif today.weekday() >= 5:
-                state = ('off', '휴무', '현지 주말')
             else:
-                state = ('scheduled', '근무 예정', '현지 평일 · 출근 기록 없음')
+                if '_hours' not in self.context:
+                    self.context['_hours'] = {row.country_code: (row.work_start, row.work_end) for row in StaffResponsibility.objects.all()}
+                start, end = self.context['_hours'].get(obj.country_code, (None, None))
+                registered = bool(start and end)
+                start, end = (start, end) if registered else DEFAULT_HOURS
+                # 근무 시간은 권역 교대(KR → EU → NA)에 맞춰 한국 시간(KST)으로 정합니다. 주말은 권역 현지 요일로 봅니다.
+                kst, local = local_now('KR'), local_now_for(obj.country_code)
+                hours = f"{start:%H:%M}~{end:%H:%M} KST{'' if registered else ' (기본값)'}"
+                if local.weekday() >= 5:
+                    state = ('off_duty', '퇴근', f'현지 주말 · 근무 {hours}')
+                elif on_duty(start, end, kst.time()):
+                    state = ('on_duty', '출근', f'근무 {hours} · 현재 {kst:%H:%M} KST')
+                else:
+                    state = ('off_duty', '퇴근', f'근무 {hours} · 현재 {kst:%H:%M} KST')
             cache[obj.pk] = state
         return cache[obj.pk]
 
@@ -140,6 +183,24 @@ class StaffEditSerializer(RowSerializer):
         return attrs
 
 
+SIGNUP_FIELDS = ('job_description', 'work_location', 'pc_ip', 'autoever_account', 'z_account')
+
+
+class SignupStaffSerializer(serializers.ModelSerializer):
+    """회원가입 화면의 운영 인력 정보. 근무지는 가입 국가에 등록된 근무지 중에서만 고릅니다."""
+
+    class Meta:
+        model = StaffAssignment
+        fields = SIGNUP_FIELDS
+
+    def validate_work_location(self, value):
+        value = value.strip()
+        country = self.context['country_code']
+        if value and not StaffChoice.objects.filter(kind='work_location', country_code=country, value=value).exists():
+            raise serializers.ValidationError('근무지는 선택한 국가에 등록된 근무지 중에서 고르세요.')
+        return value
+
+
 class CalendarSerializer(serializers.ModelSerializer):
     staff_name = serializers.CharField(source='assignment.staff.staff_name', read_only=True)
     country_code = serializers.CharField(source='assignment.country_code', read_only=True)
@@ -169,7 +230,7 @@ class ResponsibilitySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = StaffResponsibility
-        fields = ['country_code', 'site_representative', 'site_representative_name', 'team_lead', 'team_lead_name', 'group_lead', 'group_lead_name']
+        fields = ['country_code', 'site_representative', 'site_representative_name', 'team_lead', 'team_lead_name', 'group_lead', 'group_lead_name', 'work_start', 'work_end']
         extra_kwargs = {'country_code': {'validators': []}}
 
     def validate(self, attrs):
@@ -178,4 +239,8 @@ class ResponsibilitySerializer(serializers.ModelSerializer):
             person = attrs.get(field)
             if person and person.country_code != country:
                 raise serializers.ValidationError({field: '같은 권역의 인력을 지정하세요.'})
+        start = attrs.get('work_start', getattr(self.instance, 'work_start', None))
+        end = attrs.get('work_end', getattr(self.instance, 'work_end', None))
+        if bool(start) != bool(end) or (start and start == end):
+            raise serializers.ValidationError({'work_start': '출근·퇴근 시간을 함께, 서로 다르게 입력하세요.'})
         return attrs

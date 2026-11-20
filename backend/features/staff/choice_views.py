@@ -4,7 +4,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
-from core.roles import can_manage_members, record_activity
+from core.roles import can_manage_members, record_activity, staff_edit_countries
 from reporting.history import capture_history
 from reporting.services import bump, check_revision, lock_state, record_log
 from .calendar_views import StaffView
@@ -54,8 +54,16 @@ class StaffChoicesView(StaffView):
         return self.change(request, pk)
 
     def change(self, request, pk=None):
-        if not can_manage_members(request.user):
-            raise PermissionDenied('선택지 추가·삭제는 관리자와 팀장만 할 수 있습니다.')
+        # 근무지는 권역 설정에서 관리 권역의 책임자(그룹장 포함)도 추가·삭제합니다. 그 외 항목은 관리자·팀장만 합니다.
+        if pk is not None:
+            target = get_object_or_404(StaffChoice, pk=pk)
+            kind, country = target.kind, target.country_code
+        else:
+            raw = request.data.get('choice')
+            kind, country = (raw.get('kind'), raw.get('country_code')) if isinstance(raw, dict) else (None, None)
+        regional = kind == 'work_location' and country in staff_edit_countries(request.user)
+        if not can_manage_members(request.user) and not regional:
+            raise PermissionDenied('근무지는 관리 권역만, 그 외 선택지는 관리자와 팀장만 추가·삭제할 수 있습니다.')
         state = lock_state()
         check_revision(state, request.data.get('revision'))
         capture_history(request, 'staff')
@@ -79,7 +87,8 @@ class StaffChoicesView(StaffView):
         action = 'delete' if pk is not None else 'create'
         record_log(request, 'staff', action, summary, before=before, after=after)
         record_activity(request, action, summary, 'staff_choice', pk or instance.pk, before=before, after=after)
-        return Response({'revision': state.revision, 'choices': choices(), 'items': item_catalog(True)})
+        visible = can_manage_members(request.user)
+        return Response({'revision': state.revision, 'choices': choices(visible), 'items': item_catalog(visible)})
 
 
 class StaffColumnsView(StaffView):

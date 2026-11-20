@@ -81,7 +81,7 @@
 }
 .staff-table tbody tr { --staff-color: #356eb0; --staff-tint: #eef5ff; }
 .staff-table tbody tr.staff-country-eu { --staff-color: #6557a5; --staff-tint: #f2effb; }
-.staff-table tbody tr.staff-country-na { --staff-color: #486384; --staff-tint: #eef2f7; }
+.staff-table tbody tr.staff-country-na { --staff-color: #2f7d73; --staff-tint: #eaf6f3; }
 .staff-table tbody tr.staff-country-unknown { --staff-color: #34465e; --staff-tint: #f2f4f7; }
 .staff-table tbody tr { background: var(--staff-row-bg, #fff); }
 .staff-table tbody tr:hover { background: var(--staff-row-hover, #fafcff); }
@@ -143,32 +143,40 @@
 .staff-choice-list li { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:12px 0; border-bottom:1px solid var(--border-soft); overflow-wrap:anywhere; }
 .staff-choice-confirm { padding:16px; margin-bottom:16px; border:1px solid var(--border); border-radius:6px; }
 
-/* 직책별 색상은 이 변수에서 함께 바꿉니다. 현장대리인 지정은 직책과 독립적입니다. */
+/* 권역은 왼쪽 색 막대·구분 행으로, 역할은 팀장·그룹장 배지와 옅은 행 강조로 구분합니다. 색은 이 변수에서 함께 바꿉니다. */
 .staff-workspace, .staff-table {
-  --staff-team-lead-bg: #f2eaff;
-  --staff-team-lead-hover: #e9ddfb;
-  --staff-group-lead-bg: #eaf4ff;
-  --staff-group-lead-hover: #dcecff;
-  --staff-user-bg: #f0f8df;
-  --staff-user-hover: #e7f0cf;
-  --staff-observer-bg: #fff7d6;
-  --staff-observer-hover: #fff0b4;
+  --staff-team-lead: #4b3d9e; --staff-team-lead-bg: #ece8fb; --staff-team-lead-row: #f8f6fe;
+  --staff-group-lead: #1f5f9e; --staff-group-lead-bg: #e2eefa; --staff-group-lead-row: #f5f9fe;
 }
-.staff-table .staff-role-team-lead { --staff-row-bg: var(--staff-team-lead-bg); --staff-row-hover: var(--staff-team-lead-hover); }
-.staff-table .staff-role-group-lead { --staff-row-bg: var(--staff-group-lead-bg); --staff-row-hover: var(--staff-group-lead-hover); }
-.staff-table .staff-role-user { --staff-row-bg: var(--staff-user-bg); --staff-row-hover: var(--staff-user-hover); }
-.staff-table .staff-role-observer { --staff-row-bg: var(--staff-observer-bg); --staff-row-hover: var(--staff-observer-hover); }
+.staff-table tbody tr > .staff-row-number { box-shadow: inset 4px 0 0 var(--staff-color); padding-left: 14px; }
+.staff-table .staff-role-team-lead { --staff-row-bg: var(--staff-team-lead-row); --staff-row-hover: #f1eefc; }
+.staff-table .staff-role-group-lead { --staff-row-bg: var(--staff-group-lead-row); --staff-row-hover: #edf4fd; }
+.staff-table .staff-role-team-lead .staff-person, .staff-table .staff-role-group-lead .staff-person { font-weight: 700; }
+.staff-table .staff-group-row { --staff-row-bg: var(--staff-tint); --staff-row-hover: var(--staff-tint); }
+.staff-table .staff-group-row > th { padding: 10px 14px; border-bottom: 1px solid #d5dee8; box-shadow: inset 4px 0 0 var(--staff-color); text-align: left; font-size: 12px; font-weight: 500; }
+.staff-table .staff-group-row > th > * { margin-right: 12px; vertical-align: middle; }
+.staff-table .staff-group-row strong { font-size: 13px; font-weight: 700; }
+.staff-table .staff-group-row .staff-country-badge { background: #fff; min-width: 0; }
 .staff-title-labels { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
-.staff-title-labels .staff-job-title { background:#ffffffa6; }
-.staff-representative-badge { display:inline-flex; padding:3px 8px; border:1px solid #59718e; border-radius:4px; background:white; color:var(--text); font-size:11px; font-weight:600; white-space:nowrap; }
+.staff-role-pill { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border:1px solid currentColor; border-radius:12px; font-size:12px; font-weight:700; white-space:nowrap; color:var(--text); }
+.staff-role-pill svg { color: var(--staff-role-color); }
+.staff-role-pill-team-lead { --staff-role-color: var(--staff-team-lead); border-color: var(--staff-team-lead); background: var(--staff-team-lead-bg); }
+.staff-role-pill-group-lead { --staff-role-color: var(--staff-group-lead); border-color: var(--staff-group-lead); background: var(--staff-group-lead-bg); }
+.staff-role-pill-admin { border-color: #34465e; background: #eef1f5; }
+/* 현장대리인: 성명 바로 뒤의 작은 태그. 직책·역할 배지와 겹치지 않게 이름에 붙여 둡니다. */
+.staff-person-name { display: inline-flex; align-items: center; gap: 8px; }
+.staff-site-rep { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px 1px 5px; border-radius: 10px; background: var(--staff-tint, #eef5ff); box-shadow: inset 0 0 0 1px var(--staff-color, #356eb0); color: var(--text); font-size: 11px; font-weight: 600; line-height: 18px; white-space: nowrap; }
+.staff-site-rep svg { color: var(--staff-color, #356eb0); }
+.staff-role-legend .staff-site-rep { --staff-color: #59718e; --staff-tint: #f3f5f8; }
 .staff-row-actions { display:flex; flex-wrap:nowrap; gap:6px; white-space:nowrap; }
 .staff-role-legend { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:0 20px 16px; font-size:12px; }
-.staff-role-legend > span { padding:5px 10px; border-radius:4px; border:1px solid #c9d3df; }
-.staff-legend-team-lead { background:var(--staff-team-lead-bg); }
-.staff-legend-group-lead { background:var(--staff-group-lead-bg); }
-.staff-legend-user { background:var(--staff-user-bg); }
-.staff-legend-observer { background:var(--staff-observer-bg); }
-.staff-legend-representative { background:white; }
+.staff-legend-group { font-weight: 700; margin-left: 8px; }
+.staff-legend-group:first-child { margin-left: 0; }
+.staff-legend-country { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:4px; background: var(--staff-tint); }
+.staff-legend-country i { width: 4px; height: 14px; border-radius: 2px; background: var(--staff-color); }
+.staff-role-legend .staff-country-kr, .staff-legend-country.staff-country-kr { --staff-color: #356eb0; --staff-tint: #eef5ff; }
+.staff-legend-country.staff-country-eu { --staff-color: #6557a5; --staff-tint: #f2effb; }
+.staff-legend-country.staff-country-na { --staff-color: #2f7d73; --staff-tint: #eaf6f3; }
 .staff-items-modal { width:min(960px,94vw); max-width:960px; }
 .staff-item-manager { min-width:0; }
 .staff-item-tabs { display:flex; gap:24px; border-bottom:1px solid var(--border); margin-bottom:20px; }
@@ -211,12 +219,13 @@
 
 /* 인력 현황: KPI → 권역 카드 → 버튼 필터 목록 → 팀 일정. 상태 색은 텍스트 라벨과 함께 씁니다. */
 .staff-overview {
-  --staff-scheduled: #245d99; --staff-scheduled-bg: #eaf2fb;
+  --staff-on_duty: #2f7a3e; --staff-on_duty-bg: #e9f5ec;
+  --staff-off_duty: #4a5a6b; --staff-off_duty-bg: #eef1f4;
+  --staff-planned: #6a4c93; --staff-planned-bg: #f1ecf8;
   --staff-leave: #8a4b0f; --staff-leave-bg: #fdf1e3;
-  --staff-off: #4a5a6b; --staff-off-bg: #eef1f4;
   --staff-retired: #9b2f39; --staff-retired-bg: #fbecee;
 }
-.staff-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--border); border-radius: 9px; background: var(--panel); }
+.staff-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--border); border-radius: 9px; background: var(--panel); }
 .staff-kpi { display: grid; gap: 6px; padding: 16px 18px; border: 0; border-right: 1px solid var(--border-soft); background: #fff; color: var(--text); text-align: left; font: inherit; cursor: pointer; box-shadow: inset 3px 0 0 var(--staff-kpi, var(--accent)); }
 .staff-kpi:last-child { border-right: 0; }
 .staff-kpi:hover { background: #f4f8fc; }
@@ -226,14 +235,15 @@
 .staff-kpi > strong { font-size: 27px; font-weight: 620; font-variant-numeric: tabular-nums; }
 .staff-kpi > strong small { font-size: 13px; font-weight: 500; margin-left: 2px; }
 .staff-kpi > small { font-size: 11px; }
-.staff-kpi-scheduled { --staff-kpi: var(--staff-scheduled); }
+.staff-kpi-on_duty { --staff-kpi: var(--staff-on_duty); }
+.staff-kpi-off_duty { --staff-kpi: var(--staff-off_duty); }
+.staff-kpi-planned { --staff-kpi: var(--staff-planned); }
 .staff-kpi-leave { --staff-kpi: var(--staff-leave); }
-.staff-kpi-off { --staff-kpi: var(--staff-off); }
 .staff-kpi-all { --staff-kpi: #142536; }
 .staff-regions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .staff-region { --staff-color: #356eb0; --staff-tint: #eef5ff; display: grid; gap: 12px; align-content: start; padding: 0 0 16px; background: #fff; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .staff-region.staff-country-eu { --staff-color: #6557a5; --staff-tint: #f2effb; }
-.staff-region.staff-country-na { --staff-color: #486384; --staff-tint: #eef2f7; }
+.staff-region.staff-country-na { --staff-color: #2f7d73; --staff-tint: #eaf6f3; }
 .staff-region.is-active { border-color: var(--accent); box-shadow: inset 0 -3px 0 var(--accent); }
 .staff-region-select { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; padding: 16px 18px 4px; border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .staff-region-select:hover { background: #f8fbfe; }
@@ -245,7 +255,7 @@
 .staff-progress { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: #e6edf4; overflow: hidden; }
 .staff-progress i { display: block; height: 100%; background: var(--staff-color); }
 .staff-region dl { display: grid; gap: 8px; margin: 0; padding: 0 18px; font-size: 13px; }
-.staff-region dl > div { display: grid; grid-template-columns: 64px 1fr; gap: 12px; }
+.staff-region dl > div { display: grid; grid-template-columns: 72px 1fr; gap: 12px; }
 .staff-region dd { margin: 0; overflow-wrap: anywhere; }
 .staff-region > .btn { justify-self: start; margin: 0 18px; }
 .staff-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 12px 20px; padding: 0 20px 12px; }
@@ -255,9 +265,10 @@
 .staff-chips button[aria-pressed="true"] { background: #eaf2fb; border-color: var(--accent); font-weight: 600; }
 .staff-chips button b { font-weight: 600; font-variant-numeric: tabular-nums; }
 .staff-chips button i, .staff-status i, .staff-kind i, .staff-calendar-legend i { width: 7px; height: 7px; border-radius: 50%; background: var(--staff-dot); }
-.staff-chip-scheduled, .staff-status-scheduled { --staff-dot: var(--staff-scheduled); }
+.staff-chip-on_duty, .staff-status-on_duty { --staff-dot: var(--staff-on_duty); }
+.staff-chip-off_duty, .staff-status-off_duty { --staff-dot: var(--staff-off_duty); }
+.staff-chip-planned, .staff-status-planned { --staff-dot: var(--staff-planned); }
 .staff-chip-leave, .staff-status-leave { --staff-dot: var(--staff-leave); }
-.staff-chip-off, .staff-status-off { --staff-dot: var(--staff-off); }
 .staff-chip-retired, .staff-status-retired { --staff-dot: var(--staff-retired); }
 .staff-search { display: grid; gap: 7px; font-size: 12px; margin-left: auto; }
 .staff-search input { width: 200px; max-width: 100%; }
@@ -265,9 +276,10 @@
 .staff-more-filters > summary { cursor: pointer; padding: 4px 0 12px; }
 .staff-more-filters .staff-directory-filters { padding: 0 0 8px; }
 .staff-status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 4px; font-size: 12px; font-weight: 600; white-space: nowrap; background: #fff; color: var(--text); border: 1px solid #d5dee8; }
-.staff-status-scheduled { background: var(--staff-scheduled-bg); }
+.staff-status-on_duty { background: var(--staff-on_duty-bg); }
+.staff-status-off_duty { background: var(--staff-off_duty-bg); }
+.staff-status-planned { background: var(--staff-planned-bg); }
 .staff-status-leave { background: var(--staff-leave-bg); }
-.staff-status-off { background: var(--staff-off-bg); }
 .staff-status-retired { background: var(--staff-retired-bg); }
 .staff-cell-status_detail { min-width: 170px; font-size: 12px; }
 .staff-calendar-actions { flex-wrap: wrap; justify-content: flex-end; }
@@ -296,3 +308,19 @@
 }
 @media print { .staff-chips, .staff-more-filters, .staff-region > .btn, .staff-calendar-nav { display: none; } }
 .staff-chips-label { align-self: center; margin-right: 2px; font-size: 12px; font-weight: 600; }
+
+.staff-region-form { display: grid; gap: 16px; }
+.staff-region-form legend { grid-column: 1 / -1; padding: 0; margin-bottom: 4px; font-size: 13px; font-weight: 650; }
+.staff-region-places { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); display: grid; gap: 12px; }
+.staff-region-places h3 { margin: 0; font-size: 13px; }
+.staff-region-places h3 small { margin-left: 8px; font-size: 11px; font-weight: 500; }
+.staff-region-places ul { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; border: 1px solid var(--border-soft); border-radius: 6px; }
+.staff-region-places li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--border-soft); font-size: 13px; overflow-wrap: anywhere; }
+.staff-region-places li:last-child { border-bottom: 0; }
+.staff-region-places li small { font-size: 11px; }
+@media (max-width: 1100px) { .staff-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } .staff-kpi { border-bottom: 1px solid var(--border-soft); } }
+
+.staff-person-fields .staff-check-field { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 6px; }
+.staff-person-fields .staff-check-field input { width: auto; margin-top: 3px; }
+.staff-check-field span { display: grid; gap: 4px; font-weight: 600; }
+.staff-check-field small { font-size: 11px; font-weight: 400; }

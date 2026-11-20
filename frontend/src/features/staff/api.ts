@@ -20,6 +20,9 @@ export interface Responsibility {
   team_lead_name: string;
   group_lead: number | null;
   group_lead_name: string;
+  /** 권역 현지 출근·퇴근 시간(HH:MM:SS). 미등록이면 null이며 09:00~18:00으로 판정합니다. */
+  work_start: string | null;
+  work_end: string | null;
 }
 export interface StaffOptions {
   my_assignment: number | null;
@@ -46,7 +49,7 @@ export interface CalendarEvent {
   end_date: string;
   can_edit: boolean;
 }
-export interface TrendMonth { month: string; entries: number; exits: number; headcount: number; net: number }
+export interface TrendMonth { month: string; entries: number; exits: number; headcount: number; net: number; /** 월별 인원 기록값이면 true, 투입·퇴사일로 계산했으면 false */ recorded?: boolean }
 export interface StaffTrend { months: TrendMonth[]; missing_dates: number; grouping: string; companies: string[] }
 const root = "/api/operations/staff";
 export const staffOptions = () => request<StaffOptions>("GET", `${root}/options/`);

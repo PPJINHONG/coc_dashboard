@@ -7,15 +7,16 @@ from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.roles import can_manage_members, record_activity, staff_edit_countries
+from invites.services import find_invite
+from core.roles import is_admin, can_manage_members, record_activity, staff_edit_countries
 from reporting.history import capture_history
 from reporting.months import parse_month
 from reporting.services import lock_state, check_revision, bump, record_log
-from .models import StaffAssignment, StaffCalendarEvent, StaffResponsibility, StaffChoice
+from .models import StaffAssignment, StaffCalendarEvent, StaffResponsibility, StaffChoice, StaffHeadcountRecord
 from .permissions import can_view_grade, owns_profile
 from .serializers import CalendarSerializer, ResponsibilitySerializer, local_today
 from .items import choice_rows, item_catalog
@@ -146,6 +147,8 @@ class ResponsibilityView(StaffView):
         raw = request.data.get('responsibility')
         if not isinstance(raw, dict) or raw.get('country_code') not in staff_edit_countries(request.user):
             raise PermissionDenied('관리 권역의 책임자만 지정할 수 있습니다.')
+        if 'site_representative' in raw and not is_admin(request.user):
+            raise PermissionDenied('현장대리인은 관리자만 지정할 수 있습니다.')
         state = lock_state()
         check_revision(state, request.data.get('revision'))
         capture_history(request, 'staff')
@@ -173,16 +176,44 @@ class StaffTrendView(StaffView):
             rows = rows.filter(company_name=company)
         missing = rows.filter(deployment_date__isnull=True).count()
         known = list(rows.filter(deployment_date__isnull=False))
+        # 월별 인원 기록이 있는 달은 기록값을 씁니다. 기록에는 소속사 구분이 없으므로 소속사 필터에서는 쓰지 않습니다.
+        records = {}
+        if not company:
+            for record in StaffHeadcountRecord.objects.filter(**({'country_code': country} if country else {})):
+                total = records.setdefault(record.period_month, [0, 0, 0])
+                total[0] += record.headcount
+                total[1] += record.entries
+                total[2] += record.exits
         result = []
         for offset in range(11, -1, -1):
             index = end.year * 12 + end.month - 1 - offset
             first = date(index // 12, index % 12 + 1, 1)
             last = (first.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
             # 진행 중인 달은 권역 현지의 오늘까지 집계합니다.
+            if first in records:
+                count, entries, exits = records[first]
+                result.append({'month': first.strftime('%Y-%m'), 'entries': entries, 'exits': exits, 'headcount': count, 'net': entries - exits, 'recorded': True})
+                continue
             cutoff = min(last, local_today(country or 'KR'))
             entries = sum(first <= row.deployment_date <= cutoff for row in known)
             exits = sum(bool(row.resignation_date and first <= row.resignation_date <= cutoff) for row in known)
             count = sum(row.deployment_date <= cutoff and (not row.resignation_date or row.resignation_date > cutoff) for row in known)
-            result.append({'month': first.strftime('%Y-%m'), 'entries': entries, 'exits': exits, 'headcount': count, 'net': entries - exits})
+            result.append({'month': first.strftime('%Y-%m'), 'entries': entries, 'exits': exits, 'headcount': count, 'net': entries - exits, 'recorded': False})
         return Response({'months': result, 'missing_dates': missing, 'grouping': '현재 권역·소속사 기준',
                          'companies': list(StaffAssignment.objects.exclude(company_name='').order_by('company_name').values_list('company_name', flat=True).distinct())})
+
+
+class SignupOptionsView(APIView):
+    """가입 화면의 국가별 근무지 선택지. 유효한 초대 링크가 있을 때만 근무지 이름을 알려 줍니다."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, token):
+        invite, state = find_invite(token)
+        if invite is None:
+            return Response({'detail': '초대 링크가 올바르지 않습니다.'}, status=404)
+        result = {country: [] for country in ('KR', 'EU', 'NA')}
+        for country, value in StaffChoice.objects.filter(kind='work_location').values_list('country_code', 'value'):
+            result.setdefault(country, []).append(value)
+        return Response({'work_locations': result})

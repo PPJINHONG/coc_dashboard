@@ -8,8 +8,9 @@ import { saveStaffPerson, saveResponsibility, type StaffOptions } from "./api";
 import { staffEditFields, staffFields, WORK_STATUSES } from "./fields";
 import { exportCsv } from "../../shared/fields";
 import StaffCalendar from "./StaffCalendar";
-import StaffTable from "./StaffTable";
+import StaffTable, { sortStaff } from "./StaffTable";
 import Panel from "../../shared/components/Panel";
+import Icon from "../../shared/components/Icon";
 import type { Field } from "../../shared/fields";
 import type { StaffPageProps } from "./StaffPage";
 import StaffResponsibilities, { REGIONS } from "./StaffResponsibilities";
@@ -22,7 +23,8 @@ export default function StaffDirectory(props: StaffPageProps & { options: StaffO
   const [error, setError] = useState("");
   const [refreshError, setRefreshError] = useState("");
   const [choicesOpen,setChoicesOpen] = useState(false);
-  const [representative,setRepresentative] = useState<DataRow|null>(null);
+  // 현장대리인 지정은 관리자만 정보 수정 화면에서 합니다(서버도 관리자만 허용).
+  const [siteRep, setSiteRep] = useState(false);
   const countries = user?.staff_edit_countries ?? [];
   const rows = sectionRows(snapshot, "staff").map(person=>({...person,...(person.custom_values as Record<string,unknown>??{})}));
   const customItems=options.items.filter(item=>item.custom);
@@ -62,7 +64,8 @@ export default function StaffDirectory(props: StaffPageProps & { options: StaffO
     }
     return String(person[key] ?? "") === value;
   }));
-  const filtered = scoped.filter((person) => !status || person.work_status === status);
+  const filtered = sortStaff(scoped.filter((person) => !status || person.work_status === status));
+  const groupCounts = filtered.reduce<Record<string, number>>((result, person) => ({ ...result, [String(person.country_code)]: (result[String(person.country_code)] ?? 0) + 1 }), {});
   const regionRows = rows.filter((person) => !region || person.country_code === region);
   const count = (list: DataRow[], value: string) => list.filter((person) => person.work_status === value).length;
   const pick = (next: { region?: string; status?: string }) => { if (next.region !== undefined) setRegion(next.region); if (next.status !== undefined) setStatus(next.status); setPage(1); };
@@ -70,13 +73,15 @@ export default function StaffDirectory(props: StaffPageProps & { options: StaffO
   const current = Math.min(page, pages);
   const kpis = [
     { value: "", label: "전체 인원", count: regionRows.length, note: `퇴사 ${count(regionRows, "retired")}명 포함` },
-    { value: "scheduled", label: "근무 예정", count: count(regionRows, "scheduled"), note: "현지 평일 · 휴가 아님" },
+    { value: "on_duty", label: "출근", count: count(regionRows, "on_duty"), note: "권역 근무 시간 안" },
+    { value: "off_duty", label: "퇴근", count: count(regionRows, "off_duty"), note: "근무 시간 밖 · 주말" },
     { value: "leave", label: "휴가", count: count(regionRows, "leave"), note: "오늘 연차·결혼휴가" },
-    { value: "off", label: "휴무", count: count(regionRows, "off"), note: "현지 주말 · 투입 전" },
+    { value: "planned", label: "투입 예정", count: count(regionRows, "planned"), note: "업무 투입일 전" },
   ];
   const setFilter = (key: string, value: string) => { setFilters({ ...filters, [key]: value }); setPage(1); };
   function open(person?: DataRow) {
     setError("");
+    setSiteRep(person?.is_site_representative === true);
     const canManage = !person || person.can_manage === true;
     setManaged(canManage);
     const editFields = canManage ? staffEditFields(countries, user?.is_staff ? "admin" : user?.role, String(person?.job_title ?? "")) : fields.filter((field) => ["staff_name", "job_description", "work_location", "pc_ip", "autoever_account", "z_account"].includes(field.key));
@@ -104,7 +109,12 @@ export default function StaffDirectory(props: StaffPageProps & { options: StaffO
       const person:DataRow={...draft};
       if(managed) person.custom_values=Object.fromEntries(customItems.map(item=>[item.key,String(draft[item.key]??"")]));
       for(const item of customItems) delete person[item.key];
-      await saveStaffPerson(snapshot.revision, person);
+      const result = await saveStaffPerson(snapshot.revision, person) as { revision: number; person: DataRow };
+      const original = rows.find((row) => row.id === draft.id);
+      if (user?.is_staff && draft.id && siteRep !== (original?.is_site_representative === true)) {
+        const country = String(result.person?.country_code ?? draft.country_code ?? original?.country_code);
+        await saveResponsibility(result.revision, { country_code: country, site_representative: siteRep ? Number(draft.id) : null });
+      }
     } catch (cause) {
       setError(cause instanceof ApiError ? [cause.message, ...Object.values(cause.fieldErrors).flat()].join(" ") : "저장하지 못했습니다.");
       setSaving(false);
@@ -116,16 +126,6 @@ export default function StaffDirectory(props: StaffPageProps & { options: StaffO
     try { await refresh(); setRefreshError(""); }
     catch { setRefreshError("저장은 완료했지만 목록을 갱신하지 못했습니다. 새로고침해 주세요."); }
     finally { setSaving(false); setBusy(false); }
-  }
-  async function setSiteRepresentative() {
-    if(!representative||saving) return;
-    setSaving(true);setBusy(true);setError("");
-    try {
-      await saveResponsibility(snapshot.revision,{country_code:String(representative.country_code),site_representative:representative.is_site_representative?null:representative.id??null});
-      setRepresentative(null);
-      try {await refresh();} catch {setRefreshError("지정은 완료됐지만 화면을 갱신하지 못했습니다. 다시 불러와 주세요.");}
-    } catch(cause) {setError(cause instanceof Error?cause.message:"현장대리인을 지정하지 못했습니다.");}
-    finally {setSaving(false);setBusy(false);}
   }
   return (
     <div className="report-sections staff-page staff-overview">
@@ -140,7 +140,7 @@ export default function StaffDirectory(props: StaffPageProps & { options: StaffO
         </button>)}
       </div>
       <StaffResponsibilities rows={rows} options={options} countries={countries} revision={snapshot.revision} refresh={refresh} setBusy={setBusy} region={region} onRegion={(value) => pick({ region: value })} />
-      <Panel title="인력 현황" subtitle="출근 기록이 없어 근무중이 아닌 근무 예정으로 표시합니다.">
+      <Panel title="인력 현황" subtitle="출근·퇴근은 권역별 근무 시간(한국 시간) 기준입니다.">
         <div className="staff-toolbar">
           <div className="staff-chips" role="group" aria-label="권역 필터"><span className="staff-chips-label">권역</span>{[["", "전체"], ...Object.keys(REGIONS).map((code) => [code, code])].map(([value, label]) => <button type="button" key={value} aria-pressed={region === value} onClick={() => pick({ region: value })}>{label}<b>{value ? rows.filter((person) => person.country_code === value).length : rows.length}</b></button>)}</div>
           <div className="staff-chips" role="group" aria-label="상태 필터"><span className="staff-chips-label">상태</span>{[{ value: "", label: "전체" }, ...WORK_STATUSES].map((item) => <button type="button" key={item.value} aria-pressed={status === item.value} className={item.value ? `staff-chip-${item.value}` : undefined} onClick={() => pick({ status: item.value })}>{item.value && <i aria-hidden="true" />}{item.label}<b>{item.value ? count(scoped, item.value) : scoped.length}</b></button>)}</div>
@@ -155,13 +155,15 @@ export default function StaffDirectory(props: StaffPageProps & { options: StaffO
             <details className="staff-column-picker"><summary>표시 컬럼</summary><div>{allColumns.map((field) => <label key={field.key}><input type="checkbox" checked={!hidden.includes(field.key)} disabled={["country_code", "staff"].includes(field.key)} onChange={(event) => setHidden(event.target.checked ? hidden.filter((key) => key !== field.key) : [...hidden, field.key])} />{field.label}</label>)}</div></details>
           </div>
         </details>
-        <div className="staff-role-legend" aria-label="직책별 배경색"><span className="staff-legend-team-lead">팀장</span><span className="staff-legend-group-lead">그룹장</span><span className="staff-legend-user">책임</span><span className="staff-legend-observer">옵저버</span><span className="staff-legend-representative">현장대리인은 별도 표기</span></div>
-        <StaffTable rows={filtered.slice((current - 1) * 30, current * 30)} columns={columns} data={data} onEdit={rows.some((person) => person.can_edit) ? open : undefined} onRepresentative={rows.some(person => person.can_set_site_representative) ? person => { setError(""); setRepresentative(person); } : undefined} />
+        <div className="staff-role-legend" aria-label="표 구분 범례">
+          <span className="staff-legend-group">권역</span>{Object.entries(REGIONS).map(([code, label]) => <span key={code} className={`staff-legend-country staff-country-${code.toLowerCase()}`}><i aria-hidden="true" />{code} {label}</span>)}
+          <span className="staff-legend-group">역할</span><span className="staff-role-pill staff-role-pill-team-lead">팀장</span><span className="staff-role-pill staff-role-pill-group-lead">그룹장</span><span className="staff-job-title">책임</span><span className="staff-site-rep"><Icon name="flag" size={11} />현장대리인</span>
+        </div>
+        <StaffTable rows={filtered.slice((current - 1) * 30, current * 30)} counts={groupCounts} columns={columns} data={data} onEdit={rows.some((person) => person.can_edit) ? open : undefined} />
         <div className="staff-pagination"><span>{filtered.length}명{region || status || search ? ` · 전체 ${rows.length}명 중` : ""}</span><div className="actions"><button className="btn btn-sm" disabled={current <= 1} onClick={() => setPage(current - 1)}>이전</button><span>{current} / {pages}</span><button className="btn btn-sm" disabled={current >= pages} onClick={() => setPage(current + 1)}>다음</button></div></div>
       </Panel>
       <StaffCalendar {...props} country={region} onCountry={(value) => pick({ region: value })} />
       {choicesOpen && <StaffChoices items={options.items} columnLabels={allColumns.map(field => field.label)} revision={snapshot.revision} refresh={refresh} setBusy={setBusy} onClose={() => setChoicesOpen(false)} />}
-      {representative&&<Modal title={`현장대리인 ${representative.is_site_representative?"해제":"지정"}`} onClose={()=>{if(!saving)setRepresentative(null);}}><p>{String(representative.staff_name)}님을 {String(representative.country_code)} 권역 현장대리인으로 {representative.is_site_representative?"지정 해제":"지정"}하시겠습니까?</p><p>직책은 그대로 유지하며, 지정된 사람의 직책 옆에 현장대리인을 별도로 표시합니다.</p><ErrorMessage message={error}/><div className="actions"><button className="btn" disabled={saving} onClick={()=>setRepresentative(null)}>취소</button><button className="btn btn-primary" disabled={saving} onClick={()=>void setSiteRepresentative()}>{representative.is_site_representative?"지정 해제":"현장대리인 지정"}</button></div></Modal>}
       {draft && <Modal title={draft.id ? "운영 인력 정보 수정" : "운영 인력 추가"} onClose={close}>
         <form className="staff-person-form" onSubmit={(event) => { event.preventDefault(); void save(); }}>
           <fieldset disabled={saving} className="staff-person-fields">
@@ -172,6 +174,7 @@ export default function StaffDirectory(props: StaffPageProps & { options: StaffO
                 setDirty(true);
               }} />}
             </label>)}
+            {user?.is_staff && draft.id != null && <label className="staff-field-wide staff-check-field"><input type="checkbox" checked={siteRep} onChange={(event) => { setSiteRep(event.target.checked); setDirty(true); }} /><span>{String(draft.country_code ?? "")} 권역 현장대리인으로 지정<small>권역마다 한 명이며, 지정하면 기존 현장대리인은 해제됩니다.</small></span></label>}
           </fieldset>
           <ErrorMessage message={error} />
           <div className="actions"><button type="button" className="btn" disabled={saving} onClick={close}>취소</button>

@@ -5,7 +5,7 @@ import SectionPage from "../../shared/sections/SectionPage";
 import type { SectionConfig } from "../../shared/sections/types";
 import { staffFields } from "./fields";
 import StaffPage from "./StaffPage";
-import StaffTable from "./StaffTable";
+import StaffTable, { sortStaff } from "./StaffTable";
 
 const section: SectionConfig = {
   key: "staff",
@@ -29,7 +29,7 @@ const feature: FeatureDefinition = {
   report: {
     order: 4,
     Summary: ({ data, snapshot }) => (
-      <SectionPage config={section} rows={sectionRows(snapshot, "staff")} data={data} rowLimit={10} />
+      <SectionPage config={section} rows={sortStaff(sectionRows(snapshot, "staff"))} data={data} rowLimit={10} />
     ),
   },
   Page: (props) => (
