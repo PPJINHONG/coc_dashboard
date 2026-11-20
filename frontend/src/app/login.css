@@ -49,7 +49,8 @@
 .access-screen .account-fields { gap: 22px; }
 .access-screen .account-field { gap: 9px; }
 .access-screen .account-field label { font-size: 13px; font-weight: 500; }
-.access-screen .account-field input {
+.access-screen .account-field input,
+.access-screen .account-field select {
   min-height: 44px;
   background: var(--panel-2);
   border-color: var(--border);
@@ -58,6 +59,7 @@
   padding: 11px 12px;
 }
 .access-screen .account-input.has-toggle input { padding-right: 58px; }
+.access-screen .account-field select { width: 100%; border: 1px solid var(--border); color: var(--text); }
 .access-screen .account-field input:focus { background: var(--panel); }
 .access-screen .account-submit {
   width: 100%;

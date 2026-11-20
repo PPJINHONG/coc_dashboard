@@ -124,7 +124,7 @@ def test_calendar_is_combined_and_country_filtered_with_immediate_status():
     assert {item['country_code'] for item in combined} == {'KR', 'EU'}
     assert [item['country_code'] for item in kr_client.get(ROOT + 'calendar/?month=2026-11&country=EU').data['events']] == ['EU']
     row = next(item for item in kr_client.get('/api/operations/current/').data['staff'] if item['id'] == kr.pk)
-    assert row['current_status'] == '휴가'
+    assert row['current_status'] == '연차'
     assert len(ChangeLog.objects.filter(section='staff')) == 2
 
 
@@ -218,3 +218,21 @@ def test_explicit_account_link_syncs_names_and_member_updates_are_shared():
     assert client.patch(f'/api/members/{user.pk}/', {'name': '가' * 101}, format='json').status_code == 400
     user.refresh_from_db()
     assert user.first_name == '회원 이름 변경'
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize('today,values,with_event,expected', [
+    (date(2026, 11, 13), {}, False, ('scheduled', '근무 예정')),           # 금요일
+    (date(2026, 11, 14), {}, False, ('off', '휴무')),                      # 토요일
+    (date(2026, 11, 13), {}, True, ('leave', '연차')),
+    (date(2026, 11, 13), {'deployment_date': date(2026, 12, 1)}, False, ('off', '휴무')),
+    (date(2026, 11, 13), {'resignation_date': date(2026, 11, 12)}, False, ('retired', '퇴사')),
+])
+def test_work_status_is_estimated_from_local_date_and_calendar(monkeypatch, today, values, with_event, expected):
+    monkeypatch.setattr('features.staff.serializers.local_today', lambda country: today)
+    user, person = profile('worker', **values)
+    if with_event:
+        StaffCalendarEvent.objects.create(assignment=person, country_code='KR', kind='leave', start_date=today, end_date=today)
+    row = next(item for item in login(user).get('/api/operations/current/').data['staff'] if item['id'] == person.pk)
+    assert (row['work_status'], row['current_status']) == expected
+    assert row['status_detail']

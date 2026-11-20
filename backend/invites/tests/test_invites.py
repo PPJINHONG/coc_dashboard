@@ -17,7 +17,7 @@ def check_url(token):
 
 
 def _signup(token, username="new@example.com", **extra):
-    data = {"name": "새 팀원", "username": username, "password": PASSWORD, **extra}
+    data = {"name": "새 팀원", "username": username, "password": PASSWORD, "country_code": "KR", **extra}
     if token is not None:
         data["invite"] = token
     return APIClient().post(REGISTER_URL, data, format="json")
@@ -95,7 +95,7 @@ def test_invite_signup_logs_in_and_records_use(member_client):
     client = APIClient()
     response = client.post(
         REGISTER_URL,
-        {"name": "새 팀원", "username": "New@Example.com", "password": PASSWORD, "invite": token},
+        {"name": "새 팀원", "username": "New@Example.com", "password": PASSWORD, "invite": token, "country_code": "EU"},
         format="json",
     )
     assert response.status_code == 201, response.data

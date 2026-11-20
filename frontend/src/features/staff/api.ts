@@ -27,10 +27,14 @@ export interface StaffOptions {
   can_view_grade: boolean;
   can_manage_choices: boolean;
   choices: StaffChoice[];
+  items: StaffItem[];
   accounts: { id: number; name: string; username: string }[];
   responsibilities: Responsibility[];
 }
-export interface StaffChoice { id: number; kind: "company_name" | "work_location"; country_code: string; value: string; }
+export interface StaffChoice { id: number; kind: string; country_code: string; value: string; }
+export interface StaffItemValue { value:string; country_code:string; choice_id:number|null; uses:number; default:boolean; }
+export interface StaffItem { key:string; label:string; scoped:boolean; custom:boolean; values:StaffItemValue[]; }
+export interface StaffItemResult { revision:number; choices:StaffChoice[]; items:StaffItem[]; }
 export interface CalendarEvent {
   id: number;
   assignment: number;
@@ -46,8 +50,9 @@ export interface TrendMonth { month: string; entries: number; exits: number; hea
 export interface StaffTrend { months: TrendMonth[]; missing_dates: number; grouping: string; companies: string[] }
 const root = "/api/operations/staff";
 export const staffOptions = () => request<StaffOptions>("GET", `${root}/options/`);
-export const addStaffChoice = (revision: number, choice: Omit<StaffChoice, "id">) => request<{revision:number;choices:StaffChoice[]}>("POST", `${root}/choices/`, {revision,choice});
-export const deleteStaffChoice = (revision: number, id: number) => request<{revision:number;choices:StaffChoice[]}>("DELETE", `${root}/choices/${id}/`, {revision});
+export const addStaffChoice = (revision: number, choice: Omit<StaffChoice, "id">) => request<StaffItemResult>("POST", `${root}/choices/`, {revision,choice});
+export const deleteStaffChoice = (revision: number, id: number) => request<StaffItemResult>("DELETE", `${root}/choices/${id}/`, {revision});
+export const addStaffColumn = (revision:number, label:string) => request<StaffItemResult & {column:{key:string;label:string}}>("POST", `${root}/columns/`, {revision,label});
 export const calendarEvents = (month: string, country: string) => request<{ events: CalendarEvent[] }>("GET", `${root}/calendar/?${new URLSearchParams({ month, country })}`);
 export const saveCalendarEvent = (revision: number, event: Partial<CalendarEvent>) => request(event.id ? "PATCH" : "POST", `${root}/calendar/${event.id ? `${event.id}/` : ""}`, { revision, event });
 export const deleteCalendarEvent = (revision: number, id: number) => request("DELETE", `${root}/calendar/${id}/`, { revision });

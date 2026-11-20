@@ -33,6 +33,7 @@ class Section:
     history_models: tuple = ()
     # 관리자·팀장 외에는 현재값뿐 아니라 변경 이력에서도 숨길 필드입니다.
     private_fields: tuple = ()
+    history_labels: Callable[[], dict] | None = None
 
     @property
     def monthly(self):

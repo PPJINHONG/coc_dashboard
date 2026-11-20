@@ -19,6 +19,8 @@ export interface Registration {
   name: string;
   username: string;
   password: string;
+  /** 가입과 함께 운영 인력으로 등록할 국가 */
+  country_code: string;
   invite: string;
 }
 

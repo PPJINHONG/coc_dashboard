@@ -71,10 +71,12 @@ class LogsView(ReportingView):
         if not request.user.is_authenticated or not request.user.is_active:
             raise PermissionDenied('로그인한 활성 사용자만 변경 이력을 조회할 수 있습니다.')
         catalog_rows = visible_history(request.user, {'month': request.query_params.get('month')})
-        rows = (visible_history(request.user, request.query_params)
-                if request.query_params.get('region') or request.query_params.get('actor') else catalog_rows)
-        tabs, actors, regions = {}, {}, {}
+        params = request.query_params
+        rows = (visible_history(request.user, params)
+                if any(params.get(key) for key in ('region', 'actor', 'action', 'days')) else catalog_rows)
+        tabs, actors, regions, actions = {}, {}, {}, {}
         for row in catalog_rows:
+            actions[row['action']] = actions.get(row['action'], 0) + 1
             tab = tabs.setdefault(row['section'], {'id': row['section'], 'count': 0, 'latest_at': row['created_at']})
             tab['count'] += 1
             actors[row['actor_key']] = {'id': row['actor_key'], 'name': row['actor_name']}
@@ -88,7 +90,7 @@ class LogsView(ReportingView):
         page_size = 30
         return Response({'results': rows[offset:offset + page_size], 'count': len(rows),
                          'next_offset': offset + page_size if offset + page_size < len(rows) else None,
-                         'tabs': list(tabs.values()), 'actors': sorted(actors.values(), key=lambda item: item['name']),
+                         'tabs': list(tabs.values()), 'actions': actions, 'actors': sorted(actors.values(), key=lambda item: item['name']),
                          'regions': sorted(regions.values(), key=lambda item: item['region_name'])})
 
 

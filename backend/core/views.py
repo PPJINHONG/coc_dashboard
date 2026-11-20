@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 
 from invites.services import invite_error, redeem_invite
 
+from .signals import user_registered
 from .serializers import LoginSerializer, MeSerializer, RegisterSerializer
 
 LOGIN_FAIL_DETAIL = "아이디 또는 비밀번호가 올바르지 않습니다."
@@ -66,6 +67,8 @@ class RegisterView(APIView):
             with transaction.atomic():
                 user = serializer.save()
                 redeem_invite(invite_token, user)
+                user_registered.send(sender=RegisterView, request=request, user=user,
+                                     country_code=serializer.validated_data["country_code"])
         except IntegrityError:
             return Response({"username": ["이미 사용 중인 이메일 아이디입니다."]}, status=400)
         login(request, user)

@@ -20,8 +20,8 @@ export function staffFields(data: Bootstrap, withGrade = false): Field[] {
     },
     { key: "job_title", label: "직책" },
     { key: "company_name", label: "소속사" },
-    { key: "employment_status", label: "재직 상태", options: [{ value: "employed", label: "재직중" }, { value: "retired", label: "퇴사" }] },
-    { key: "current_status", label: "현재 상태" },
+    { key: "work_status", label: "근무 상태", options: WORK_STATUSES },
+    { key: "status_detail", label: "상태 정보" },
     { key: "deployment_date", label: "업무 투입일" },
     { key: "resignation_date", label: "회사 퇴사일" },
     ...(withGrade ? [{ key: "grade", label: "등급" }] : []),
@@ -36,6 +36,17 @@ export function staffFields(data: Bootstrap, withGrade = false): Field[] {
     { key: "account_name", label: "연결 회원" },
   ];
 }
+
+/**
+ * 오늘(권역 현지 날짜)의 근무 상태. 서버가 일정·투입일·퇴사일·주말로 계산합니다.
+ * 출근 기록이 없으므로 근무중이 아니라 근무 예정으로 표시합니다.
+ */
+export const WORK_STATUSES = [
+  { value: "scheduled", label: "근무 예정" },
+  { value: "leave", label: "휴가" },
+  { value: "off", label: "휴무" },
+  { value: "retired", label: "퇴사" },
+];
 
 /** 접속·계정 정보 열. 형식이 제각각이라 문자열로 입력합니다. */
 const ACCESS_FIELDS: Field[] = [

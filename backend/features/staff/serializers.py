@@ -4,12 +4,14 @@ from rest_framework import serializers
 
 from reporting.serializers import RowSerializer
 
-from .models import StaffAssignment, StaffCalendarEvent, StaffResponsibility
+from .models import StaffAssignment, StaffCalendarEvent, StaffResponsibility, StaffChoice
 from .permissions import can_edit_person, can_manage_person, can_view_grade, owns_profile
+from .items import BASE_GRADES, validate_custom_values
+from core.roles import user_role, staff_edit_countries
 
 
 EDIT_FIELDS = ['country_code', 'job_title', 'company_name', 'job_description', 'work_location', 'pc_ip', 'autoever_account', 'z_account',
-               'account', 'deployment_date', 'resignation_date', 'grade']
+               'account', 'deployment_date', 'resignation_date', 'grade', 'custom_values']
 SELF_FIELDS = {'staff_name', 'job_description', 'work_location', 'pc_ip', 'autoever_account', 'z_account'}
 TIMEZONES = {'KR': 'Asia/Seoul', 'NA': 'America/Los_Angeles', 'EU': 'Europe/Berlin'}
 DOMAINS = {'KR': '내수', 'NA': '북미', 'EU': '유럽'}
@@ -30,13 +32,19 @@ class StaffSerializer(RowSerializer):
     global_region = serializers.SerializerMethodField()
     employment_status = serializers.SerializerMethodField()
     current_status = serializers.SerializerMethodField()
+    work_status = serializers.SerializerMethodField()
+    status_detail = serializers.SerializerMethodField()
     account_name = serializers.SerializerMethodField()
+    is_site_representative = serializers.SerializerMethodField()
+    display_role = serializers.SerializerMethodField()
+    can_set_site_representative = serializers.SerializerMethodField()
 
     class Meta(RowSerializer.Meta):
         model = StaffAssignment
         fields = ['id', 'country_code', 'staff', 'staff_name', 'job_title', 'company_name', 'job_description', 'work_location',
                   'pc_ip', 'autoever_account', 'z_account', 'can_edit', 'can_manage', 'account', 'account_name',
-                  'deployment_date', 'resignation_date', 'grade', 'global_region', 'employment_status', 'current_status']
+                  'deployment_date', 'resignation_date', 'grade', 'global_region', 'employment_status', 'current_status',
+                  'work_status', 'status_detail', 'custom_values', 'is_site_representative', 'display_role', 'can_set_site_representative']
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -49,20 +57,54 @@ class StaffSerializer(RowSerializer):
         request = self.context.get('request')
         return bool(request and can_manage_person(request.user, obj))
 
+    def get_is_site_representative(self, obj):
+        if '_site_representatives' not in self.context:
+            self.context['_site_representatives'] = dict(StaffResponsibility.objects.values_list('country_code', 'site_representative_id'))
+        return self.context['_site_representatives'].get(obj.country_code) == obj.pk
+
+    def get_display_role(self, obj):
+        role = user_role(obj.account) if obj.account_id else None
+        if role == 'observer' or obj.job_title == '옵저버':
+            return 'observer'
+        return {'팀장': 'team_lead', '그룹장': 'group_lead', '책임': 'user', '관리자': 'admin'}.get(obj.job_title, role or 'user')
+
+    def get_can_set_site_representative(self, obj):
+        request = self.context.get('request')
+        return bool(request and obj.country_code in staff_edit_countries(request.user))
+
     def get_global_region(self, obj):
         return DOMAINS[obj.country_code]
 
     def get_employment_status(self, obj):
         return 'retired' if obj.resignation_date and obj.resignation_date < local_today(obj.country_code) else 'employed'
 
+    def work_state(self, obj):
+        """오늘(권역 현지 날짜)의 근무 상태. 출근 기록이 없으므로 근무중이 아니라 근무 예정으로만 추정합니다."""
+        cache = self.context.setdefault('_work_states', {})
+        if obj.pk not in cache:
+            today = local_today(obj.country_code)
+            event = next((item for item in obj.calendar_events.all() if item.start_date <= today <= item.end_date), None)
+            if self.get_employment_status(obj) == 'retired':
+                state = ('retired', '퇴사', f'{obj.resignation_date} 퇴사')
+            elif obj.deployment_date and obj.deployment_date > today:
+                state = ('off', '휴무', f'{obj.deployment_date} 업무 투입 예정')
+            elif event:
+                state = ('leave', event.get_kind_display(), f'{event.get_kind_display()} · {event.start_date} ~ {event.end_date}')
+            elif today.weekday() >= 5:
+                state = ('off', '휴무', '현지 주말')
+            else:
+                state = ('scheduled', '근무 예정', '현지 평일 · 출근 기록 없음')
+            cache[obj.pk] = state
+        return cache[obj.pk]
+
+    def get_work_status(self, obj):
+        return self.work_state(obj)[0]
+
     def get_current_status(self, obj):
-        if self.get_employment_status(obj) == 'retired':
-            return '퇴사'
-        today = local_today(obj.country_code)
-        for event in obj.calendar_events.all():
-            if event.start_date <= today <= event.end_date:
-                return event.get_kind_display()
-        return '근무'
+        return self.work_state(obj)[1]
+
+    def get_status_detail(self, obj):
+        return self.work_state(obj)[2]
 
     def get_account_name(self, obj):
         return (obj.account.get_full_name() or obj.account.username) if obj.account else ''
@@ -87,6 +129,14 @@ class StaffEditSerializer(RowSerializer):
         end = attrs.get('resignation_date', getattr(self.instance, 'resignation_date', None))
         if start and end and start > end:
             raise serializers.ValidationError('회사 퇴사일은 업무 투입일보다 빠를 수 없습니다.')
+        if 'grade' in attrs:
+            grade = attrs['grade'].strip()
+            old = self.instance.grade if self.instance else ''
+            if grade and grade not in BASE_GRADES and grade != old and not StaffChoice.objects.filter(kind='grade', value=grade).exists():
+                raise serializers.ValidationError({'grade': '등록된 등급 항목을 선택하세요.'})
+            attrs['grade'] = grade
+        if 'custom_values' in attrs:
+            attrs['custom_values'] = validate_custom_values(attrs['custom_values'], self.instance)
         return attrs
 
 

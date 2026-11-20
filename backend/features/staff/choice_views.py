@@ -8,7 +8,8 @@ from core.roles import can_manage_members, record_activity
 from reporting.history import capture_history
 from reporting.services import bump, check_revision, lock_state, record_log
 from .calendar_views import StaffView
-from .models import StaffChoice
+from .models import StaffChoice, StaffColumn
+from .items import RESERVED_LABELS, choice_rows, item_catalog
 
 
 class ChoiceSerializer(serializers.ModelSerializer):
@@ -19,22 +20,30 @@ class ChoiceSerializer(serializers.ModelSerializer):
         validators = []
 
     def validate(self, attrs):
+        kind = attrs['kind']
+        if kind not in ('company_name', 'work_location', 'grade'):
+            column = StaffColumn.objects.filter(key=kind).first()
+            if column is None:
+                raise serializers.ValidationError('항목을 먼저 추가한 후 값을 등록하세요.')
+            attrs['column'] = column
         if attrs['kind'] == 'work_location' and attrs.get('country_code') not in ('KR', 'EU', 'NA'):
             raise serializers.ValidationError('근무지의 권역을 선택하세요.')
-        if attrs['kind'] == 'company_name':
+        if attrs['kind'] != 'work_location':
             attrs['country_code'] = ''
-            if len(attrs['value']) > 100:
-                raise serializers.ValidationError('소속사는 100자 이하로 입력하세요.')
+        maximum = {'company_name': 100, 'grade': 40}.get(kind, 150)
+        if len(attrs['value']) > maximum:
+            raise serializers.ValidationError(f'값은 {maximum}자 이하로 입력하세요.')
         return attrs
 
 
-def choices():
-    return ChoiceSerializer(StaffChoice.objects.all(), many=True).data
+def choices(with_grade=True):
+    return choice_rows(with_grade)
 
 
 class StaffChoicesView(StaffView):
     def get(self, request):
-        return Response({'choices': choices(), 'can_manage': can_manage_members(request.user)})
+        can_manage = can_manage_members(request.user)
+        return Response({'choices': choices(can_manage), 'can_manage': can_manage, 'items': item_catalog(can_manage)})
 
     @transaction.atomic
     def post(self, request):
@@ -70,4 +79,29 @@ class StaffChoicesView(StaffView):
         action = 'delete' if pk is not None else 'create'
         record_log(request, 'staff', action, summary, before=before, after=after)
         record_activity(request, action, summary, 'staff_choice', pk or instance.pk, before=before, after=after)
-        return Response({'revision': state.revision, 'choices': choices()})
+        return Response({'revision': state.revision, 'choices': choices(), 'items': item_catalog(True)})
+
+
+class StaffColumnsView(StaffView):
+    @transaction.atomic
+    def post(self, request):
+        if not can_manage_members(request.user):
+            raise PermissionDenied('열 추가는 관리자와 팀장만 할 수 있습니다.')
+        state = lock_state()
+        check_revision(state, request.data.get('revision'))
+        label = request.data.get('label')
+        if not isinstance(label, str):
+            raise ValidationError('추가할 열 이름을 입력하세요.')
+        label = ' '.join(label.split())
+        if not label or len(label) > 80 or label in RESERVED_LABELS or StaffColumn.objects.filter(label__iexact=label).exists():
+            raise ValidationError('기존 열과 겹치지 않는 80자 이하의 열 이름을 입력하세요.')
+        if StaffColumn.objects.count() >= 100:
+            raise ValidationError('추가 열은 100개까지 등록할 수 있습니다.')
+        capture_history(request, 'staff')
+        column = StaffColumn.objects.create(label=label)
+        after = {'key': column.key, 'label': column.label}
+        bump(state)
+        summary = f'운영 인력 열 추가: {label}'
+        record_log(request, 'staff', 'create', summary, after=after)
+        record_activity(request, 'create', summary, 'staff_column', column.pk, after=after)
+        return Response({'revision': state.revision, 'column': after, 'items': item_catalog(True), 'choices': choices()}, status=201)

@@ -48,6 +48,7 @@ function AccessForm({
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [country, setCountry] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -59,6 +60,7 @@ function AccessForm({
     if (signingUp && !name.trim()) errors.name = ['이름을 입력해 주세요.'];
     if (!username.trim()) errors.username = ['이메일 아이디를 입력해 주세요.'];
     if (!password) errors.password = ['비밀번호를 입력해 주세요.'];
+    if (signingUp && !country) errors.country_code = ['국가를 선택해 주세요.'];
     setFieldErrors(errors);
     setError(null);
     if (Object.keys(errors).length) return;
@@ -66,7 +68,7 @@ function AccessForm({
     onBusyChange(true);
     try {
       if (signingUp) {
-        await register({ name: name.trim(), username: username.trim(), password, invite: inviteToken ?? '' });
+        await register({ name: name.trim(), username: username.trim(), password, country_code: country, invite: inviteToken ?? '' });
         clearInviteFromUrl();
       } else await login(username.trim(), password);
     } catch (err) {
@@ -104,7 +106,7 @@ function AccessForm({
     <>
       <div className="account-heading">
         <h1>{signingUp ? 'Create your account' : 'Welcome back'}</h1>
-        <p>{signingUp ? '이름과 이메일, 비밀번호만 입력하면 바로 시작합니다.' : '계정에 로그인하고 운영 현황을 확인하세요.'}</p>
+        <p>{signingUp ? '이름과 이메일, 비밀번호, 근무 국가를 입력하면 바로 시작합니다.' : '계정에 로그인하고 운영 현황을 확인하세요.'}</p>
       </div>
       {signingUp && invite.kind === 'valid' && (
         <p className="invite-banner" role="status">
@@ -134,6 +136,24 @@ function AccessForm({
             value={password} onChange={(e) => setPassword(e.target.value)}
             error={fieldErrors.password?.join(' ')} disabled={submitting} required
           />
+          {signingUp && (
+            <div className="field account-field">
+              <label htmlFor="country_code">근무 국가</label>
+              <select
+                id="country_code" name="country_code" value={country} required
+                aria-invalid={fieldErrors.country_code ? true : undefined}
+                aria-describedby="country_code-hint country_code-error"
+                onChange={(e) => setCountry(e.target.value)}
+              >
+                <option value="" disabled>국가를 선택하세요</option>
+                <option value="KR">KR · 내수</option>
+                <option value="EU">EU · 유럽</option>
+                <option value="NA">NA · 북미</option>
+              </select>
+              <p className="field-hint" id="country_code-hint">가입하면 이 국가의 운영 인력으로 바로 등록됩니다.</p>
+              <ErrorMessage id="country_code-error" message={fieldErrors.country_code?.join(' ')} />
+            </div>
+          )}
           <button type="submit" className="btn btn-primary account-submit" disabled={submitting}>
             {submitting ? (signingUp ? '가입 중…' : '로그인 중…') : (signingUp ? '회원가입' : '로그인')}
           </button>
