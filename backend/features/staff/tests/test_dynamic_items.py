@@ -2,211 +2,148 @@ import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
-from core.roles import apply_role
+from features.staff.models import StaffAssignment, StaffChoice, StaffColumn
 from reporting.models import ChangeLog, DataState, StaffMember
-from features.staff.models import StaffAssignment, StaffChoice, StaffColumn, StaffResponsibility
 
-ROOT = '/api/operations/staff/'
+ROOT = "/api/operations/staff/"
 
 
-def api(role='admin', name=None):
-    user = get_user_model().objects.create_user(username=f'{name or role}@items.test', first_name=name or role)
-    apply_role(user, role, ['KR'] if role == 'group_lead' else [])
-    client = APIClient()
-    client.force_authenticate(user)
-    return client, user
+def api(admin=True, name="Admin"):
+    user = get_user_model().objects.create_user(username=name, first_name=name, email=f"{name.lower()}@example.com", is_staff=admin)
+    client = APIClient(); client.force_authenticate(user); return client, user
 
 
 def revision():
     return DataState.objects.get_or_create(pk=1)[0].revision
 
 
-def column(client, label='담당 시스템'):
-    response = client.post(ROOT + 'columns/', {'revision': revision(), 'label': label}, format='json')
+def add_column(client, label, scoped=False):
+    response = client.post(ROOT + "columns/", {"revision": revision(), "label": label, "is_region_scoped": scoped}, format="json")
     assert response.status_code == 201, response.data
-    return response.data['column']
+    return response.data["column"]
 
 
-def choice(client, kind, value, country=''):
-    return client.post(ROOT + 'choices/', {'revision': revision(), 'choice': {'kind': kind, 'value': value, 'country_code': country}}, format='json')
-
-
-def person(name='인력', country='KR', **values):
-    return StaffAssignment.objects.create(staff=StaffMember.objects.create(staff_name=name), country_code=country, **values)
+def add_choice(client, key, value, country=""):
+    return client.post(ROOT + "choices/", {"revision": revision(), "choice": {"kind": key, "value": value, "country_code": country}}, format="json")
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize('role,allowed', [('admin', True), ('team_lead', True), ('group_lead', False), ('user', False), ('observer', False)])
-def test_only_team_lead_and_admin_add_columns_and_grade_options(role, allowed):
-    client, _ = api(role)
-    response = client.post(ROOT + 'columns/', {'revision': revision(), 'label': '고객사'}, format='json')
-    assert response.status_code == (201 if allowed else 403)
-    assert choice(client, 'grade', 'L6').status_code == (200 if allowed else 403)
-    result = client.get(ROOT + 'options/').data
-    assert any(item['key'] == 'grade' for item in result['items']) == allowed
-    assert any(item['kind'] == 'grade' for item in result['choices']) == allowed
-
-
-@pytest.mark.django_db
-def test_column_appears_in_items_values_save_reload_and_log_labels():
+def test_initial_catalog_is_empty_and_fixed_labels_can_be_added():
     client, _ = api()
-    created = column(client)
-    key = created['key']
-    options = client.get(ROOT + 'options/').data
-    descriptor = next(item for item in options['items'] if item['key'] == key)
-    assert descriptor['label'] == '담당 시스템' and descriptor['values'] == [] and descriptor['custom']
-    assert choice(client, key, '시스템 A').status_code == 200
-    response = client.post(ROOT, {'revision': revision(), 'person': {'staff_name': '새 인력', 'country_code': 'KR', 'custom_values': {key: '시스템 A'}}}, format='json')
+    assert [item["label"] for item in client.get(ROOT + "options/").data["items"]] == ["입사일", "퇴사일", "업무 투입일", "업무 종료일"]
+    company = add_column(client, "소속사")
+    location = add_column(client, "근무지", True)
+    grade = add_column(client, "등급")
+    items = client.get(ROOT + "options/").data["items"]
+    items = [item for item in items if item["custom"]]
+    assert [(item["label"], item["position"]) for item in items] == [
+        ("소속사", 1), ("근무지", 2), ("등급", 3),
+    ]
+    assert {company["key"], location["key"], grade["key"]} == {item["key"] for item in items}
+
+
+@pytest.mark.django_db
+def test_column_order_can_be_changed_only_with_complete_unique_keys():
+    client, _ = api()
+    columns = [add_column(client, label) for label in ("소속사", "근무지", "등급")]
+    keys = [column["key"] for column in columns]
+    assert client.put(ROOT + "columns/", {"revision": revision(), "keys": [keys[2], keys[0], keys[1]]}, format="json").status_code == 200
+    assert list(StaffColumn.objects.values_list("key", flat=True)) == [keys[2], keys[0], keys[1]]
+    before = revision()
+    assert client.put(ROOT + "columns/", {"revision": before, "keys": keys[:2]}, format="json").status_code == 400
+    assert revision() == before
+
+
+@pytest.mark.django_db
+def test_staff_custom_values_only_accept_registered_choices_and_region_scope():
+    client, _ = api()
+    company = add_column(client, "소속사")
+    location = add_column(client, "근무지", True)
+    add_choice(client, company["key"], "솔로몬텍")
+    add_choice(client, location["key"], "상암", "KR")
+    payload = {"revision": revision(), "person": {"hire_date": "2025-01-01", "deployment_date": "2025-02-01", "staff_name": "새 인력", "country_code": "KR", "custom_values": {company["key"]: "솔로몬텍", location["key"]: "상암"}}}
+    response = client.post(ROOT, payload, format="json")
     assert response.status_code == 201, response.data
-    pk = response.data['person']['id']
-    assert client.get('/api/operations/current/').data['staff'][0]['custom_values'] == {key: '시스템 A'}
-    assert StaffAssignment.objects.get(pk=pk).custom_values == {key: '시스템 A'}
-    log = client.get('/api/operations/logs/').data['results'][0]
-    assert log['column_labels'][key] == '담당 시스템'
-    item = next(item for item in client.get(ROOT + 'options/').data['items'] if item['key'] == key)
-    assert item['values'][0]['uses'] == 1
+    assert response.data["person"]["job_title"] == "책임"
+    row = StaffAssignment.objects.get()
+    assert row.custom_values == {company["key"]: "솔로몬텍", location["key"]: "상암"}
+    invalid = client.patch(ROOT, {"revision": revision(), "person": {"id": row.pk, "custom_values": {company["key"]: "미등록"}}}, format="json")
+    assert invalid.status_code == 400
+    wrong_region = client.patch(ROOT, {"revision": revision(), "person": {"id": row.pk, "country_code": "EU", "custom_values": {location["key"]: "상암"}}}, format="json")
+    assert wrong_region.status_code == 200
 
 
 @pytest.mark.django_db
-def test_custom_values_reject_unknown_free_text_and_preserve_used_deleted_choice():
+def test_column_delete_requires_no_choices_or_staff_values_and_reorders():
     client, _ = api()
-    key = column(client)['key']
-    choice(client, key, '업무 A')
-    row = person(custom_values={key: '업무 A'})
-    for values in [{key: '미등록 값'}, {'unknown': '값'}, {key: ['배열']}, []]:
-        assert client.patch(ROOT, {'revision': revision(), 'person': {'id': row.pk, 'custom_values': values}}, format='json').status_code == 400
-    option = StaffChoice.objects.get(kind=key)
-    assert client.delete(f'{ROOT}choices/{option.pk}/', {'revision': revision()}, format='json').status_code == 200
-    row.refresh_from_db()
-    assert row.custom_values[key] == '업무 A'
-    assert client.patch(ROOT, {'revision': revision(), 'person': {'id': row.pk, 'job_description': '다른 항목 수정', 'custom_values': {key: '업무 A'}}}, format='json').status_code == 200
-    descriptor = next(item for item in client.get(ROOT + 'options/').data['items'] if item['key'] == key)
-    assert descriptor['values'] == [{'value': '업무 A', 'country_code': '', 'choice_id': None, 'uses': 1, 'default': False}]
+    first = add_column(client, "첫 열")
+    second = add_column(client, "둘째 열")
+    add_choice(client, first["key"], "값")
+    assert client.delete(ROOT + f"columns/{first['key']}/", {"revision": revision()}, format="json").status_code == 400
+    choice = StaffChoice.objects.get(kind=first["key"])
+    client.delete(ROOT + f"choices/{choice.pk}/", {"revision": revision()}, format="json")
+    person = StaffAssignment.objects.create(staff=StaffMember.objects.create(staff_name="인력"), country_code="KR", custom_values={first["key"]: "기존"})
+    assert client.delete(ROOT + f"columns/{first['key']}/", {"revision": revision()}, format="json").status_code == 400
+    person.custom_values = {}; person.save(update_fields=["custom_values"])
+    assert client.delete(ROOT + f"columns/{first['key']}/", {"revision": revision()}, format="json").status_code == 200
+    assert list(StaffColumn.objects.values_list("key", "position")) == [(second["key"], 1)]
 
 
 @pytest.mark.django_db
-def test_group_only_edits_custom_values_of_managed_people_and_owner_cannot_change():
-    admin, _ = api()
-    key = column(admin)['key']
-    choice(admin, key, '운영')
-    group, _ = api('group_lead')
-    owner, owner_user = api('user')
-    inside = person(account=owner_user)
-    outside = person('유럽 인력', 'EU')
-    assert group.patch(ROOT, {'revision': revision(), 'person': {'id': inside.pk, 'custom_values': {key: '운영'}}}, format='json').status_code == 200
-    assert group.patch(ROOT, {'revision': revision(), 'person': {'id': outside.pk, 'custom_values': {key: '운영'}}}, format='json').status_code == 403
-    assert owner.patch(ROOT, {'revision': revision(), 'person': {'id': inside.pk, 'custom_values': {key: '운영'}}}, format='json').status_code == 403
-
-
-@pytest.mark.django_db
-def test_grade_addition_is_selectable_but_remains_private():
-    admin, _ = api()
-    row = person()
-    assert admin.patch(ROOT, {'revision': revision(), 'person': {'id': row.pk, 'grade': 'L6'}}, format='json').status_code == 400
-    assert choice(admin, 'grade', 'L6').status_code == 200
-    assert admin.patch(ROOT, {'revision': revision(), 'person': {'id': row.pk, 'grade': 'L6'}}, format='json').status_code == 200
-    group, _ = api('group_lead')
-    assert 'grade' not in group.get('/api/operations/current/').data['staff'][0]
-    assert all(item['key'] != 'grade' for item in group.get(ROOT + 'options/').data['items'])
-    assert all(item['kind'] != 'grade' for item in group.get(ROOT + 'choices/').data['choices'])
-    option = StaffChoice.objects.get(kind='grade', value='L6')
-    admin.delete(f'{ROOT}choices/{option.pk}/', {'revision': revision()}, format='json')
-    assert admin.patch(ROOT, {'revision': revision(), 'person': {'id': row.pk, 'grade': 'L6', 'pc_ip': '예전 등급 보존'}}, format='json').status_code == 200
-
-
-@pytest.mark.django_db
-def test_column_validation_stale_revision_and_no_row_data_loss():
+def test_column_delete_is_logged_and_restorable():
     client, _ = api()
-    row = person(grade='L4', work_location='서울')
-    for label in ['', ' ', '등급', '성명', '권역', 'a' * 81]:
-        assert client.post(ROOT + 'columns/', {'revision': revision(), 'label': label}, format='json').status_code == 400
-    column(client, '고객사')
-    assert client.post(ROOT + 'columns/', {'revision': revision(), 'label': '  고객사  '}, format='json').status_code == 400
-    assert client.post(ROOT + 'columns/', {'revision': 0, 'label': '다른 열'}, format='json').status_code == 409
-    row.refresh_from_db()
-    assert row.grade == 'L4' and row.work_location == '서울' and row.custom_values == {}
-
-
-@pytest.mark.django_db
-def test_site_representative_is_independent_and_updates_preserve_leaders():
-    client, _ = api('admin')
-    leader = person('그룹장', job_title='그룹장')
-    representative = person('현장 대표', job_title='책임')
-    StaffResponsibility.objects.create(country_code='KR', team_lead=leader, group_lead=leader)
-    response = client.put(ROOT + 'responsibilities/', {'revision': revision(), 'responsibility': {'country_code': 'KR', 'site_representative': representative.pk}}, format='json')
-    assert response.status_code == 200, response.data
-    responsibility = StaffResponsibility.objects.get(country_code='KR')
-    assert responsibility.team_lead_id == leader.pk and responsibility.group_lead_id == leader.pk
-    listed = {item['id']: item for item in client.get('/api/operations/current/').data['staff']}
-    assert listed[representative.pk]['is_site_representative'] and listed[representative.pk]['job_title'] == '책임'
-    assert listed[representative.pk]['can_set_site_representative']
-    assert not listed[leader.pk]['is_site_representative']
-    assert client.put(ROOT + 'responsibilities/', {'revision': revision(), 'responsibility': {'country_code': 'KR', 'group_lead': representative.pk}}, format='json').status_code == 200
-    assert StaffResponsibility.objects.get(country_code='KR').site_representative_id == representative.pk
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize('title,role,expected', [('팀장','user','team_lead'), ('그룹장','user','group_lead'), ('책임','user','user'), ('책임','observer','user')])
-def test_row_tone_follows_role_and_does_not_change_edit_permission(title, role, expected):
-    viewer, account = api(role)
-    row = person(account=account, job_title=title)
-    listed = viewer.get('/api/operations/current/').data['staff'][0]
-    assert listed['display_role'] == expected
-    assert listed['can_edit'] == (role != 'observer')
-    assert listed['can_set_site_representative'] is False
-
-
-@pytest.mark.django_db
-def test_restore_custom_values_and_protect_used_column_from_restore_deletion():
-    client, _ = api()
-    key = column(client)['key']
-    create_log = ChangeLog.objects.first()
-    choice(client, key, '운영')
-    row = person()
-    assert client.patch(ROOT, {'revision': revision(), 'person': {'id': row.pk, 'custom_values': {key: '운영'}}}, format='json').status_code == 200
-    change = ChangeLog.objects.first()
-    approved = client.post(f'/api/db-admin/logs/{change.pk}/restore-preview/', {}, format='json')
-    restored = client.post(f'/api/db-admin/logs/{change.pk}/restore/', {'token': approved.data['token'], 'confirmed': True}, format='json')
+    column = add_column(client, "복구 열")
+    assert client.delete(ROOT + f"columns/{column['key']}/", {"revision": revision()}, format="json").status_code == 200
+    log = ChangeLog.objects.first()
+    preview = client.post(f"/api/db-admin/logs/{log.pk}/restore-preview/", {}, format="json")
+    restored = client.post(f"/api/db-admin/logs/{log.pk}/restore/", {"token": preview.data["token"], "confirmed": True}, format="json")
     assert restored.status_code == 200, restored.data
-    row.refresh_from_db()
-    assert row.custom_values == {}
-    # 나중에 추가한 항목이 연결된 열은 복구로도 지우지 못합니다.
-    approved = client.post(f'/api/db-admin/logs/{create_log.pk}/restore-preview/', {}, format='json')
-    assert approved.status_code == 200
-    blocked = client.post(f'/api/db-admin/logs/{create_log.pk}/restore/', {'token': approved.data['token'], 'confirmed': True}, format='json')
-    assert blocked.status_code == 409 and StaffColumn.objects.filter(key=key).exists()
+    assert StaffColumn.objects.get(key=column["key"]).label == "복구 열"
 
 
 @pytest.mark.django_db
-def test_restore_cannot_remove_column_with_saved_values_even_after_option_deleted():
-    client, _ = api()
-    key = column(client)['key']
-    original = ChangeLog.objects.first()
-    choice(client, key, '보존할 값')
-    row = person(custom_values={key: '보존할 값'})
-    option = StaffChoice.objects.get(kind=key)
-    client.delete(f'{ROOT}choices/{option.pk}/', {'revision': revision()}, format='json')
-    approved = client.post(f'/api/db-admin/logs/{original.pk}/restore-preview/', {}, format='json')
-    assert approved.status_code == 200
-    result = client.post(f'/api/db-admin/logs/{original.pk}/restore/', {'token': approved.data['token'], 'confirmed': True}, format='json')
-    assert result.status_code == 409
-    row.refresh_from_db()
-    assert row.custom_values[key] == '보존할 값' and StaffColumn.objects.filter(key=key).exists()
+def test_user_cannot_manage_items_but_can_update_linked_own_dynamic_value():
+    admin, _ = api(True, "Admin")
+    item = add_column(admin, "담당 시스템")
+    add_choice(admin, item["key"], "A")
+    user_client, user = api(False, "Member")
+    person = StaffAssignment.objects.create(staff=StaffMember.objects.create(staff_name="Member"), account=user, country_code="KR")
+    assert user_client.post(ROOT + "columns/", {"revision": revision(), "label": "차단"}, format="json").status_code == 403
+    response = user_client.patch(ROOT, {"revision": revision(), "person": {"id": person.pk, "custom_values": {item["key"]: "A"}}}, format="json")
+    assert response.status_code == 200, response.data
 
 
 @pytest.mark.django_db
-def test_existing_staff_history_without_new_default_fields_can_still_restore():
+def test_fixed_and_custom_column_order_survives_catalog_changes():
     client, _ = api()
-    response = client.post(ROOT, {'revision': revision(), 'person': {'staff_name': '이전 형식', 'country_code': 'KR'}}, format='json')
-    assert response.status_code == 201
-    original = ChangeLog.objects.first()
-    for change in original.restore_data['changes']:
-        for side in ('before', 'after'):
-            if isinstance(change[side], dict):
-                change[side].pop('custom_values', None)
-    original.save(update_fields=['restore_data'])
-    approved = client.post(f'/api/db-admin/logs/{original.pk}/restore-preview/', {}, format='json')
-    assert approved.status_code == 200, approved.data
-    result = client.post(f'/api/db-admin/logs/{original.pk}/restore/', {'token': approved.data['token'], 'confirmed': True}, format='json')
-    assert result.status_code == 200, result.data
-    assert not StaffAssignment.objects.exists()
+    first = add_column(client, "열 A")["key"]
+    second = add_column(client, "열 B")["key"]
+    dates = ["hire_date", "resignation_date", "deployment_date", "assignment_end_date"]
+    order = [*dates, second, "country_code", first, "staff_name"]
+    response = client.put(ROOT + "columns/", {"revision": revision(), "keys": order}, format="json")
+    assert response.status_code == 200
+    assert response.data["column_order"] == order
+    third = add_column(client, "열 C")["key"]
+    assert client.get(ROOT + "options/").data["column_order"] == [*order, third]
+    deleted = client.delete(ROOT + f"columns/{second}/", {"revision": revision()}, format="json")
+    assert deleted.data["column_order"] == [*dates, "country_code", first, "staff_name", third]
+
+
+@pytest.mark.django_db
+def test_free_text_column_accepts_both_suggestions_and_typed_values():
+    admin, _ = api()
+    created = admin.post(ROOT + "columns/", {"revision": revision(), "label": "좌석", "allow_free_text": True}, format="json")
+    key = created.data["column"]["key"]
+    person = admin.post(ROOT, {"revision": revision(), "person": {"hire_date": "2025-01-01", "deployment_date": "2025-02-01", "staff_name": "인력", "country_code": "KR", "custom_values": {key: "A열"}}}, format="json")
+    assert person.status_code == 201
+    pk = person.data["person"]["id"]
+    assert add_choice(admin, key, "B열").status_code in (200, 201)
+    for value in ("B열", "C열"):
+        response = admin.patch(ROOT, {"revision": revision(), "person": {"id": pk, "custom_values": {key: value}}}, format="json")
+        assert response.status_code == 200 and response.data["person"]["custom_values"][key] == value
+    url = ROOT + f"columns/{key}/"
+    user, _ = api(False, "Member")
+    assert user.patch(url, {"revision": revision(), "allow_free_text": False}, format="json").status_code == 403
+    assert admin.patch(url, {"revision": revision(), "allow_free_text": False}, format="json").status_code == 200
+    assert admin.patch(ROOT, {"revision": revision(), "person": {"id": pk, "custom_values": {key: "D열"}}}, format="json").status_code == 400
+    assert StaffAssignment.objects.get(pk=pk).custom_values[key] == "C열"

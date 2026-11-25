@@ -65,18 +65,50 @@ def test_admin_creates_updates_and_deletes_notice_in_feature_api(admin_client, r
     assert deleted.status_code == 200
     assert RegionalNotice.objects.count() == 0
 
+    rows = admin_client.get("/api/operations/logs/", {"section": "regional_notices"}).data["results"]
+    assert [row["action"] for row in rows] == ["delete", "update", "create"]
+    assert all(row["actor_name"] == "공지 관리자" for row in rows)
+    assert "네트워크 장비 점검" in rows[2]["summary"]
+    assert rows[2]["changes"][0]["after"]["content"] == notice_values(region)["content"]
+    change = rows[1]["changes"][0]
+    assert change["before"]["title"] == "네트워크 장비 점검"
+    assert change["after"]["title"] == "수정된 작업공지"
+    assert rows[0]["changes"][0]["before"]["title"] == "수정된 작업공지"
+
 
 @pytest.mark.django_db
-def test_notice_write_is_admin_only_and_db_section_is_removed(admin_client, region):
+def test_user_can_publish_notice_but_only_admin_can_edit_or_delete(region):
     user = get_user_model().objects.create_user(username="notice-user@example.com")
     client = APIClient()
     client.force_login(user)
     assert client.get("/api/operations/regional_notices/?month=2026-11").status_code == 200
-    assert client.post(
+    url = "/api/operations/regional_notices/"
+    created = client.post(url, {"revision": 0, **notice_values(region)}, format="json")
+    assert created.status_code == 201, created.data
+    row = created.data["row"]
+    assert row["author"] == user.username
+    assert row["can_edit"] is False
+    assert client.get(url, {"month": row["month"]}).data == [row]
+    detail = f"{url}{row['id']}/"
+    revision = {"revision": created.data["revision"]}
+    assert client.patch(detail, {**revision, "title": "수정"}, format="json").status_code == 403
+    assert client.delete(detail, revision, format="json").status_code == 403
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("bypass", [False, True])
+def test_anonymous_cannot_publish_notice(settings, region, bypass):
+    settings.DEVELOPMENT_AUTH_BYPASS = bypass
+    response = APIClient().post(
         "/api/operations/regional_notices/",
         {"revision": 0, **notice_values(region)},
         format="json",
-    ).status_code == 403
+    )
+    assert response.status_code == 403
+    assert not RegionalNotice.objects.exists()
+
+
+def test_notice_db_section_is_removed(admin_client):
     assert admin_client.put(
         "/api/db-admin/sections/regional_notices/",
         {"revision": 0, "month": "2026-11", "rows": []},

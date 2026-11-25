@@ -29,7 +29,7 @@ def base(db):
 
 
 def resource(**values):
-    return {'region': 101, 'service': 'TEST', 'host_count': 12, 'vm_count': None, **values}
+    return {'region': 101, 'service': 'HCLOUD', 'host_count': 12, 'vm_count': None, **values}
 
 
 def save(client, rows, revision=0):
@@ -83,6 +83,7 @@ def test_current_resource_columns_and_unique_constraint(db):
     assert 'service_code' not in infra_columns
     assert not {'zone_name', 'storage_rack_count', 'environment_name'} & infra_columns
     assert constraints['unique_monthly_resource_service']['columns'] == ['period_month', 'region_id', 'service']
+    assert constraints['resource_valid_service']['columns'] == ['service']
     assert 'unique_current_resource_service' not in constraints
     assert 'unique_current_resource_environment' not in constraints
 
@@ -90,7 +91,7 @@ def test_current_resource_columns_and_unique_constraint(db):
 @pytest.mark.django_db
 @pytest.mark.parametrize('retired', [{'zone_name': 'Old', 'storage_rack_count': 7}, {'environment_name': '운영'}])
 def test_old_client_resource_columns_are_rejected_without_mutation(client, base, retired):
-    response = save(client, [{'region': 101, 'service': 'TEST', **retired}])
+    response = save(client, [{'region': 101, 'service': 'HCLOUD', **retired}])
     assert response.status_code == 400
     assert not InfrastructureResource.objects.exists()
 
@@ -103,7 +104,7 @@ def test_copied_resource_can_save_as_new_service_and_duplicates_are_atomic(clien
     copy = {key: value for key, value in original.items() if key not in ('id', 'updated_at')}
     assert save(client, [original, copy], 1).status_code == 400
     assert InfrastructureResource.objects.count() == 1
-    copy['service'] = 'SECOND'
+    copy['service'] = 'CCS'
     assert save(client, [original, copy], 1).status_code == 200
     assert InfrastructureResource.objects.count() == 2
     assert client.get(ROOT + 'current/').data['totals']['storage'] == 6
@@ -113,7 +114,7 @@ def test_resource_trend_limits_months_and_keeps_missing_values(client, base, set
     from datetime import date
 
     for month in [date(2025, 12, 1), date(2026, 1, 1), date(2026, 3, 1)]:
-        InfrastructureResource.objects.create(period_month=month, region_id=101, service='TEST', host_count=0)
+        InfrastructureResource.objects.create(period_month=month, region_id=101, service='HCLOUD', host_count=0)
     url = ROOT + 'resources/trend/'
     response = client.get(url, {'month': '2026-03', 'months': 3})
     assert response.status_code == 200
@@ -135,7 +136,7 @@ def test_resource_tab_create_update_and_delete_record_history(client, base):
         'revision': 0,
         'month': '2026-11',
         'region': 101,
-        'service': 'TEST',
+        'service': 'HCLOUD',
         'host_count': 12,
         'vm_count': None,
         'compute_rack_count': 3,
@@ -182,7 +183,7 @@ def test_resource_tab_writes_are_admin_only(base, settings):
         'revision': 0,
         'month': '2026-11',
         'region': 101,
-        'service': 'TEST',
+        'service': 'HCLOUD',
         'host_count': 1,
     }
     anonymous = APIClient()
@@ -205,7 +206,7 @@ def test_resource_tab_rejects_duplicate_and_wrong_month(client, base):
         'revision': 0,
         'month': '2026-11',
         'region': 101,
-        'service': 'TEST',
+        'service': 'HCLOUD',
         'host_count': 1,
     }
     created = client.post(ROOT + 'resources/', payload, format='json')

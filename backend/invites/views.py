@@ -1,11 +1,13 @@
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import serializers, status
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.roles import CanWrite
+from reporting.permissions import OperationsAdministrator
+from reporting.services import record_log
 
 from . import services
 from .models import Invite
@@ -55,25 +57,28 @@ def invite_payload(invite: Invite):
 
 
 def _visible_invites(user):
-    qs = Invite.objects.select_related("created_by").prefetch_related("uses__user")
-    return qs if user.is_staff else qs.filter(created_by=user)
+    return Invite.objects.select_related("created_by").prefetch_related("uses__user")
 
 
 class InviteListCreateView(APIView):
     """관리자·사용자는 초대 링크를 만들 수 있습니다. 관리자 승인은 필요 없습니다.
     옵저버(읽기 전용)는 목록 조회만 되고 만들기는 403입니다."""
 
-    permission_classes = [IsAuthenticated, CanWrite]
+    permission_classes = [OperationsAdministrator]
 
     def get(self, request):
         return Response([invite_payload(invite) for invite in _visible_invites(request.user)[:50]])
 
+    @transaction.atomic
     def post(self, request):
         serializer = invite_create_serializer(request.user, request.data)
         serializer.is_valid(raise_exception=True)
         invite, token = services.create_invite(
             request.user, serializer.validated_data["expires_days"], serializer.validated_data["max_uses"]
         )
+        record_log(request, "invites", "create", f"초대 링크 #{invite.pk} 발급", after={
+            "id": invite.pk, "expires_at": invite.expires_at.isoformat(), "max_uses": invite.max_uses,
+        })
         # 토큰 원문은 만들 때 한 번만 돌려줍니다.
         return Response({**invite_payload(invite), "token": token}, status=status.HTTP_201_CREATED)
 
@@ -81,7 +86,7 @@ class InviteListCreateView(APIView):
 class InviteOptionsView(APIView):
     """초대 창이 보여 줄 기간·인원 선택지입니다. 일반 팀원과 관리자가 다릅니다."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [OperationsAdministrator]
 
     def get(self, request):
         return Response(options_payload(request.user))
@@ -90,13 +95,16 @@ class InviteOptionsView(APIView):
 class InviteRevokeView(APIView):
     """옵저버(읽기 전용)는 본인이 예전에 만든 초대도 취소할 수 없습니다."""
 
-    permission_classes = [IsAuthenticated, CanWrite]
+    permission_classes = [OperationsAdministrator]
 
+    @transaction.atomic
     def post(self, request, pk):
-        invite = get_object_or_404(_visible_invites(request.user), pk=pk)
+        invite = get_object_or_404(_visible_invites(request.user).select_for_update(of=("self",)), pk=pk)
         if invite.revoked_at is None:
+            before = {"id": invite.pk, "status": invite.status()}
             invite.revoked_at = timezone.now()
             invite.save(update_fields=["revoked_at"])
+            record_log(request, "invites", "update", f"초대 링크 #{invite.pk} 취소", before=before, after={"id": invite.pk, "status": invite.status()})
         return Response(invite_payload(invite))
 
 

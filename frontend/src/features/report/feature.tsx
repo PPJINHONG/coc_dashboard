@@ -1,15 +1,17 @@
+import homeLogo from "./home-logo.svg";
 import type { FeatureDefinition } from "../../shared/feature";
+import ReportPage from "./ReportPage";
 
-/** 리포트 탭은 추후 다시 개발할 수 있도록 메뉴만 유지합니다. */
 const feature: FeatureDefinition = {
   id: "report",
   label: "리포트",
   icon: "layers",
   order: 10,
-  english: "OVERVIEW",
-  description: "리포트 화면은 추후 제공할 예정입니다.",
-  homeCount: () => "준비 중",
-  Page: () => null,
+  english: "OPERATIONS REPORT",
+  homeCard: { logo: homeLogo, tone: "navy" },
+  description: "기준 월 전체 운영 현황 종합 · PDF 보고서 저장",
+  homeCount: (snapshot) => snapshot.month,
+  Page: ReportPage,
 };
 
 export default feature;

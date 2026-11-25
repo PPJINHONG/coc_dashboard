@@ -10,12 +10,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from . import registry
-from .models import ChangeLog, Region, StaffMember
-from .months import month_label, parse_month, request_month
+from .models import Region, StaffMember
+from .months import month_label, request_month
 from .permissions import OperationsAdministrator, ReportingPermission, can_manage
-from .serializers import ChangeLogSerializer, RegionSerializer, StaffMemberSerializer
+from .serializers import RegionSerializer, StaffMemberSerializer
 from .services import bump, check_revision, lock_state, record_log
-from .history import capture_history, visible_history
+from .history import capture_history, history_entry, history_page, history_queryset
 
 
 @method_decorator(csrf_protect, name='dispatch')
@@ -59,38 +59,15 @@ class SnapshotView(ReportingView):
         state = lock_state()
         payload = {'revision': state.revision, 'updated_at': state.updated_at, 'month': month_label(month),
                    'totals': registry.totals(month),
-                   'logs': visible_history(request.user, limit=50)}
+                   'logs': [history_entry(log) for log in history_queryset(request.user)[:50]]}
         for key, section in registry.sections().items():
             payload[key] = section.serializer(section.rows(month), many=True, context={'request': request}).data
         return Response(payload)
 
 
-class LogsView(ReportingView):
+class LogsView(AdminDataView):
     def get(self, request):
-        if not request.user.is_authenticated or not request.user.is_active:
-            raise PermissionDenied('로그인한 활성 사용자만 변경 이력을 조회할 수 있습니다.')
-        catalog_rows = visible_history(request.user, {'month': request.query_params.get('month')})
-        params = request.query_params
-        rows = (visible_history(request.user, params)
-                if any(params.get(key) for key in ('region', 'actor', 'action', 'days')) else catalog_rows)
-        tabs, actors, regions, actions = {}, {}, {}, {}
-        for row in catalog_rows:
-            actions[row['action']] = actions.get(row['action'], 0) + 1
-            tab = tabs.setdefault(row['section'], {'id': row['section'], 'count': 0, 'latest_at': row['created_at']})
-            tab['count'] += 1
-            actors[row['actor_key']] = {'id': row['actor_key'], 'name': row['actor_name']}
-            regions.update({item['id']: item for item in row['regions']})
-        if request.query_params.get('section'):
-            rows = [row for row in rows if row['section'] == request.query_params['section']]
-        try:
-            offset = max(0, int(request.query_params.get('offset', 0)))
-        except (ValueError, TypeError) as exc:
-            raise ValidationError('페이지 값이 올바르지 않습니다.') from exc
-        page_size = 30
-        return Response({'results': rows[offset:offset + page_size], 'count': len(rows),
-                         'next_offset': offset + page_size if offset + page_size < len(rows) else None,
-                         'tabs': list(tabs.values()), 'actions': actions, 'actors': sorted(actors.values(), key=lambda item: item['name']),
-                         'regions': sorted(regions.values(), key=lambda item: item['region_name'])})
+        return Response(history_page(request.user, request.query_params))
 
 
 class SectionView(AdminDataView):

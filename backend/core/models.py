@@ -4,6 +4,21 @@ from django.conf import settings
 from django.db import models
 
 
+class AccountSecurity(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name="security_settings",
+    )
+    must_change_password = models.BooleanField(default=False, db_default=False)
+    password_reset_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "account_security"
+        db_table_comment = "회원 비밀번호 초기화 및 변경 필요 상태"
+
+
 class UserActivity(models.Model):
     """사용자 행동 이력. 관리자가 사용자·권한 화면에서 계정별로 확인합니다.
 

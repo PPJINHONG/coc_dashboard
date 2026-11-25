@@ -15,18 +15,20 @@ def lock_state():
     return DataState.objects.select_for_update().get(pk=1)
 
 
-def actor(request):
-    if request.user.is_authenticated:
-        return {'actor_name': request.user.get_full_name() or request.user.username, 'actor_username': request.user.username}
+def actor(user):
+    if user.is_authenticated:
+        return {'actor_name': user.get_full_name() or user.username, 'actor_username': user.username}
     return {'actor_name': '개발 사용자', 'actor_username': 'development'}
 
 
-def record_log(request, section, action, summary, before=None, after=None, month=None):
+def record_log(request, section, action, summary, before=None, after=None, month=None, *, user=None):
     """운영 변경 이력을 남깁니다. 월별 기능 데이터는 기준 월(month, 그 달 1일)을 함께 저장합니다."""
     from .history import restore_delta
-    return ChangeLog.objects.create(section=section, action=action, summary=summary, before_data=before or {}, after_data=after or {},
+    if action == 'update' and before == after and not getattr(request, '_history_before', None):
+        return None
+    return ChangeLog.objects.create(section=section, action=action, summary=summary[:300], before_data=before or {}, after_data=after or {},
                              restore_data=restore_delta(request, section),
-                             period_month=month, **actor(request))
+                             period_month=month, **actor(user or request.user))
 
 
 def check_revision(state, revision):

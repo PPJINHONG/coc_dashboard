@@ -19,14 +19,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.roles import record_activity, staff_edit_countries
+from core.roles import is_admin, record_activity, staff_edit_countries
 from reporting.models import StaffMember
 from reporting.services import bump, check_revision, lock_state, record_log
 from reporting.history import capture_history
 
 from .models import StaffAssignment, StaffResponsibility
 from .serializers import EDIT_FIELDS, SELF_FIELDS, StaffEditSerializer, StaffSerializer
-from .permissions import can_manage_person, can_edit_person, can_view_grade, editor_level, title_level, owns_profile
+from .permissions import can_manage_person, can_edit_person, editor_level, title_level, owns_profile
 
 MAX_ROWS = 500
 
@@ -43,11 +43,9 @@ def validate_permissions(user, values, person=None):
             raise PermissionDenied('관리 권역의 인력만 등록·수정할 수 있습니다.')
         if title_level(values.get('job_title', '')) > editor_level(user):
             raise PermissionDenied('본인보다 상위 직책을 선택할 수 없습니다.')
-    if 'grade' in values and not can_view_grade(user):
-        raise PermissionDenied('등급은 관리자와 팀장만 관리할 수 있습니다.')
     if 'account' in values:
-        if not can_view_grade(user):
-            raise PermissionDenied('회원 계정 연결은 관리자와 팀장만 변경할 수 있습니다.')
+        if not is_admin(user):
+            raise PermissionDenied('회원 계정 연결은 관리자만 변경할 수 있습니다.')
         if values['account'] and not values['account'].is_active:
             raise ValidationError('활성 회원 계정만 연결할 수 있습니다.')
 

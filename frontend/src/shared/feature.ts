@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import type { User } from "./api/auth";
 import type { Bootstrap, Snapshot } from "./api/operations";
 import type { IconName } from "./components/Icon";
+import type { ReportSource } from "./featureReport";
 
 /** 공통 뼈대(app/AppShell.tsx)가 기능 화면(Page)에 넘겨 주는 값 */
 export interface FeaturePageProps {
@@ -17,12 +18,6 @@ export interface FeaturePageProps {
   setDirty: (dirty: boolean) => void;
   /** 저장 중이면 true. 그동안 이동 버튼을 막습니다. */
   setBusy: (busy: boolean) => void;
-}
-
-/** 홈 카드가 받는 값 */
-export interface FeatureDataProps {
-  data: Bootstrap;
-  snapshot: Snapshot;
 }
 
 /**
@@ -50,8 +45,10 @@ export interface FeatureDefinition {
   description?: string;
   /** 홈 카드 아래 건수 문구 */
   homeCount?: (snapshot: Snapshot) => string;
-  /** 홈 "주요 기능"에 넣을 때 순서·넓은 카드 여부·미리보기 */
-  featured?: { order: number; wide?: boolean; Preview: ComponentType<FeatureDataProps> };
+  /** 이 기능이 월간 리포트에 제공하는 조회 전용 데이터. */
+  report?: ReportSource;
+  /** 홈 카드에서 사용하는 기능 고유 로고와 배경색. */
+  homeCard?: { logo: string; tone: "navy" | "mist" | "forest" | "wine" | "sage" | "ink" | "paper" };
   /** 활성 기능 아래 사이드 탭. 기본 화면은 id를 빈 문자열로 등록합니다. */
   subpages?: { id: string; label: string; Page: ComponentType<FeaturePageProps> }[];
   Page: ComponentType<FeaturePageProps>;

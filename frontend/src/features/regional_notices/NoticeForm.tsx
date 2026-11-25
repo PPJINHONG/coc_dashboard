@@ -53,7 +53,7 @@ export default function NoticeForm({
       <div className="regional-notice-form-intro">
         <span>{notice ? "EDIT NOTICE" : "NEW NOTICE"}</span>
         <strong>{notice ? "작업공지 내용을 수정합니다." : "월간 타임라인에 새 작업을 등록합니다."}</strong>
-        <p>작성자는 로그인한 관리자 이름으로 자동 기록됩니다.</p>
+        {!notice && <p>작성자는 로그인한 계정의 이름으로 기록됩니다.</p>}
       </div>
 
       {error && <p className="error">{error}</p>}

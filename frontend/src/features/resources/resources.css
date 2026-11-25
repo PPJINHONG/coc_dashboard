@@ -688,7 +688,15 @@
   border-radius: var(--radius);
   background: var(--panel);
 }
-.resource-map { margin: 0 0 20px; }
+.resource-map {
+  min-width: 0;
+  margin-bottom: 20px;
+  background: #fff;
+  color: #202020;
+  overflow-wrap: anywhere;
+}
+.resource-map > .resource-visual-header { border-block: 1px solid #a7a7a7; }
+.resource-map h2, .resource-map h3 { color: inherit; }
 .resource-visual-header {
   display: flex;
   flex-wrap: wrap;
@@ -701,14 +709,13 @@
 .resource-visual-header h2 { margin: 0; font-size: 15px; }
 .resource-visual-header > span { font-size: 12px; font-variant-numeric: tabular-nums; }
 .resource-tree {
-  --branch-line: #a6bcd2;
+  --branch-line: #898989;
   --branch-gap: clamp(12px, 1.4vw, 26px);
   display: grid;
   grid-template-columns: minmax(0, 0.78fr) minmax(0, 3fr);
   align-items: center;
   padding: 18px clamp(12px, 1.4vw, 24px);
-  border-radius: 0 0 var(--radius) var(--radius);
-  background: radial-gradient(circle, #cfdae7 0.8px, transparent 1px) 0 0 / 16px 16px, #f6f9fc;
+  background: #fff;
   font-variant-numeric: tabular-nums;
 }
 .resource-tree h3, .resource-tree dl, .resource-tree dd, .resource-tree p { margin: 0; }
@@ -716,13 +723,9 @@
 .resource-root-node, .resource-area-node, .resource-leaf > article, .resource-leaf > p {
   position: relative;
   min-width: 0;
-  padding: 14px;
-  border: 1px solid #bdcfe0;
-  border-radius: 8px;
-  background: white;
-  box-shadow: 0 2px 6px #20364e09;
+  padding: 12px 16px;
 }
-.resource-root-node { border-top: 3px solid #264c76; }
+.resource-root-node { border-left: 3px solid #264c76; }
 .resource-root-node header, .resource-area-node h3 { display: flex; align-items: center; gap: 7px; font-size: 14px; }
 .resource-root-node small { display: block; margin-top: 18px; }
 .resource-root-node > b { display: block; font-size: clamp(22px, 1.8vw, 32px); letter-spacing: -.04em; }
@@ -750,18 +753,31 @@
 }
 .resource-root-node::after, .resource-area-node::after { left: 100%; }
 .resource-area-node { border-left: 3px solid var(--area-ink); }
-.resource-area-node h3 i { flex: 0 0 7px; height: 7px; border-radius: 50%; background: var(--area-ink); }
 .resource-area-node > strong { display: block; margin-top: 10px; font-size: 20px; }
 .resource-area-node small { font-size: 11px; }
 .resource-area-node .resource-host-change { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin-top: 8px; font-size: 11px; }
 .resource-host-change b { font-size: 13px; }
-.resource-leaf article { padding: 11px 14px; }
-.resource-leaf header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 10px; }
-.resource-leaf header > strong { font-size: 14px; }
-.resource-leaf header > span { padding: 2px 6px; border-radius: 4px; background: #eff4f8; font-size: 10px; }
-.resource-leaf dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin-top: 9px; }
-.resource-leaf dt { font-size: 10px; }
-.resource-leaf dd { margin-top: 2px; font-size: 13px; }
+.resource-leaf + .resource-leaf > article { border-top: 1px solid #d4d4d4; }
+.resource-leaf > article::before, .resource-leaf > p::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--area-ink);
+}
+.resource-leaf header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.resource-leaf header > strong { font-size: 15px; }
+.resource-map-services { font-size: 11px; letter-spacing: .04em; }
+.resource-map-services b { font-weight: 650; }
+.resource-map-services [data-service="HCLOUD"] { color: #205f91; }
+.resource-map-services [data-service="CCS"] { color: #754983; }
+.resource-leaf dl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.resource-leaf dt { font-size: 11px; }
+.resource-leaf dd { margin-top: 2px; font-size: 15px; }
 .resource-leaf > p { font-size: 12px; }
 .resource-compare-metrics {
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 18px;

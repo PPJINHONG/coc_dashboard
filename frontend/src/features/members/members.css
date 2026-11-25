@@ -19,3 +19,17 @@
 .members-metadata > div { display: grid; grid-template-columns: 80px 1fr; gap: 12px; }
 .members-metadata dd { margin: 0; }
 @media (max-width: 600px) { .members-filters > label, .members-filters > label:first-child { min-width: 100%; } }
+.member-password-reset {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid #d9a9ae;
+  border-radius: 6px;
+  background: #fff7f7;
+}
+.member-password-reset > div:first-child { display: grid; gap: 3px; }
+.member-password-reset strong { font-size: 13px; }
+.member-password-reset p { margin: 0; color: var(--muted); font-size: 11px; }

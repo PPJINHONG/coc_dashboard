@@ -131,7 +131,7 @@ class RegionalRequestListCreateView(APIView):
         ticket = request_queryset().get(pk=ticket.pk)
         after = ticket_snapshot(ticket)
         bump(state)
-        record_log(request, "regional_requests", "create", f"요청작업 #{ticket.pk} 등록", after=after, month=ticket.period_month)
+        record_log(request, "regional_requests", "create", f"요청작업 등록 · {ticket.title}", after=after, month=ticket.period_month)
         record_activity(request, "create", f"권역 요청작업 #{ticket.pk} 등록: {ticket.title}", "regional_request", ticket.pk, after=after)
         return Response({"revision": state.revision, "row": serialize(ticket, request)}, status=status.HTTP_201_CREATED)
 
@@ -170,7 +170,7 @@ class RegionalRequestDetailView(APIView):
         ticket = request_queryset().get(pk=ticket.pk)
         after = ticket_snapshot(ticket)
         bump(state)
-        record_log(request, "regional_requests", "update", f"요청작업 #{ticket.pk} 수정", before=before, after=after, month=ticket.period_month)
+        record_log(request, "regional_requests", "update", f"요청작업 수정 · {ticket.title}", before=before, after=after, month=ticket.period_month)
         record_activity(request, "update", f"권역 요청작업 #{ticket.pk} 수정: {ticket.title}", "regional_request", ticket.pk, before=before, after=after)
         return Response({"revision": state.revision, "row": serialize(ticket, request)})
 
@@ -186,7 +186,7 @@ class RegionalRequestDetailView(APIView):
         capture_history(request, 'regional_requests')
         ticket.delete()
         bump(state)
-        record_log(request, "regional_requests", "delete", f"요청작업 #{pk} 삭제", before=before, month=period_month)
+        record_log(request, "regional_requests", "delete", f"요청작업 삭제 · {title}", before=before, month=period_month)
         record_activity(request, "delete", f"권역 요청작업 #{pk} 삭제: {title}", "regional_request", pk, before=before)
         return Response({"revision": state.revision})
 
@@ -222,12 +222,15 @@ class ImageUploadView(APIView):
         cutoff = timezone.now() - timedelta(days=1)
         lock_state()
         for orphan in RegionalRequestImage.objects.filter(uploader=request.user, request__isnull=True, created_at__lt=cutoff):
+            record_log(request, "regional_requests", "delete", "요청작업 미첨부 이미지 정리",
+                       before={"id": orphan.pk, "original_name": orphan.original_name})
             orphan.delete()
         image = RegionalRequestImage.objects.create(
             uploader=request.user,
             file=upload,
             original_name=upload.name[:255],
         )
+        record_log(request, "regional_requests", "create", "요청작업 이미지 업로드", after={"id": image.pk, "original_name": image.original_name})
         return Response(RegionalRequestImageSerializer(image).data, status=status.HTTP_201_CREATED)
 
 

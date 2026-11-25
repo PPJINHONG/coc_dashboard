@@ -29,7 +29,7 @@ type RegionFilter = "all" | NoticeCountry;
 type FormMode = "create" | "edit" | null;
 
 export default function RegionalNoticesPage({
-  data,
+  user,
   snapshot,
   refresh,
   setDirty,
@@ -47,7 +47,6 @@ export default function RegionalNoticesPage({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
   const boardRef = useRef<HTMLDivElement>(null);
-  const canManage = data.can_manage;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -144,7 +143,7 @@ export default function RegionalNoticesPage({
           <h1>권역별 작업공지</h1>
           <p>한 달의 작업 일정을 리전 타임라인으로 확인하고 오늘 작업을 빠르게 구분합니다.</p>
         </div>
-        {canManage && (
+        {user && (
           <button
             type="button"
             className="btn btn-primary regional-notice-create"

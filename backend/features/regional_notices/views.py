@@ -9,7 +9,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.roles import display_name, record_activity
+from core.roles import CanWrite, display_name, record_activity
 from reporting.history import capture_history
 from reporting.months import request_month
 from reporting.permissions import ReportingPermission
@@ -59,6 +59,11 @@ def input_data(request):
 class RegionalNoticeListCreateView(APIView):
     permission_classes = [ReportingPermission]
 
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [CanWrite()]
+        return super().get_permissions()
+
     def get(self, request):
         month = request_month(request)
         rows = notice_queryset().filter(period_month=month)
@@ -83,7 +88,7 @@ class RegionalNoticeListCreateView(APIView):
         notice = notice_queryset().get(pk=notice.pk)
         after = notice_snapshot(notice)
         bump(state)
-        record_log(request, "regional_notices", "create", f"작업공지 #{notice.pk} 등록", after=after, month=notice.period_month)
+        record_log(request, "regional_notices", "create", f"작업공지 등록 · {notice.title}", after=after, month=notice.period_month)
         record_activity(request, "create", f"권역별 작업공지 #{notice.pk} 등록: {notice.title}", "regional_notice", notice.pk, after=after)
         return Response({"revision": state.revision, "row": serialize(notice, request)}, status=status.HTTP_201_CREATED)
 
@@ -120,7 +125,7 @@ class RegionalNoticeDetailView(APIView):
         notice = notice_queryset().get(pk=notice.pk)
         after = notice_snapshot(notice)
         bump(state)
-        record_log(request, "regional_notices", "update", f"작업공지 #{notice.pk} 수정", before=before, after=after, month=notice.period_month)
+        record_log(request, "regional_notices", "update", f"작업공지 수정 · {notice.title}", before=before, after=after, month=notice.period_month)
         record_activity(request, "update", f"권역별 작업공지 #{notice.pk} 수정: {notice.title}", "regional_notice", notice.pk, before=before, after=after)
         return Response({"revision": state.revision, "row": serialize(notice, request)})
 
@@ -135,6 +140,6 @@ class RegionalNoticeDetailView(APIView):
         capture_history(request, "regional_notices")
         notice.delete()
         bump(state)
-        record_log(request, "regional_notices", "delete", f"작업공지 #{pk} 삭제", before=before, month=month)
+        record_log(request, "regional_notices", "delete", f"작업공지 삭제 · {title}", before=before, month=month)
         record_activity(request, "delete", f"권역별 작업공지 #{pk} 삭제: {title}", "regional_notice", pk, before=before)
         return Response({"revision": state.revision})

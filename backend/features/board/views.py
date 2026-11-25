@@ -1,5 +1,6 @@
 """게시판 글·댓글·첨부 이미지 API (/api/board/...). 화면은 아직 메뉴에 연결하지 않았습니다."""
 
+from django.db import transaction
 from django.db.models import Count
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
@@ -9,7 +10,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.roles import CanWrite, can_modify, record_activity
+from core.roles import CanWrite, can_modify, display_name, record_activity
+from reporting.services import record_log
 
 from .models import Comment, Post, PostImage
 from .serializers import (
@@ -66,17 +68,22 @@ def _post_snapshot(post):
         "id": post.id,
         "title": post.title,
         "content": post.content,
-        "author": post.author.username,
+        "author_name": display_name(post.author),
         "image_ids": sorted(post.images.values_list("id", flat=True)),
         "comments": [
-            {"id": c.id, "author": c.author.username, "content": c.content}
+            {"id": c.id, "author_name": display_name(c.author), "content": c.content}
             for c in post.comments.select_related("author").all()
         ],
     }
 
 
 def _comment_snapshot(comment):
-    return {"id": comment.id, "post": comment.post_id, "author": comment.author.username, "content": comment.content}
+    return {"id": comment.id, "post": comment.post_id, "post_title": comment.post.title, "author_name": display_name(comment.author), "content": comment.content}
+
+
+def record_board_change(request, action, summary, target, pk, before=None, after=None):
+    record_activity(request, action, summary, target, pk, before=before, after=after)
+    record_log(request, "board", action, summary, before=before, after=after)
 
 
 class PostListCreateView(APIView):
@@ -91,6 +98,7 @@ class PostListCreateView(APIView):
         data = PostListSerializer(posts, many=True, context={"request": request}).data
         return Response(data)
 
+    @transaction.atomic
     def post(self, request):
         serializer = PostWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -114,7 +122,7 @@ class PostListCreateView(APIView):
                 img.post = post
             PostImage.objects.bulk_update(images, ["post"])
 
-        record_activity(request, "create", f"게시글 #{post.id} 작성: {post.title}", "post", post.id, after=_post_snapshot(post))
+        record_board_change(request, "create", f"게시글 #{post.id} 작성: {post.title}", "post", post.id, after=_post_snapshot(post))
         detail = PostDetailSerializer(post, context={"request": request}).data
         return Response(detail, status=status.HTTP_201_CREATED)
 
@@ -122,16 +130,18 @@ class PostListCreateView(APIView):
 class PostDetailView(APIView):
     permission_classes = [CanWrite]
 
-    def _get_post(self, pk):
-        return get_object_or_404(Post.objects.select_related("author"), pk=pk)
+    def _get_post(self, pk, lock=False):
+        posts = Post.objects.select_related("author")
+        return get_object_or_404(posts.select_for_update(of=("self",)) if lock else posts, pk=pk)
 
     def get(self, request, pk):
         post = self._get_post(pk)
         data = PostDetailSerializer(post, context={"request": request}).data
         return Response(data)
 
+    @transaction.atomic
     def patch(self, request, pk):
-        post = self._get_post(pk)
+        post = self._get_post(pk, lock=True)
         if not can_modify(request.user, post.author.username):
             return Response(
                 {"detail": "작성자 또는 관리자만 수정할 수 있습니다."}, status=status.HTTP_403_FORBIDDEN
@@ -163,25 +173,27 @@ class PostDetailView(APIView):
             post.content = validated["content"]
         post.save()
 
-        record_activity(request, "update", f"게시글 #{post.id} 수정", "post", post.id, before=before, after=_post_snapshot(post))
+        record_board_change(request, "update", f"게시글 #{post.id} 수정", "post", post.id, before=before, after=_post_snapshot(post))
         data = PostDetailSerializer(post, context={"request": request}).data
         return Response(data)
 
+    @transaction.atomic
     def delete(self, request, pk):
-        post = self._get_post(pk)
+        post = self._get_post(pk, lock=True)
         if not can_modify(request.user, post.author.username):
             return Response(
                 {"detail": "작성자 또는 관리자만 삭제할 수 있습니다."}, status=status.HTTP_403_FORBIDDEN
             )
         before = _post_snapshot(post)
         post.delete()
-        record_activity(request, "delete", f"게시글 #{pk} 삭제: {before['title']}", "post", pk, before=before)
+        record_board_change(request, "delete", f"게시글 #{pk} 삭제: {before['title']}", "post", pk, before=before)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class CommentCreateView(APIView):
     permission_classes = [CanWrite]
 
+    @transaction.atomic
     def post(self, request, pk):
         post = get_object_or_404(Post, pk=pk)
         serializer = CommentWriteSerializer(data=request.data)
@@ -191,7 +203,7 @@ class CommentCreateView(APIView):
             author=request.user,
             content=serializer.validated_data["content"],
         )
-        record_activity(request, "create", f"게시글 #{post.id} 댓글 작성", "post_comment", comment.id, after=_comment_snapshot(comment))
+        record_board_change(request, "create", f"게시글 #{post.id} 댓글 작성", "post_comment", comment.id, after=_comment_snapshot(comment))
         data = CommentSerializer(comment, context={"request": request}).data
         return Response(data, status=status.HTTP_201_CREATED)
 
@@ -200,8 +212,9 @@ class CommentDetailView(APIView):
     permission_classes = [CanWrite]
 
     def _get_comment(self, pk):
-        return get_object_or_404(Comment.objects.select_related("author"), pk=pk)
+        return get_object_or_404(Comment.objects.select_related("author", "post").select_for_update(of=("self",)), pk=pk)
 
+    @transaction.atomic
     def patch(self, request, pk):
         comment = self._get_comment(pk)
         if not can_modify(request.user, comment.author.username):
@@ -213,10 +226,11 @@ class CommentDetailView(APIView):
         serializer.is_valid(raise_exception=True)
         comment.content = serializer.validated_data["content"]
         comment.save()
-        record_activity(request, "update", f"게시글 #{comment.post_id} 댓글 수정", "post_comment", comment.id, before=before, after=_comment_snapshot(comment))
+        record_board_change(request, "update", f"게시글 #{comment.post_id} 댓글 수정", "post_comment", comment.id, before=before, after=_comment_snapshot(comment))
         data = CommentSerializer(comment, context={"request": request}).data
         return Response(data)
 
+    @transaction.atomic
     def delete(self, request, pk):
         comment = self._get_comment(pk)
         if not can_modify(request.user, comment.author.username):
@@ -225,7 +239,7 @@ class CommentDetailView(APIView):
             )
         before = _comment_snapshot(comment)
         comment.delete()
-        record_activity(request, "delete", f"게시글 #{before['post']} 댓글 삭제", "post_comment", pk, before=before)
+        record_board_change(request, "delete", f"게시글 #{before['post']} 댓글 삭제", "post_comment", pk, before=before)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -233,6 +247,7 @@ class ImageUploadView(APIView):
     permission_classes = [CanWrite]
     parser_classes = [MultiPartParser, FormParser]
 
+    @transaction.atomic
     def post(self, request):
         upload = request.FILES.get("file")
         if upload is None:
@@ -267,6 +282,7 @@ class ImageUploadView(APIView):
             )
 
         image = PostImage.objects.create(uploader=request.user, file=upload)
+        record_log(request, "board", "create", "게시판 이미지 업로드", after={"id": image.pk, "original_name": upload.name})
         data = PostImageSerializer(image, context={"request": request}).data
         return Response(data, status=status.HTTP_201_CREATED)
 

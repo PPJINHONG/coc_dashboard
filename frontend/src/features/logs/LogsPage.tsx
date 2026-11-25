@@ -13,18 +13,16 @@ import LogData from "./LogData";
 export default function LogsPage({ data, snapshot, user, features, refresh, setBusy }: FeaturePageProps) {
   const labels = Object.fromEntries([
     ...features.map((item) => [item.id, item.label]),
+    ["board", "게시판"], ["dashboard", "대시보드"], ["invites", "팀원 초대"], ["navigation", "개인 화면 설정"],
     ["regions", "리전 공통데이터"], ["staff-members", "인력 공통데이터"],
   ]);
   const people = Object.fromEntries(sectionRows(snapshot, "staff").map((row) => [String(row.id), String(row.staff_name ?? "")]));
   const [section, setSection] = useState("");
-  const [region, setRegion] = useState("");
-  const [actor, setActor] = useState("");
   const [action, setAction] = useState("");
   const [days, setDays] = useState("");
   const [detail, setDetail] = useState<HistoryLog | null>(null);
-  const [selectedMonth, setSelectedMonth] = useState(false);
   const [page, setPage] = useState<HistoryPage | null>(null);
-  const [catalog, setCatalog] = useState<Pick<HistoryPage, "tabs" | "actors" | "regions" | "actions"> | null>(null);
+  const [catalog, setCatalog] = useState<Pick<HistoryPage, "tabs" | "actions"> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
@@ -35,8 +33,7 @@ export default function LogsPage({ data, snapshot, user, features, refresh, setB
   const [restoring, setRestoring] = useState(false);
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const generation = useRef(0);
-  const month = selectedMonth ? snapshot.month : "";
-  const fetchPage = useCallback((offset = "") => api.history({ section, region, actor, action, days, month, offset }), [section, region, actor, action, days, month]);
+  const fetchPage = useCallback((offset = "") => api.history({ section, action, days, offset }), [section, action, days]);
   useEffect(() => {
     const current = ++generation.current;
     setLoading(true);
@@ -103,11 +100,9 @@ export default function LogsPage({ data, snapshot, user, features, refresh, setB
       setBusy(false);
     }
   }
-  const scope = user?.is_staff || user?.role === "team_lead" ? "전체 변경 이력" :
-    user?.role === "group_lead" ? `${(user.managed_countries ?? []).join(" · ")} 관리 권역의 변경 이력` : "본인이 변경한 이력";
   return <>
     <header className="page-heading">
-      <div><span className="eyebrow">ACTIVITY</span><h1>변경 이력</h1><p>{scope}을 최신순으로 확인합니다.</p></div>
+      <div><span className="eyebrow">ACTIVITY</span><h1>변경 이력</h1><p>기능별 변경 내용과 변경자를 최신순으로 확인합니다.</p></div>
       <button className="btn btn-sm" disabled={loading || restoring} onClick={() => setReload((value) => value + 1)}>새로고침</button>
     </header>
     <section className="panel logs-filters" aria-label="변경 이력 분류">
@@ -120,18 +115,6 @@ export default function LogsPage({ data, snapshot, user, features, refresh, setB
       </div></div>
       <div className="logs-chip-row"><span>기간</span><div className="logs-chips" role="group" aria-label="변경 기간">
         {[["", "전체"], ["1", "오늘"], ["7", "최근 7일"], ["30", "최근 30일"]].map(([value, label]) => <button key={value} aria-pressed={days === value} disabled={restoring} onClick={() => setDays(value)}>{label}</button>)}
-      </div></div>
-      <div className="logs-chip-row logs-extra"><span>추가 조건</span><div className="logs-extra-fields">
-        <label>리전<select value={region} disabled={restoring} onChange={(event) => setRegion(event.target.value)}>
-          <option value="">전체 리전</option>{catalog?.regions.map((item) => <option key={item.id} value={item.id}>{item.region_name}</option>)}
-        </select></label>
-        <label>변경자<select value={actor} disabled={restoring} onChange={(event) => setActor(event.target.value)}>
-          <option value="">전체 변경자</option>{catalog?.actors.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-        </select></label>
-        <label>기준 월<select value={selectedMonth ? "selected" : "all"} disabled={restoring} onChange={(event) => setSelectedMonth(event.target.value === "selected")}>
-          <option value="all">전체 기간</option><option value="selected">{snapshot.month} 월별 데이터</option>
-        </select></label>
-        <button className="btn btn-sm" disabled={restoring} onClick={() => { setRegion(""); setActor(""); setSection(""); setAction(""); setDays(""); setSelectedMonth(false); }}>필터 초기화</button>
       </div></div>
     </section>
     <section className="panel logs-content" aria-label="변경 목록" aria-busy={loading}>

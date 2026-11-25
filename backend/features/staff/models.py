@@ -9,18 +9,17 @@ from reporting.models import StaffMember
 class StaffAssignment(models.Model):
     account = models.OneToOneField(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
                                   related_name='staff_profile', db_comment='직접 연결한 회원 계정')
+    hire_date = models.DateField(null=True, blank=True, db_comment='입사일')
+    assignment_end_date = models.DateField(null=True, blank=True, db_comment='업무 종료일')
     deployment_date = models.DateField(null=True, blank=True, db_comment='운영 업무 투입일')
     resignation_date = models.DateField(null=True, blank=True, db_comment='회사 퇴사일 (마지막 재직일)')
-    grade = models.CharField(max_length=40, blank=True, default='', db_default='')
     custom_values = models.JSONField(default=dict, blank=True, db_default={})
     country_code = models.CharField(max_length=2, choices=[('KR', 'KR'), ('EU', 'EU'), ('NA', 'NA')])
     updated_at = models.DateTimeField(auto_now=True, db_default=models.functions.Now())
     staff = models.ForeignKey(StaffMember, db_column='staff_member_id', on_delete=models.PROTECT)
     # 직책·소속사는 모르는 경우가 있어 비워 둘 수 있습니다.
-    job_title = models.CharField(max_length=100, blank=True, default='', db_default='')
-    company_name = models.CharField(max_length=100, blank=True, default='', db_default='')
+    job_title = models.CharField(max_length=100, default='책임', db_default='책임')
     job_description = models.TextField(blank=True, default='', db_default='')
-    work_location = models.CharField(max_length=150, blank=True, default='', db_default='')
     # 접속·계정 정보. 형식이 제각각이므로(미확정 IP 포함) 문자열 그대로 저장합니다.
     pc_ip = models.CharField(max_length=45, blank=True, default='', db_default='', db_comment='PC IP')
     autoever_account = models.CharField(max_length=40, blank=True, default='', db_default='', db_comment='오토에버 계정')
@@ -80,35 +79,33 @@ def staff_column_key():
 class StaffColumn(models.Model):
     key = models.CharField(max_length=40, unique=True, default=staff_column_key, editable=False)
     label = models.CharField(max_length=80, unique=True)
+    allow_free_text = models.BooleanField(default=False, db_default=False)
+    position = models.PositiveIntegerField(default=0, db_default=0)
 
     class Meta:
         db_table = 'ops_staff_columns'
-        ordering = ['id']
+        ordering = ['position', 'id']
 
 
 class StaffChoice(models.Model):
     kind = models.CharField(max_length=40)
-    column = models.ForeignKey(StaffColumn, null=True, blank=True, on_delete=models.PROTECT)
-    country_code = models.CharField(max_length=2, blank=True, default='', db_default='')
+    column = models.ForeignKey(StaffColumn, on_delete=models.PROTECT)
     value = models.CharField(max_length=150)
 
     class Meta:
         db_table = 'ops_staff_choices'
-        ordering = ['kind', 'country_code', 'value', 'id']
+        ordering = ['kind', 'value', 'id']
         constraints = [
-            models.UniqueConstraint(fields=['kind', 'country_code', 'value'], name='unique_staff_choice'),
-            models.CheckConstraint(condition=(Q(column__isnull=True, kind__in=['company_name', 'work_location', 'grade']) |
-                                              Q(column__isnull=False, kind__startswith='custom_')), name='staff_choice_valid_kind_v2'),
-            models.CheckConstraint(condition=Q(country_code__in=['', 'KR', 'EU', 'NA']), name='staff_choice_valid_country'),
-            models.CheckConstraint(condition=Q(kind='work_location', country_code__in=['KR', 'EU', 'NA']) | (~Q(kind='work_location') & Q(country_code='')), name='staff_choice_country_scope_v2'),
+            models.UniqueConstraint(fields=['kind', 'value'], name='unique_staff_shared_choice'),
+            models.CheckConstraint(condition=Q(kind__startswith='custom_'), name='staff_choice_valid_kind_v3'),
         ]
 
     def get_kind_display(self):
-        return self.column.label if self.column_id else {'company_name': '소속사', 'work_location': '근무지', 'grade': '등급'}.get(self.kind, self.kind)
+        return self.column.label
 
 
 class StaffHeadcountRecord(models.Model):
-    """월별 권역 인원 기록. 기록이 있는 달은 인력 추이에 이 값을 쓰고, 없는 달은 투입일·퇴사일로 계산합니다."""
+    """월별 권역 인원 기록. 기록이 있는 달은 인력 추이에 이 값을 쓰고, 없는 달은 투입일·업무 종료일·퇴사일로 계산합니다."""
 
     period_month = models.DateField(db_comment='기준 월 (그 달 1일)')
     country_code = models.CharField(max_length=2, choices=[('KR', 'KR'), ('EU', 'EU'), ('NA', 'NA')])
@@ -124,3 +121,11 @@ class StaffHeadcountRecord(models.Model):
             models.UniqueConstraint(fields=['period_month', 'country_code'], name='unique_staff_headcount_month_country'),
             models.CheckConstraint(condition=Q(country_code__in=['KR', 'EU', 'NA']), name='staff_headcount_valid_country'),
         ]
+
+
+class StaffTableLayout(models.Model):
+    """기본 열 두 개의 위치. 추가 열 순서는 StaffColumn.position을 사용한다."""
+
+    name_position = models.PositiveIntegerField(default=0)
+    region_position = models.PositiveIntegerField(default=1)
+    date_positions = models.JSONField(default=dict, blank=True, db_default={})

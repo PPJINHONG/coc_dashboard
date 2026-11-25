@@ -2,79 +2,72 @@ import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
-from core.roles import apply_role
-from features.staff.models import StaffAssignment, StaffChoice
+from features.staff.models import StaffAssignment, StaffChoice, StaffColumn
 from reporting.models import ChangeLog, DataState, StaffMember
 
-URL = '/api/operations/staff/choices/'
+ROOT = "/api/operations/staff/"
 
 
-def client(role):
-    user = get_user_model().objects.create_user(username=f'{role}@choices.test')
-    apply_role(user, role, ['KR'] if role == 'group_lead' else [])
-    api = APIClient()
-    api.force_authenticate(user)
-    return api
+def client(admin=False):
+    user = get_user_model().objects.create_user(username="Admin" if admin else "Member", first_name="Admin" if admin else "Member", email="a@example.com" if admin else "m@example.com", is_staff=admin)
+    api = APIClient(); api.force_authenticate(user); return api
 
 
 def revision():
     return DataState.objects.get_or_create(pk=1)[0].revision
 
 
-@pytest.mark.django_db
-@pytest.mark.parametrize('role,can_manage', [('admin', True), ('team_lead', True), ('group_lead', False), ('user', False), ('observer', False)])
-def test_choice_management_only_team_lead_and_above(role, can_manage):
-    api = client(role)
-    existing = StaffChoice.objects.create(kind='work_location', country_code='KR', value='서울')
-    options = api.get('/api/operations/staff/options/').data
-    assert options['can_manage_choices'] == can_manage and options['choices'][0]['value'] == '서울'
-    response = api.post(URL, {'revision': revision(), 'choice': {'kind': 'work_location', 'country_code': 'NA', 'value': '미국 사무실'}}, format='json')
-    assert response.status_code == (200 if can_manage else 403)
-    response = api.delete(f'{URL}{existing.pk}/', {'revision': revision()}, format='json')
-    # 그룹장(KR 관리)은 관리 권역의 근무지만 삭제할 수 있습니다.
-    assert response.status_code == (200 if can_manage or role == 'group_lead' else 403)
+def column(api, label="소속사", scoped=False):
+    response = api.post(ROOT + "columns/", {"revision": revision(), "label": label, "is_region_scoped": scoped}, format="json")
+    assert response.status_code == 201, response.data
+    return response.data["column"]
 
 
 @pytest.mark.django_db
-def test_group_lead_manages_only_managed_region_work_locations():
-    api = client('group_lead')
-    ok = api.post(URL, {'revision': revision(), 'choice': {'kind': 'work_location', 'country_code': 'KR', 'value': '상암'}}, format='json')
-    assert ok.status_code == 200, ok.data
-    assert all(item['key'] != 'grade' for item in ok.data['items'])
-    assert api.post(URL, {'revision': revision(), 'choice': {'kind': 'work_location', 'country_code': 'EU', 'value': '베를린'}}, format='json').status_code == 403
-    assert api.post(URL, {'revision': revision(), 'choice': {'kind': 'company_name', 'value': '회사'}}, format='json').status_code == 403
-    other = StaffChoice.objects.create(kind='work_location', country_code='NA', value='LA')
-    assert api.delete(f'{URL}{other.pk}/', {'revision': revision()}, format='json').status_code == 403
+def test_only_admin_manages_columns_and_values():
+    member = client()
+    assert member.post(ROOT + "columns/", {"revision": 0, "label": "소속사"}, format="json").status_code == 403
+    admin = client(True)
+    created = column(admin)
+    assert member.post(ROOT + "choices/", {"revision": revision(), "choice": {"kind": created["key"], "value": "회사"}}, format="json").status_code == 403
+    assert admin.post(ROOT + "choices/", {"revision": revision(), "choice": {"kind": created["key"], "value": "회사"}}, format="json").status_code == 200
 
 
 @pytest.mark.django_db
-def test_options_empty_by_default_and_deleting_option_preserves_existing_people():
-    api = client('team_lead')
-    assert api.get(URL).data['choices'] == []
-    response = api.post(URL, {'revision': 0, 'choice': {'kind': 'company_name', 'value': '운영 회사'}}, format='json')
-    assert response.status_code == 200, response.data
-    option = StaffChoice.objects.get()
-    person = StaffAssignment.objects.create(staff=StaffMember.objects.create(staff_name='기존 인력'), company_name='운영 회사', country_code='KR')
-    assert api.delete(f'{URL}{option.pk}/', {'revision': revision()}, format='json').status_code == 200
-    person.refresh_from_db()
-    assert person.company_name == '운영 회사'
-    assert ChangeLog.objects.filter(section='staff').count() == 2
+def test_choices_are_shared_across_regions():
+    admin = client(True)
+    created = column(admin, "근무지", True)
+    payload = {"revision": revision(), "choice": {"kind": created["key"], "value": "상암"}}
+    assert admin.post(ROOT + "choices/", payload, format="json").status_code == 200
+    payload["revision"] = revision()
+    payload["choice"]["country_code"] = "KR"
+    assert admin.post(ROOT + "choices/", payload, format="json").status_code == 400
+
 
 
 @pytest.mark.django_db
-def test_choice_validation_revision_and_restoration():
-    api = client('admin')
-    for values in [{'kind': 'unknown', 'value': 'L5'}, {'kind': 'work_location', 'country_code': 'JP', 'value': '사무실'}, {'kind': 'company_name', 'value': ' '}, {'kind': 'company_name', 'value': 'x' * 101}]:
-        assert api.post(URL, {'revision': 0, 'choice': values}, format='json').status_code == 400
-    values = {'kind': 'work_location', 'country_code': 'KR', 'value': '한국 사무실'}
-    assert api.post(URL, {'revision': 0, 'choice': values}, format='json').status_code == 200
-    assert api.post(URL, {'revision': 0, 'choice': values}, format='json').status_code == 409
-    assert api.post(URL, {'revision': revision(), 'choice': values}, format='json').status_code == 400
-    option = StaffChoice.objects.get()
-    assert api.delete(f'{URL}{option.pk}/', {'revision': revision()}, format='json').status_code == 200
+def test_deleting_value_preserves_existing_staff_value():
+    admin = client(True)
+    created = column(admin, "등급")
+    response = admin.post(ROOT + "choices/", {"revision": revision(), "choice": {"kind": created["key"], "value": "L1"}}, format="json")
+    choice = StaffChoice.objects.get()
+    person = StaffAssignment.objects.create(staff=StaffMember.objects.create(staff_name="인력"), country_code="KR", custom_values={created["key"]: "L1"})
+    assert response.status_code == 200
+    assert admin.delete(ROOT + f"choices/{choice.pk}/", {"revision": revision()}, format="json").status_code == 200
+    person.refresh_from_db(); assert person.custom_values[created["key"]] == "L1"
+    item = admin.get(ROOT + "options/").data["items"][0]
+    assert item["values"] == [{"value": "L1", "choice_id": None, "uses": 1}]
+
+
+@pytest.mark.django_db
+def test_choice_delete_is_audited_and_restorable():
+    admin = client(True)
+    created = column(admin)
+    admin.post(ROOT + "choices/", {"revision": revision(), "choice": {"kind": created["key"], "value": "회사"}}, format="json")
+    choice = StaffChoice.objects.get()
+    assert admin.delete(ROOT + f"choices/{choice.pk}/", {"revision": revision()}, format="json").status_code == 200
     log = ChangeLog.objects.first()
-    preview = api.post(f'/api/db-admin/logs/{log.pk}/restore-preview/', {}, format='json')
-    assert preview.status_code == 200
-    response = api.post(f'/api/db-admin/logs/{log.pk}/restore/', {'token': preview.data['token'], 'confirmed': True}, format='json')
-    assert response.status_code == 200, response.data
-    assert StaffChoice.objects.get(pk=option.pk).value == '한국 사무실'
+    preview = admin.post(f"/api/db-admin/logs/{log.pk}/restore-preview/", {}, format="json")
+    restored = admin.post(f"/api/db-admin/logs/{log.pk}/restore/", {"token": preview.data["token"], "confirmed": True}, format="json")
+    assert restored.status_code == 200, restored.data
+    assert StaffChoice.objects.get(pk=choice.pk).value == "회사"

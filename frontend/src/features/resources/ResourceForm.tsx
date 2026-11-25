@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
 import type { Bootstrap, DataRow } from "../../shared/api/operations";
 import ErrorMessage from "../../shared/components/ErrorMessage";
-import type { ResourceInput } from "./api";
+import { RESOURCE_SERVICES, type ResourceInput } from "./api";
 
 type ResourceDraft = Omit<ResourceInput, "host_count"> & {
   host_count: number | "";
@@ -10,7 +10,7 @@ type ResourceDraft = Omit<ResourceInput, "host_count"> & {
 function initialValues(row: DataRow | null, data: Bootstrap): ResourceDraft {
   return {
     region: Number(row?.region ?? data.regions[0]?.id ?? 0),
-    service: String(row?.service ?? ""),
+    service: row?.service === "CCS" ? "CCS" : "HCLOUD",
     host_count: row?.host_count == null ? 0 : Number(row.host_count),
     vm_count: row?.vm_count == null ? null : Number(row.vm_count),
     compute_rack_count:
@@ -59,15 +59,14 @@ export default function ResourceForm({
   }
 
   async function submit() {
-    const service = values.service.trim();
     const quantities = [
       values.host_count,
       values.vm_count,
       values.compute_rack_count,
       values.storage_count,
     ].filter((value) => value !== null && value !== "") as number[];
-    if (!values.region || !service) {
-      setValidation("리전과 서비스를 입력해 주세요.");
+    if (!values.region) {
+      setValidation("리전을 선택해 주세요.");
       return;
     }
     if (
@@ -77,7 +76,7 @@ export default function ResourceForm({
       setValidation("수량은 0 이상의 정수로 입력해 주세요.");
       return;
     }
-    await onSubmit({ ...values, service, host_count: values.host_count });
+    await onSubmit({ ...values, host_count: values.host_count });
   }
 
   const nullableNumber = (
@@ -128,15 +127,17 @@ export default function ResourceForm({
           </select>
         </td>
         <td>
-          <input
+          <select
             aria-label="서비스"
             title="서비스"
             disabled={busy}
-            maxLength={80}
             value={values.service}
-            placeholder="서비스 직접 입력"
-            onChange={(event) => update("service", event.target.value)}
-          />
+            onChange={(event) => update("service", event.target.value as ResourceInput["service"])}
+          >
+            {RESOURCE_SERVICES.map((service) => (
+              <option key={service} value={service}>{service}</option>
+            ))}
+          </select>
         </td>
         <td className="resource-edit-number">
           <input
@@ -175,8 +176,7 @@ export default function ResourceForm({
             disabled={
               busy ||
               (Boolean(row) && !dirty) ||
-              !values.region ||
-              !values.service.trim()
+              !values.region
             }
             onClick={() => void submit()}
           >

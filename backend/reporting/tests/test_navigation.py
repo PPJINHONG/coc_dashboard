@@ -73,3 +73,13 @@ def test_layout_preference_patch_requires_csrf_even_for_visitors():
     client.get(URL)
     response = client.patch(URL, {'hidden_tabs': ['staff']}, format='json', HTTP_X_CSRFTOKEN=client.cookies['csrftoken'].value)
     assert response.status_code == 200, response.data
+
+
+@pytest.mark.django_db
+def test_retired_hidden_tab_does_not_block_saving_preferences():
+    client = APIClient()
+    client.get(URL)
+    NavigationPreference.objects.update(hidden_tabs=['retired_tab', 'staff'])
+    current = client.get(URL).data
+    assert current['hidden_tabs'] == ['staff']
+    assert client.patch(URL, {**current, 'sidebar_collapsed': True}, format='json').status_code == 200

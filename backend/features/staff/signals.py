@@ -6,11 +6,7 @@ from django.db.models.deletion import ProtectedError
 from django.dispatch import receiver
 from rest_framework.exceptions import ValidationError
 
-from core.roles import record_activity
-from core.signals import user_registered
-from reporting.history import capture_history
 from reporting.models import ChangeLog, StaffMember
-from reporting.services import bump, lock_state, record_log
 from .models import StaffAssignment, StaffColumn
 
 
@@ -26,8 +22,16 @@ def account_name_changed(sender, instance, raw=False, **kwargs):
 
 @receiver(post_save, sender=StaffMember)
 def staff_name_changed(sender, instance, raw=False, **kwargs):
-    if not raw:
-        get_user_model().objects.filter(staff_profile__staff_id=instance.pk).update(first_name=instance.staff_name)
+    if raw:
+        return
+    for account in get_user_model().objects.filter(staff_profile__staff_id=instance.pk):
+        old_username = account.username
+        account.first_name = instance.staff_name
+        account.username = instance.staff_name
+        account.save(update_fields=['first_name', 'username'])
+        if old_username != account.username:
+            from core.signals import username_changed
+            username_changed.send(sender=type(account), old_username=old_username, new_username=account.username)
 
 
 @receiver(post_save, sender=StaffAssignment)
@@ -47,38 +51,18 @@ def restored_staff_name(sender, instance, created, **kwargs):
         return
     for change in instance.restore_data.get('changes', []):
         if change.get('model') == StaffMember._meta.label_lower and change.get('after'):
-            get_user_model().objects.filter(staff_profile__staff_id=change['after']['id']).update(first_name=change['after']['staff_name'])
+            name = change['after']['staff_name']
+            for account in get_user_model().objects.filter(staff_profile__staff_id=change['after']['id']):
+                old_username = account.username
+                account.first_name = name
+                account.username = name
+                account.save(update_fields=['first_name', 'username'])
+                if old_username != name:
+                    from core.signals import username_changed
+                    username_changed.send(sender=type(account), old_username=old_username, new_username=name)
 
 
 @receiver(pre_delete, sender=StaffColumn)
 def protect_used_column(sender, instance, **kwargs):
     if StaffAssignment.objects.filter(custom_values__has_key=instance.key).exists():
         raise ProtectedError('인력에 값이 저장된 추가 열은 제거할 수 없습니다.', [instance])
-
-
-@receiver(user_registered)
-def register_staff(sender, request, user, country_code, staff=None, **kwargs):
-    """회원가입한 사람을 고른 국가의 운영 인력으로 바로 등록하고 계정을 연결합니다.
-
-    가입 화면에서는 본인이 직접 고칠 수 있는 일반 정보(업무·근무지·PC IP·오토에버·Z 계정)만 받습니다.
-    직책은 팀원으로 시작하고, 직책·소속사·투입일·등급은 관리자·팀장·그룹장이 운영 인력 탭에서 입력합니다.
-    """
-    from .serializers import SIGNUP_FIELDS, SignupStaffSerializer, StaffSerializer
-
-    unknown = set(staff or {}) - set(SIGNUP_FIELDS)
-    if unknown:
-        raise ValidationError({'staff': ['가입 화면에서는 업무·근무지·PC IP·오토에버 계정·Z 계정만 입력할 수 있습니다.']})
-    values = SignupStaffSerializer(data=staff or {}, context={'country_code': country_code})
-    if not values.is_valid():
-        raise ValidationError({'staff': [str(message) for messages in values.errors.values() for message in messages]})
-    state = lock_state()
-    capture_history(request, 'staff')
-    person = StaffAssignment.objects.create(staff=StaffMember.objects.create(staff_name=user.first_name),
-                                            account=user, country_code=country_code, job_title='팀원', **values.validated_data)
-    bump(state)
-    after = dict(StaffSerializer(person).data)
-    summary = f'운영 인력 {user.first_name} 회원가입 자동 등록'
-    # 가입 요청은 아직 로그인 전이므로 이력의 변경자를 가입한 본인으로 남깁니다.
-    log = record_log(request, 'staff', 'create', summary, after=after)
-    ChangeLog.objects.filter(pk=log.pk).update(actor_name=user.first_name, actor_username=user.username)
-    record_activity(request, 'create', summary, 'staff', str(person.pk), after=after, user=user)

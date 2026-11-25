@@ -1,11 +1,13 @@
+import homeLogo from "./home-logo.svg";
 import "./resources.css";
 import { sectionRows, type Bootstrap, type DataRow } from "../../shared/api/operations";
 import DataTable from "../../shared/components/DataTable";
-import type { FeatureDataProps, FeatureDefinition, FeaturePageProps } from "../../shared/feature";
+import type { FeatureDefinition, FeaturePageProps } from "../../shared/feature";
 import type { Field } from "../../shared/fields";
 import type { SectionConfig } from "../../shared/sections/types";
 import { resourceFields } from "./fields";
 import ResourceComparison from "./ResourceComparison";
+import { resourceReport } from "./report";
 import ResourcesPage from "./ResourcesPage";
 
 /** DB 관리 조회 표: 수량 열 아래에 합계를 붙입니다. 빈 값은 합계에서 빼고 "+ 미입력"으로 알립니다. */
@@ -53,27 +55,6 @@ const section: SectionConfig = {
   ),
 };
 
-function HomePreview({ data, snapshot }: FeatureDataProps) {
-  const rows = sectionRows(snapshot, "resources");
-  return (
-    <div className="resource-preview">
-      <div className="preview-label">Infrastructure resources</div>
-      <div className="preview-row preview-row-head">
-        <span>Region</span><span>Service</span><span>Host</span><span>VM</span>
-      </div>
-      {rows.slice(0, 4).map((row) => (
-        <div className="preview-row" key={row.id}>
-          <span>{data.regions.find((region) => region.id === row.region)?.region_name ?? "미등록 리전"}</span>
-          <span>{String(row.service ?? "—")}</span>
-          <span>{Number(row.host_count).toLocaleString()}</span>
-          <span>{row.vm_count == null ? "—" : Number(row.vm_count).toLocaleString()}</span>
-        </div>
-      ))}
-      {!rows.length && <div className="preview-no-data">등록된 자원이 없습니다.</div>}
-    </div>
-  );
-}
-
 function ResourceOverview({
   data,
   snapshot,
@@ -98,13 +79,14 @@ function ResourceOverview({
 
 const feature: FeatureDefinition = {
   id: "resources",
+  report: resourceReport,
   label: "인프라 자원",
   icon: "server",
   order: 20,
   english: "INFRASTRUCTURE",
+  homeCard: { logo: homeLogo, tone: "mist" },
   description: "리전·서비스별 Host, VM, Storage 현황을 확인하세요.",
   homeCount: (snapshot) => `${sectionRows(snapshot, "resources").length}개 자원`,
-  featured: { order: 1, wide: true, Preview: HomePreview },
   subpages: [
     { id: "", label: "자원 현황", Page: ResourceOverview },
     { id: "comparison", label: "자원 증감 추이", Page: ResourceComparison },

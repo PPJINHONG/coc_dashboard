@@ -4,13 +4,8 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
 from django.dispatch import Signal, receiver
 
-# 계정 아이디가 바뀌면 보냅니다(old_username, new_username).
-# 작성자 아이디 스냅샷을 저장하는 기능 앱이 필요하면 이 신호를 받아 갱신합니다.
+# 계정 이름이 바뀌면 보냅니다(old_username, new_username).
 username_changed = Signal()
-# 초대 링크로 회원가입한 직후 가입 트랜잭션 안에서 보냅니다(request, user, country_code, staff).
-# staff는 가입 화면에서 받은 운영 인력 정보(업무·근무지·접속 계정 등)이며 검증은 받는 쪽이 합니다.
-# 운영 인력 기능이 받아 연결된 인력 행을 만듭니다. 받는 쪽이 실패하면 가입도 취소됩니다.
-user_registered = Signal()
 
 
 @receiver(user_logged_in)

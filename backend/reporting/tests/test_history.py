@@ -10,7 +10,6 @@ from rest_framework.test import APIClient
 
 from core.models import UserActivity
 from core.roles import apply_role
-from core.signals import username_changed
 from features.regional_requests.models import RegionalRequest, RegionalRequestImage
 from features.resources.models import InfrastructureResource
 from features.staff.models import StaffAssignment, StaffCalendarEvent
@@ -52,7 +51,7 @@ def save_resources(user, rows, month=MONTH):
 
 
 def resource(region, count=1):
-    return {'region': region.pk, 'service': 'TEST', 'host_count': count}
+    return {'region': region.pk, 'service': 'HCLOUD', 'host_count': count}
 
 
 def preview(user, log):
@@ -72,43 +71,28 @@ def create_request(user, **values):
     return response.data['row']
 
 
-def test_scope_redacts_other_countries_from_batch_and_snapshot(setup):
+def test_change_history_is_admin_only_and_snapshot_hides_it_from_users(setup):
     users, regions = setup
     save_resources(users['admin'], [resource(regions['KR'], 3), resource(regions['EU'], 777)])
     log = ChangeLog.objects.get()
-    for role in ('admin', 'team_lead', 'group_lead', 'user', 'observer'):
-        response = client(users[role]).get(URL)
-        assert response.status_code == 200
-        data = response.data
-        snapshot = client(users[role]).get('/api/operations/current/').data['logs']
-        if role in ('user', 'observer'):
-            assert data['count'] == 0 and snapshot == []
-        else:
-            assert data['count'] == 1 and len(snapshot) == 1
-            row = data['results'][0]
-            assert row['can_restore'] == (role == 'admin')
-            assert len(row['after_data']['rows']) == (1 if role == 'group_lead' else 2)
-            if role == 'group_lead':
-                assert row['after_data']['rows'][0]['host_count'] == 3
-                assert {item['id'] for item in data['regions']} == {regions['KR'].pk}
-                assert snapshot[0]['after_data'] == row['after_data']
-                forbidden = client(users[role]).get(URL, {'region': regions['EU'].pk, 'actor': data['actors'][0]['id']}).data
-                assert forbidden['count'] == 0
+    admin_response = client(users['admin']).get(URL)
+    assert admin_response.status_code == 200 and admin_response.data['count'] == 1
+    assert len(admin_response.data['results'][0]['after_data']['rows']) == 2
+    assert admin_response.data['results'][0]['can_restore']
+    for role in ('team_lead', 'group_lead', 'user', 'observer'):
+        assert client(users[role]).get(URL).status_code == 403
+        assert client(users[role]).get('/api/operations/current/').data['logs'] == []
     assert log.restore_data['changes']
 
 
-def test_user_only_own_and_author_usernames_never_exposed(setup):
+def test_admin_history_never_exposes_author_usernames(setup):
     users, regions = setup
     for role in ('user', 'other'):
         create_request(users[role], title=role)
-    body = client(users['user']).get(URL).data
-    assert body['count'] == 1 and body['results'][0]['actor_name'] == 'user'
+    assert client(users['user']).get(URL).status_code == 403
+    body = client(users['admin']).get(URL).data
+    assert body['count'] == 2
     assert 'author_username' not in json.dumps(body, default=str) and 'actor_username' not in json.dumps(body, default=str)
-    assert body['results'][0]['can_restore'] is False
-    users['user'].username = 'renamed@history.test'
-    users['user'].save()
-    username_changed.send(sender=get_user_model(), old_username='user@history.test', new_username=users['user'].username)
-    assert client(users['user']).get(URL).data['count'] == 1
 
 
 def test_latest_tab_order_filters_and_pagination(setup):
@@ -116,18 +100,17 @@ def test_latest_tab_order_filters_and_pagination(setup):
     for index in range(35):
         create_request(users['user'], title=str(index))
     save_resources(users['admin'], [resource(regions['EU'])], month='2026-09')
-    response = client(users['team_lead']).get(URL).data
+    response = client(users['admin']).get(URL).data
     assert response['count'] == 36 and len(response['results']) == 30 and response['next_offset'] == 30
     assert [tab['id'] for tab in response['tabs']] == ['resources', 'regional_requests']
     assert [row['id'] for row in response['results']] == sorted([row['id'] for row in response['results']], reverse=True)
-    older = client(users['team_lead']).get(URL, {'offset': 30}).data
+    older = client(users['admin']).get(URL, {'offset': 30}).data
     assert len(older['results']) == 6 and older['next_offset'] is None
     assert not {row['id'] for row in older['results']}.intersection(row['id'] for row in response['results'])
-    user_key = next(actor['id'] for actor in response['actors'] if actor['name'] == 'user')
-    filtered = client(users['team_lead']).get(URL, {'section': 'regional_requests', 'month': current_month().strftime('%Y-%m'), 'actor': user_key, 'region': 'KR'}).data
+    assert 'actors' not in response and 'regions' not in response
+    filtered = client(users['admin']).get(URL, {'section': 'regional_requests'}).data
     assert filtered['count'] == 35
-    assert client(users['team_lead']).get(URL, {'month': 'bad'}).status_code == 400
-    assert client(users['team_lead']).get(URL, {'offset': 'bad'}).status_code == 400
+    assert client(users['admin']).get(URL, {'offset': 'bad'}).status_code == 400
 
 
 def test_restore_reverts_only_affected_rows_preserves_other_month_and_audits(setup):
@@ -211,10 +194,10 @@ def test_restore_staff_name_and_assignment_and_group_scope(setup):
     users, regions = setup
     member = StaffMember.objects.create(staff_name='원래 이름')
     person = StaffAssignment.objects.create(staff=member, country_code='KR', job_title='책임')
-    response = client(users['team_lead']).patch('/api/operations/staff/', {'revision': revision(), 'person': {'id': person.pk, 'staff_name': '새 이름', 'country_code': 'KR', 'job_title': '그룹장'}}, format='json')
+    response = client(users['admin']).patch('/api/operations/staff/', {'revision': revision(), 'person': {'id': person.pk, 'staff_name': '새 이름', 'country_code': 'KR', 'job_title': '그룹장'}}, format='json')
     assert response.status_code == 200, response.data
     log = ChangeLog.objects.first()
-    scoped = client(users['group_lead']).get(URL).data
+    scoped = client(users['admin']).get(URL).data
     assert scoped['count'] == 1 and len(scoped['results'][0]['after_data']['rows']) == 2
     approved = preview(users['admin'], log)
     result = restore(users['admin'], log, approved.data['token'])
@@ -226,7 +209,7 @@ def test_restore_staff_name_and_assignment_and_group_scope(setup):
 def test_linked_data_conflict_rolls_back_all_rows(setup):
     users, regions = setup
     member = StaffMember.objects.create(staff_name='보존할 인력')
-    response = client(users['admin']).post('/api/operations/staff/', {'revision': revision(), 'person': {'staff_name': '신규 인력', 'country_code': 'KR'}}, format='json')
+    response = client(users['admin']).post('/api/operations/staff/', {'revision': revision(), 'person': {'hire_date': '2025-01-01', 'deployment_date': '2025-02-01', 'staff_name': '신규 인력', 'country_code': 'KR'}}, format='json')
     assert response.status_code == 201
     log = ChangeLog.objects.first()
     new_member = StaffMember.objects.exclude(pk=member.pk).get()
@@ -274,23 +257,21 @@ def test_confirmation_token_user_expiration_and_csrf(setup):
 def test_legacy_history_readable_but_not_restorable(setup):
     users, regions = setup
     old = ChangeLog.objects.create(section='resources', action='update', actor_name='과거 관리자', before_data={'rows': []}, after_data={'rows': [resource(regions['KR'])]})
-    response = client(users['group_lead']).get(URL).data
+    response = client(users['admin']).get(URL).data
     assert response['count'] == 1 and not response['results'][0]['can_restore']
     assert preview(users['admin'], old).status_code == 400
     assert APIClient().get(URL).status_code == 403
 
 
-def test_request_country_scope_filters_and_bulk_write_remains_unavailable(setup):
+def test_request_countries_visible_together_and_bulk_write_remains_unavailable(setup):
     users, _ = setup
     create_request(users['user'], region='KR', title='한국 요청')
     create_request(users['other'], region='EU', title='유럽 요청')
-    response = client(users['group_lead']).get(URL).data
-    assert response['count'] == 1
-    assert response['results'][0]['after_data']['rows'][0]['title'] == '한국 요청'
-    assert [region['id'] for region in response['regions']] == ['KR']
-    assert client(users['group_lead']).get(URL, {'region': 'EU'}).data['results'] == []
-    filtered = client(users['team_lead']).get(URL, {'region': 'EU', 'section': 'regional_requests'}).data
-    assert filtered['count'] == 1 and filtered['results'][0]['after_data']['rows'][0]['title'] == '유럽 요청'
+    response = client(users['admin']).get(URL).data
+    assert response['count'] == 2
+    filtered = client(users['admin']).get(URL, {'region': 'EU', 'section': 'regional_requests'}).data
+    assert filtered['count'] == 2
+    assert {country for row in filtered['results'] for country in row['countries']} == {'EU', 'KR'}
     assert client(users['admin']).put(ADMIN + 'sections/regional_requests/', {'revision': revision(), 'rows': []}, format='json').status_code == 400
     assert RegionalRequest.objects.count() == 2
 
@@ -303,10 +284,10 @@ def test_main_request_author_assignment_and_observer_permissions_are_preserved(s
     assert client(users['other']).patch(path, {'status': 'in_progress', 'assignee_regions': ['EU'], 'assignee_name': '다른 담당자'}, format='json').status_code == 200
     assert client(users['other']).delete(path).status_code == 403
     assert client(users['user']).delete(path).status_code == 403
-    assert client(users['observer']).patch(path, {'status': 'completed'}, format='json').status_code == 403
+    assert client(users['observer']).patch(path, {'status': 'completed'}, format='json').status_code == 200
     ticket = RegionalRequest.objects.get(pk=row['id'])
-    assert ticket.title == '원래 요청' and ticket.assignee_regions == ['EU'] and ticket.status == 'in_progress'
-    assert client(users['other']).get(URL).data['count'] == 1
+    assert ticket.title == '원래 요청' and ticket.assignee_regions == ['EU'] and ticket.status == 'completed'
+    assert client(users['other']).get(URL).status_code == 403
 
 
 def uploaded_image(user):
@@ -395,12 +376,33 @@ def test_changes_are_paired_and_filtered_by_action_and_period(setup):
     users, regions = setup
     rows = save_resources(users['admin'], [resource(regions['KR'])])
     save_resources(users['admin'], [{**rows[0], 'host_count': 5}])
-    data = client(users['team_lead']).get(URL).data
+    data = client(users['admin']).get(URL).data
     assert data['actions'] == {'update': 2}
     latest = data['results'][0]
     assert [(item['model'], item['before']['host_count'], item['after']['host_count']) for item in latest['changes']] == [('resources.infrastructureresource', 1, 5)]
-    assert client(users['team_lead']).get(URL + '?action=delete').data['count'] == 0
-    assert client(users['team_lead']).get(URL + '?action=update&days=1').data['count'] == 2
+    assert client(users['admin']).get(URL + '?action=delete').data['count'] == 0
+    assert client(users['admin']).get(URL + '?action=update&days=1').data['count'] == 2
     ChangeLog.objects.update(created_at='2020-01-01T00:00:00Z')
-    assert client(users['team_lead']).get(URL + '?days=30').data['count'] == 0
-    assert client(users['team_lead']).get(URL + '?days=2').status_code == 400
+    assert client(users['admin']).get(URL + '?days=30').data['count'] == 0
+    assert client(users['admin']).get(URL + '?days=2').status_code == 400
+
+def test_board_notice_lifecycle_shows_actor_title_and_content(setup):
+    users, _ = setup
+    author = client(users['user'])
+    admin = client(users['admin'])
+    path = '/api/board/posts/'
+    response = author.post(path, {'title': '점검 공지', 'content': '10시 시작'}, format='json')
+    assert response.status_code == 201
+    detail = f"{path}{response.data['id']}/"
+    assert author.patch(detail, {'content': '11시 시작'}, format='json').status_code == 200
+    assert author.post(detail + 'comments/', {'content': '확인했습니다'}, format='json').status_code == 201
+    assert author.delete(detail).status_code == 204
+    logs = admin.get(URL, {'section': 'board'}).data['results']
+    assert [row['action'] for row in logs] == ['delete', 'create', 'update', 'create']
+    assert {row['actor_name'] for row in logs} == {'user'}
+    assert logs[0]['changes'][0]['before']['comments'][0]['content'] == '확인했습니다'
+    assert logs[1]['changes'][0]['after']['post_title'] == '점검 공지'
+    update = logs[2]['changes'][0]
+    assert update['before']['content'] == '10시 시작' and update['after']['content'] == '11시 시작'
+    assert logs[3]['changes'][0]['after']['title'] == '점검 공지'
+    assert author.get(URL).status_code == 403

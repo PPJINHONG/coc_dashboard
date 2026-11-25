@@ -5,14 +5,13 @@ export interface HistoryRegion { id: number | string; region_name: string; count
 
 export interface HistoryLog extends Log {
   column_labels?: Record<string,string>;
-  actor_key: string;
   regions: HistoryRegion[];
   countries: string[];
   can_restore: boolean;
   restored: boolean;
   restore_reason: string;
-  /** 행별 변경 전·후 쌍. 권한 밖인 쪽은 null */
-  changes?: { model: string; before: Record<string, unknown> | null; after: Record<string, unknown> | null }[];
+  /** 행별 변경 전·후 쌍. 등록 전과 삭제 후 값은 null */
+  changes: { model: string; before: Record<string, unknown> | null; after: Record<string, unknown> | null }[];
 }
 export interface HistoryPage {
   results: HistoryLog[];
@@ -21,8 +20,6 @@ export interface HistoryPage {
   tabs: { id: string; count: number; latest_at: string }[];
   /** 작업 종류(create·update·delete·restore)별 건수 */
   actions: Record<string, number>;
-  actors: { id: string; name: string }[];
-  regions: HistoryRegion[];
 }
 export interface RestorePreview {
   token: string;
