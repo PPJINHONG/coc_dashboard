@@ -7,12 +7,13 @@ from pathlib import PurePosixPath
 from zoneinfo import ZoneInfo
 
 from django.core.files.base import ContentFile
+from django.db.models import Count, Max
 from django.db.models.fields.files import FieldFile, FileField
 from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from core.roles import ROLE_GROUP_LEAD, ROLE_TEAM_LEAD, is_admin, managed_countries, user_role
+from core.roles import is_admin
 from . import registry
 from .models import ChangeLog, Region, StaffMember
 
@@ -62,18 +63,6 @@ def scope_for(row, section, snapshots, regions):
     region_id = row.get('region_id', row.get('region'))
     if section == 'regions':
         region_id = row.get('id')
-    # 이전 이슈·댓글 이력의 리전 이름은 원본에서 읽을 수 있을 때만 표시합니다.
-    if row.get('issue_id', row.get('issue')) is not None:
-        issue_id = str(row.get('issue_id', row.get('issue')))
-        for table in snapshots.values():
-            issue = table.get(issue_id)
-            if issue and 'title' in issue and 'region_id' in issue:
-                region_id = issue['region_id']
-                break
-        if region_id is None:
-            definition = registry.sections().get(section)
-            if definition and any(field.name == 'region' for field in definition.model._meta.concrete_fields):
-                region_id = definition.model.objects.filter(pk=issue_id).values_list('region_id', flat=True).first()
     region = regions.get(region_id)
     if section == 'regions':
         region = {'id': row['id'], 'region_name': row.get('region_name', ''), 'country_code': row.get('country_code', '')}
@@ -132,12 +121,12 @@ def restore_delta(request, section):
     return {'changes': changes, 'files': files, 'labels': labels}
 
 
-def clean_data(value, private_fields=()):
+def clean_data(value):
     if isinstance(value, list):
-        return [clean_data(item, private_fields) for item in value]
+        return [clean_data(item) for item in value]
     if isinstance(value, dict):
-        return {key: clean_data(item, private_fields) for key, item in value.items()
-                if key not in ('author_username', 'actor_username', 'author_id', 'uploader_id', 'password', 'can_edit', *private_fields)}
+        return {key: clean_data(item) for key, item in value.items()
+                if key not in ('author_username', 'actor_username', 'author_id', 'uploader_id', 'password', 'can_edit')}
     return value
 
 
@@ -149,8 +138,10 @@ def legacy_changes(log):
     def key(row):
         return str(row.get('id', row.get('service_code', 'single')))
     old, new = {key(row): row for row in rows(before)}, {key(row): row for row in rows(after)}
-    regions = {row.pk: {'id': row.pk, 'region_name': row.region_name, 'country_code': row.country_code}
-               for row in Region.objects.all()}
+    region_ids = {row.get('region_id', row.get('region')) for row in (*old.values(), *new.values())}
+    regions = Region.objects.in_bulk(pk for pk in region_ids if isinstance(pk, int))
+    regions = {pk: {'id': pk, 'region_name': region.region_name, 'country_code': region.country_code}
+               for pk, region in regions.items()}
     result = []
     for pk in dict.fromkeys([*old, *new]):
         a, b = old.get(pk), new.get(pk)
@@ -162,82 +153,63 @@ def legacy_changes(log):
     return result
 
 
-def actor_key(log):
-    return hashlib.sha256((log.actor_username or log.actor_name).casefold().encode()).hexdigest()
+def history_queryset(user):
+    if not is_admin(user):
+        return ChangeLog.objects.none()
+    return (ChangeLog.objects.exclude(section__in=('issues', 'work', 'services'))
+            .exclude(restore_data__has_key='changes', restore_data__changes=[])
+            .select_related('restoration'))
 
 
-def visible_history(user, params=None, limit=None):
-    """범위 밖 원본은 응답에서 제거합니다. 필터는 항상 권한 범위 적용 뒤에 적용합니다."""
-    params = params or {}
-    if not user or not user.is_authenticated or not user.is_active:
-        return []
-    role = user_role(user)
-    unrestricted = is_admin(user) or role == ROLE_TEAM_LEAD
-    countries = set(managed_countries(user)) if role == ROLE_GROUP_LEAD else set()
-    queryset = ChangeLog.objects.exclude(section__in=('issues', 'work', 'services')).select_related('restoration')
-    if not unrestricted and role != ROLE_GROUP_LEAD:
-        queryset = queryset.filter(actor_username__iexact=user.username)
-    if params.get('month'):
-        from .months import parse_month
-        queryset = queryset.filter(period_month=parse_month(params['month']))
+def history_entry(log):
+    captured = log.restore_data.get('changes')
+    changes = legacy_changes(log) if captured is None else captured
+    pairs, regions, countries = [], {}, set()
+    for change in changes:
+        pairs.append({'model': change.get('model', ''), 'before': clean_data(change.get('before')),
+                      'after': clean_data(change.get('after'))})
+        for key in ('before_scope', 'after_scope'):
+            scope = change.get(key, {})
+            regions.update((region['id'], region) for region in scope.get('regions', []))
+            countries.update(scope.get('countries', []))
+    restored = bool(getattr(log, 'restoration', None))
+    can_restore = bool(captured and history_models(log.section) and not restored and log.action != 'restore')
+    return {
+        'id': log.pk, 'section': log.section, 'month': log.period_month.strftime('%Y-%m') if log.period_month else None,
+        'action': log.action, 'actor_name': log.actor_name, 'summary': log.summary, 'created_at': log.created_at,
+        'before_data': {'rows': [pair['before'] for pair in pairs if pair['before']]},
+        'after_data': {'rows': [pair['after'] for pair in pairs if pair['after']]}, 'changes': pairs,
+        'regions': list(regions.values()), 'countries': sorted(countries), 'column_labels': log.restore_data.get('labels', {}),
+        'can_restore': can_restore, 'restored': restored,
+        'restore_reason': ('이미 복구한 변경입니다.' if restored else '복구 작업은 다시 복구할 수 없습니다.' if log.action == 'restore'
+                           else '' if can_restore else '조회 전용 이력입니다.'),
+    }
+
+
+def history_page(user, params):
+    catalog = history_queryset(user)
+    rows = catalog
+    if params.get('section'):
+        rows = rows.filter(section=params['section'])
     if params.get('action'):
         if params['action'] not in ('create', 'update', 'delete', 'restore'):
-            raise ValidationError('작업 종류는 create·update·delete·restore 중에서 선택하세요.')
-        queryset = queryset.filter(action=params['action'])
+            raise ValidationError('올바른 작업 종류를 선택하세요.')
+        rows = rows.filter(action=params['action'])
     if params.get('days'):
         if params['days'] not in ('1', '7', '30'):
             raise ValidationError('기간은 1·7·30일 중에서 선택하세요.')
-        # 오늘(KST 0시)부터 거꾸로 센 날짜 기준입니다. 1이면 오늘 변경만 봅니다.
         today = timezone.localtime(timezone.now(), ZoneInfo('Asia/Seoul')).replace(hour=0, minute=0, second=0, microsecond=0)
-        queryset = queryset.filter(created_at__gte=today - timedelta(days=int(params['days']) - 1))
-    output = []
-    for log in queryset:
-        definition = registry.sections().get(log.section)
-        private_fields = definition.private_fields if definition and not unrestricted else ()
-        if params.get('actor') and actor_key(log) != params['actor']:
-            continue
-        changes = log.restore_data.get('changes') if log.restore_data else None
-        if changes == []:
-            continue
-        changes = changes if changes is not None else legacy_changes(log)
-        before, after, pairs, visible_regions, visible_countries = [], [], [], {}, set()
-        for change in changes:
-            sides = []
-            for side in ('before', 'after'):
-                row = change.get(side)
-                scope = change.get(f'{side}_scope', {'regions': [], 'countries': []})
-                allowed = unrestricted or (role != ROLE_GROUP_LEAD) or bool(countries.intersection(scope['countries']))
-                if not row or not allowed:
-                    continue
-                if params.get('region') and not any(str(region['id']) == params['region'] for region in scope['regions']):
-                    continue
-                sides.append((side, row, scope))
-            if sides:
-                # 같은 행의 변경 전·후를 한 쌍으로 보냅니다. 권한 밖인 쪽은 비워 둡니다.
-                pair = {'model': change.get('model', ''), 'before': None, 'after': None}
-                pair.update({side: clean_data(row, private_fields) for side, row, _ in sides})
-                pairs.append(pair)
-            for side, row, scope in sides:
-                (before if side == 'before' else after).append(clean_data(row, private_fields))
-                visible_regions.update({region['id']: region for region in scope['regions']})
-                visible_countries.update(scope['countries'])
-        # 내용이 없는 옛 기록은 전체 조회 권한 또는 본인에게만 보입니다.
-        if not before and not after and (changes or role == ROLE_GROUP_LEAD or params.get('region')):
-            continue
-        restored = getattr(log, 'restoration', None)
-        can_restore = bool(is_admin(user) and history_models(log.section) and log.restore_data.get('changes') and not restored and log.action != 'restore')
-        output.append({
-            'id': log.pk, 'section': log.section, 'month': log.period_month.strftime('%Y-%m') if log.period_month else None,
-            'action': log.action, 'actor_name': log.actor_name, 'actor_key': actor_key(log),
-            'summary': log.summary if unrestricted or role != ROLE_GROUP_LEAD else '관리 권역 데이터 변경',
-            'before_data': {'rows': before}, 'after_data': {'rows': after}, 'changes': pairs, 'created_at': log.created_at,
-            'regions': list(visible_regions.values()), 'countries': sorted(visible_countries),
-            'column_labels': log.restore_data.get('labels', {}),
-            'can_restore': can_restore, 'restored': bool(restored),
-            'restore_reason': ('이미 복구한 변경입니다.' if restored else
-                               '복구 작업은 다시 복구할 수 없습니다.' if log.action == 'restore' else
-                               '복구 원본이 없는 과거 이력입니다.' if not log.restore_data.get('changes') else ''),
-        })
-        if limit and len(output) >= limit:
-            break
-    return output
+        rows = rows.filter(created_at__gte=today - timedelta(days=int(params['days']) - 1))
+    try:
+        offset = max(0, int(params.get('offset', 0)))
+    except ValueError as exc:
+        raise ValidationError('페이지 값이 올바르지 않습니다.') from exc
+    end = offset + 30
+    total = rows.count()
+    tabs = catalog.values('section').annotate(count=Count('pk'), latest_at=Max('created_at')).order_by('-latest_at', 'section')
+    return {
+        'results': [history_entry(log) for log in rows[offset:end]], 'count': total,
+        'next_offset': end if end < total else None,
+        'tabs': [{'id': tab['section'], 'count': tab['count'], 'latest_at': tab['latest_at']} for tab in tabs],
+        'actions': dict(catalog.order_by().values_list('action').annotate(count=Count('pk'))),
+    }

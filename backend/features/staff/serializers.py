@@ -5,15 +5,16 @@ from rest_framework import serializers
 
 from reporting.serializers import RowSerializer
 
-from .models import StaffAssignment, StaffCalendarEvent, StaffResponsibility, StaffChoice
-from .permissions import can_edit_person, can_manage_person, can_view_grade, owns_profile
-from .items import BASE_GRADES, validate_custom_values
+from .models import StaffAssignment, StaffCalendarEvent, StaffResponsibility
+from .permissions import can_edit_person, can_manage_person, owns_profile
+from .items import validate_custom_values
+from .dates import DATE_LABELS, validate_staff_dates
 from core.roles import is_admin, user_role, staff_edit_countries
 
 
-EDIT_FIELDS = ['country_code', 'job_title', 'company_name', 'job_description', 'work_location', 'pc_ip', 'autoever_account', 'z_account',
-               'account', 'deployment_date', 'resignation_date', 'grade', 'custom_values']
-SELF_FIELDS = {'staff_name', 'job_description', 'work_location', 'pc_ip', 'autoever_account', 'z_account'}
+EDIT_FIELDS = ['country_code', 'job_title', 'job_description', 'pc_ip', 'autoever_account', 'z_account',
+               'account', *DATE_LABELS, 'custom_values']
+SELF_FIELDS = {'staff_name', 'job_description', 'pc_ip', 'autoever_account', 'z_account', 'custom_values'}
 TIMEZONES = {'KR': 'Asia/Seoul', 'NA': 'America/Los_Angeles', 'EU': 'Europe/Berlin'}
 DOMAINS = {'KR': '내수', 'NA': '북미', 'EU': '유럽'}
 
@@ -60,17 +61,16 @@ class StaffSerializer(RowSerializer):
 
     class Meta(RowSerializer.Meta):
         model = StaffAssignment
-        fields = ['id', 'country_code', 'staff', 'staff_name', 'job_title', 'company_name', 'job_description', 'work_location',
+        fields = ['id', 'country_code', 'staff', 'staff_name', 'job_title', 'job_description',
                   'pc_ip', 'autoever_account', 'z_account', 'can_edit', 'can_manage', 'account', 'account_name',
-                  'deployment_date', 'resignation_date', 'grade', 'global_region', 'employment_status', 'current_status',
+                  *DATE_LABELS, 'global_region', 'employment_status', 'current_status',
                   'work_status', 'status_detail', 'custom_values', 'is_site_representative', 'display_role', 'can_set_site_representative']
 
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        request = self.context.get('request')
-        if not request or not can_view_grade(request.user):
-            data.pop('grade', None)
-        return data
+    def validate(self, attrs):
+        # 일괄 저장은 인력 ID 또는 공통 인력 키로 기존 행을 갱신합니다.
+        instance = StaffAssignment.objects.filter(pk=attrs['id']).first() if 'id' in attrs else StaffAssignment.objects.filter(staff=attrs['staff']).first()
+        validate_staff_dates(attrs, instance)
+        return attrs
 
     def get_can_manage(self, obj):
         request = self.context.get('request')
@@ -82,9 +82,7 @@ class StaffSerializer(RowSerializer):
         return self.context['_site_representatives'].get(obj.country_code) == obj.pk
 
     def get_display_role(self, obj):
-        # 옵저버(읽기 전용 계정)는 운영 인력 화면에서 따로 표시하지 않고 일반 인력으로 보여 줍니다.
-        role = user_role(obj.account) if obj.account_id else None
-        role = None if role == 'observer' else role
+        role = user_role(obj.account) if obj.account_id else 'user'
         titled = {'팀장': 'team_lead', '그룹장': 'group_lead', '책임': 'user', '관리자': 'admin'}.get(obj.job_title, role or 'user')
         # 권역 카드에서 팀장·그룹장으로 지정된 사람은 직책이 비어 있어도 그 역할로 표시합니다. 더 높은 쪽을 씁니다.
         if '_leads' not in self.context:
@@ -168,37 +166,13 @@ class StaffEditSerializer(RowSerializer):
         fields = ['id', 'staff_name', *EDIT_FIELDS]
 
     def validate(self, attrs):
-        start = attrs.get('deployment_date', getattr(self.instance, 'deployment_date', None))
-        end = attrs.get('resignation_date', getattr(self.instance, 'resignation_date', None))
-        if start and end and start > end:
-            raise serializers.ValidationError('회사 퇴사일은 업무 투입일보다 빠를 수 없습니다.')
-        if 'grade' in attrs:
-            grade = attrs['grade'].strip()
-            old = self.instance.grade if self.instance else ''
-            if grade and grade not in BASE_GRADES and grade != old and not StaffChoice.objects.filter(kind='grade', value=grade).exists():
-                raise serializers.ValidationError({'grade': '등록된 등급 항목을 선택하세요.'})
-            attrs['grade'] = grade
+        instance = self.instance
+        if instance is None and 'id' in attrs:
+            instance = StaffAssignment.objects.filter(pk=attrs['id']).first()
+        validate_staff_dates(attrs, instance)
         if 'custom_values' in attrs:
-            attrs['custom_values'] = validate_custom_values(attrs['custom_values'], self.instance)
+            attrs['custom_values'] = validate_custom_values(attrs['custom_values'], instance)
         return attrs
-
-
-SIGNUP_FIELDS = ('job_description', 'work_location', 'pc_ip', 'autoever_account', 'z_account')
-
-
-class SignupStaffSerializer(serializers.ModelSerializer):
-    """회원가입 화면의 운영 인력 정보. 근무지는 가입 국가에 등록된 근무지 중에서만 고릅니다."""
-
-    class Meta:
-        model = StaffAssignment
-        fields = SIGNUP_FIELDS
-
-    def validate_work_location(self, value):
-        value = value.strip()
-        country = self.context['country_code']
-        if value and not StaffChoice.objects.filter(kind='work_location', country_code=country, value=value).exists():
-            raise serializers.ValidationError('근무지는 선택한 국가에 등록된 근무지 중에서 고르세요.')
-        return value
 
 
 class CalendarSerializer(serializers.ModelSerializer):

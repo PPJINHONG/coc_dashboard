@@ -26,6 +26,7 @@ const isManagementTab = (id: string) => Boolean(FEATURES.find((item) => item.id 
 
 const canAccessTab = (id: string, user: User | null) => {
   const item = FEATURES.find((feature) => feature.id === id);
+  if (item?.management && !user?.is_staff) return false;
   if (item?.adminOnly && !user?.is_staff) return false;
   return !item?.allowedRoles || Boolean(user && item.allowedRoles.includes(user.is_staff ? "admin" : user.role ?? "user"));
 };
@@ -261,22 +262,19 @@ export default function AppShell() {
           <span className="app-brand-mark">
             <Icon name="cloud" size={24} />
           </span>
-          <span className="sidebar-title">
-            <strong>COC dashboard</strong>
-            <small>Operations console</small>
-          </span>
+          <strong className="sidebar-title">COC dashboard</strong>
         </button>
         <nav className="sidebar-nav" aria-label="기능 탭">
           {visibleTabs.filter((item) => !isManagementTab(item.id)).map(navButton)}
         </nav>
         {visibleTabs.some((item) => isManagementTab(item.id)) && (
-          <nav className="sidebar-admin-nav" aria-label="관리자 메뉴">
+          <nav className="sidebar-admin-nav" aria-label="관리 메뉴">
             <span className="sidebar-group-label">관리</span>
             {visibleTabs.filter((item) => isManagementTab(item.id)).map(navButton)}
           </nav>
         )}
         <div className="sidebar-utilities">
-          {user && user.role !== "observer" && (
+          {user?.is_staff && (
             <button
               className="nav-item"
               disabled={busy}
@@ -322,15 +320,7 @@ export default function AppShell() {
             <div>
               <strong>{user?.name || "Visitor"}</strong>
               <small>
-                {user?.is_staff
-                  ? "관리자"
-                  : user?.role === "observer"
-                    ? "옵저버(읽기 전용)"
-                    : user?.role === "team_lead"
-                      ? "팀장"
-                      : user?.role === "group_lead"
-                        ? `그룹장 (${(user.managed_countries ?? []).join("·")})`
-                        : "사용자"}
+                {user?.is_staff ? "관리자" : "책임"}
               </small>
             </div>
             <button
@@ -410,16 +400,14 @@ export default function AppShell() {
             >
               <Icon name="eye" size={14} />탭 관리
             </button>
-            {tab !== "database" && (
+            {user?.is_staff && tab !== "database" && (
               <button
                 className="btn btn-sm btn-primary"
                 disabled={busy}
-                onClick={() =>
-                  user?.is_staff ? navigate("database") : setAdminLogin(true)
-                }
+                onClick={() => navigate("database")}
               >
-                <Icon name={user?.is_staff ? "database" : "shield"} size={14} />
-                {user?.is_staff ? "데이터 관리" : "관리자 로그인"}
+                <Icon name="database" size={14} />
+                데이터 관리
               </button>
             )}
           </div>
@@ -434,13 +422,11 @@ export default function AppShell() {
           )}
           {tab === "home" && (
             <HomePage
-              data={data}
               snapshot={snapshot}
               features={FEATURES.filter((item) => canAccessTab(item.id, user))}
               hiddenTabs={preference.hidden_tabs}
               isAdmin={Boolean(user?.is_staff)}
               navigate={navigate}
-              manageTabs={() => setManageTabs(true)}
             />
           )}
           {Page && feature && canAccessTab(feature.id, user) && (

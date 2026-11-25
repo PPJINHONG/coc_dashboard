@@ -32,7 +32,7 @@ def base(db):
 
 
 def resource(**values):
-    return {'region': 101, 'service': 'TEST', 'host_count': 12, 'vm_count': None, **values}
+    return {'region': 101, 'service': 'HCLOUD', 'host_count': 12, 'vm_count': None, **values}
 
 
 def save(client, section, rows, revision, month=None):
@@ -85,14 +85,14 @@ def test_invalid_month_is_rejected(client, base, month):
 
 
 @pytest.mark.django_db
-def test_change_logs_record_month_and_filter(client, base):
+def test_change_logs_show_month_for_monthly_data(client, base):
     assert save(client, 'resources', [resource()], 0, '2026-08').status_code == 200
     assert client.patch(ADMIN + 'common/regions/101/', {'region_name': '수정 리전'}, format='json').status_code == 200
     log = ChangeLog.objects.get(section='resources')
     assert log.period_month == date(2026, 8, 1)
     assert ChangeLog.objects.get(section='regions').period_month is None
-    logs = client.get(ROOT + 'logs/?month=2026-08').data['results']
-    assert [entry['month'] for entry in logs] == ['2026-08']
+    logs = client.get(ROOT + 'logs/').data['results']
+    assert [entry['month'] for entry in logs] == [None, '2026-08']
 
 
 @pytest.mark.django_db
@@ -107,4 +107,4 @@ def test_staff_section_has_no_month(client, base):
 @pytest.mark.django_db
 def test_database_rejects_month_not_on_first_day(base):
     with pytest.raises(IntegrityError), transaction.atomic():
-        InfrastructureResource.objects.create(period_month=date(2026, 8, 15), region_id=101, service='TEST')
+        InfrastructureResource.objects.create(period_month=date(2026, 8, 15), region_id=101, service='HCLOUD')

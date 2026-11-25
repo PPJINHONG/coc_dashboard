@@ -90,35 +90,49 @@
 .access-mode-switch button:hover:not(:disabled) { color: var(--accent); background: var(--panel-2); }
 .access-mode-switch button:disabled { background: var(--panel-2); cursor: not-allowed; }
 .access-identity {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
+  display: grid;
+  place-items: center;
   padding: 60px 32px;
-  background: var(--bg);
+  background: #f4f8fb;
+  overflow: hidden;
 }
-.access-identity-content { position: relative; width: max-content; max-width: 100%; }
-.access-identity-content > p {
+.access-identity-content {
   position: relative;
-  z-index: 1;
-  white-space: nowrap;
-  font-size: clamp(22px, 2.7vw, 46px);
-  line-height: 1.2;
-  font-weight: 500;
-  letter-spacing: -0.045em;
-  color: var(--text-strong);
+  isolation: isolate;
+  display: grid;
+  justify-items: start;
+  max-width: 100%;
+}
+.access-company-logo {
+  display: block;
+  width: 96px;
+  height: auto;
+  margin-bottom: 24px;
+}
+.access-identity h2 {
   margin: 0;
+  font-size: clamp(26px, 3.65vw, 70px);
+  font-weight: 630;
+  line-height: 1.12;
+  letter-spacing: -0.055em;
+  color: #132d43;
+}
+.access-team {
+  margin: 16px 0 0;
+  font-size: clamp(13px, 1.07vw, 18px);
+  font-weight: 500;
+  color: var(--muted);
 }
 .access-cloud {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 56%;
+  z-index: -1;
+  right: -6%;
+  top: 48%;
+  transform: translateY(-50%);
+  width: 58%;
   height: auto;
-  aspect-ratio: 1;
-  color: #79a9d9;
-  opacity: 0.13;
+  stroke-width: 0.8;
+  color: #dce9f2;
   pointer-events: none;
 }
 @media (min-width: 1800px) {
@@ -130,7 +144,6 @@
   .access-brand { padding: 28px; }
   .access-form-area { padding: 36px 28px 80px; }
   .access-identity { padding-inline: 20px; }
-  .access-identity-content > p { font-size: 23px; }
 }
 @media (max-width: 760px) {
   .access-screen { grid-template-columns: minmax(0, 1fr); }
@@ -163,3 +176,12 @@
 .access-screen .account-staff legend { padding: 0 0 4px; font-size: 13px; font-weight: 600; }
 .access-screen .account-staff legend small { display: block; margin-top: 4px; font-size: 11px; font-weight: 400; }
 .access-screen .account-field select:disabled { cursor: not-allowed; }
+.password-help {
+  margin: -10px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.password-change-logout {
+  width: 100%;
+  justify-content: center;
+}

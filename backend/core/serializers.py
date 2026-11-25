@@ -1,4 +1,4 @@
-"""로그인·회원가입·내 정보 응답 형식."""
+"""이름 로그인·회원가입·내 정보·비밀번호 변경 응답 형식."""
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
@@ -6,113 +6,131 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q
 from rest_framework import serializers
 
+from .security import must_change_password
 
-# 이메일 아이디로 세션 로그인합니다. 기존 계정도 로그인할 수 있도록 입력 형식은 제한하지 않습니다.
+
+def normalize_name(value):
+    return " ".join(str(value).split())
+
+
+def validate_account_name(value, instance=None):
+    value = normalize_name(value)
+    if not value:
+        raise serializers.ValidationError("이름을 입력하세요.")
+    users = get_user_model().objects.filter(Q(username__iexact=value) | Q(first_name__iexact=value))
+    if instance is not None:
+        users = users.exclude(pk=instance.pk)
+    if users.exists():
+        raise serializers.ValidationError("이미 로그인 이름으로 사용 중입니다.")
+    return value
+
+
+def validate_account_email(value, instance=None):
+    value = str(value).strip().lower()
+    serializers.EmailField(max_length=254).run_validation(value)
+    users = get_user_model().objects.filter(email__iexact=value)
+    if instance is not None:
+        users = users.exclude(pk=instance.pk)
+    if users.exists():
+        raise serializers.ValidationError("이미 사용 중인 이메일입니다.")
+    return value
+
+
+def validate_account_password(value, *, name=""):
+    candidate = get_user_model()(username=name, first_name=name)
+    try:
+        validate_password(value, user=candidate)
+    except DjangoValidationError as exc:
+        raise serializers.ValidationError(list(exc.messages)) from exc
+    return value
+
+
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150)
     password = serializers.CharField(write_only=True, trim_whitespace=False)
 
     def validate_username(self, value):
-        return value.lower()
+        value = normalize_name(value)
+        if not value:
+            raise serializers.ValidationError("로그인 이름을 입력하세요.")
+        return value
 
 
 class AccountSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source="first_name", max_length=150, allow_blank=False)
-    username = serializers.CharField(max_length=150, allow_blank=False)
-    # 관리자(admin)·옵저버(observer, 읽기 전용)·사용자(user). 변경은 DB 관리의 사용자·권한에서만 합니다.
+    username = serializers.CharField(read_only=True)
+    email = serializers.EmailField(max_length=254)
     role = serializers.SerializerMethodField()
-    # 그룹장의 관리 국가, 운영 인력을 편집할 수 있는 국가(관리자·팀장은 전체). 화면은 이 값으로 편집 버튼·국가 선택지를 정합니다.
     managed_countries = serializers.SerializerMethodField()
     staff_edit_countries = serializers.SerializerMethodField()
+    must_change_password = serializers.SerializerMethodField()
 
     class Meta:
         model = get_user_model()
-        fields = ("id", "name", "username", "email", "date_joined", "is_staff", "role", "managed_countries", "staff_edit_countries")
-        read_only_fields = ("id", "email", "date_joined", "is_staff", "role", "managed_countries", "staff_edit_countries")
+        fields = (
+            "id", "name", "username", "email", "date_joined", "is_staff", "role",
+            "managed_countries", "staff_edit_countries", "must_change_password",
+        )
+        read_only_fields = (
+            "id", "username", "date_joined", "is_staff", "role", "managed_countries",
+            "staff_edit_countries", "must_change_password",
+        )
 
     def get_role(self, obj):
         from .roles import user_role
-
         return user_role(obj) if obj.pk else None
 
     def get_managed_countries(self, obj):
-        from .roles import managed_countries
-
-        return managed_countries(obj) if obj.pk else []
+        return []
 
     def get_staff_edit_countries(self, obj):
         from .roles import staff_edit_countries
-
         return staff_edit_countries(obj) if obj.pk else []
 
-    def validate_username(self, value):
-        value = value.lower()
-        # 요청한 관리자 아이디는 일반 이메일 검사에서 제외하되, 신규 가입에는 허용하지 않습니다.
-        from .defaults import DEFAULT_USERNAMES
+    def get_must_change_password(self, obj):
+        return must_change_password(obj)
 
-        # 기본 계정(admin·kr·eu·na·readonly)은 자기 아이디를 그대로 둘 때만 @ 없는 아이디를 유지합니다.
-        existing_admin = (
-            self.instance is not None
-            and self.instance.username == value
-            and value in DEFAULT_USERNAMES
-        )
-        if not existing_admin:
-            serializers.EmailField(max_length=150).run_validation(value)
-        users = get_user_model().objects.filter(Q(username__iexact=value) | Q(email__iexact=value))
-        if self.instance is not None:
-            users = users.exclude(pk=self.instance.pk)
-        if users.exists():
-            raise serializers.ValidationError("이미 사용 중인 이메일 아이디입니다.")
-        return value
+    def validate_name(self, value):
+        return validate_account_name(value, self.instance)
 
-    def validate(self, attrs):
-        password = attrs.get("password")
-        changing_username = self.instance is not None and attrs.get("username", self.instance.username) != self.instance.username
-        if self.instance is not None and (changing_username or password is not None):
-            if not self.instance.check_password(attrs.get("current_password", "")):
-                raise serializers.ValidationError({"current_password": ["현재 비밀번호가 올바르지 않습니다."]})
-        if password is not None:
-            candidate = get_user_model()(
-                username=attrs.get("username", getattr(self.instance, "username", "")),
-                first_name=attrs.get("first_name", getattr(self.instance, "first_name", "")),
-            )
-            candidate.email = candidate.username
-            try:
-                validate_password(password, user=candidate)
-            except DjangoValidationError as exc:
-                raise serializers.ValidationError({"password": list(exc.messages)})
-        return attrs
+    def validate_email(self, value):
+        return validate_account_email(value, self.instance)
 
 
 class RegisterSerializer(AccountSerializer):
     password = serializers.CharField(write_only=True, trim_whitespace=False, max_length=128)
-    # 가입과 함께 운영 인력으로 등록할 국가입니다. 계정에는 저장하지 않고 user_registered 신호로 넘깁니다.
-    country_code = serializers.ChoiceField(choices=("KR", "EU", "NA"), write_only=True,
-                                           error_messages={"required": "국가를 선택해 주세요.", "invalid_choice": "국가는 KR·EU·NA 중에서 선택해 주세요."})
 
     class Meta(AccountSerializer.Meta):
-        fields = AccountSerializer.Meta.fields + ("password", "country_code")
+        fields = AccountSerializer.Meta.fields + ("password",)
+
+    def validate_password(self, value):
+        name = normalize_name(self.initial_data.get("name", ""))
+        return validate_account_password(value, name=name)
 
     def create(self, validated_data):
-        values = {key: value for key, value in validated_data.items() if key != "country_code"}
-        return get_user_model().objects.create_user(**values, email=values["username"])
+        password = validated_data.pop("password")
+        name = validated_data.pop("first_name")
+        email = validated_data.pop("email")
+        return get_user_model().objects.create_user(
+            username=name,
+            first_name=name,
+            email=email,
+            password=password,
+            is_staff=False,
+            is_superuser=False,
+        )
 
 
 class MeSerializer(AccountSerializer):
-    password = serializers.CharField(write_only=True, trim_whitespace=False, max_length=128, required=False)
-    current_password = serializers.CharField(write_only=True, trim_whitespace=False, required=False)
+    pass
 
-    class Meta(AccountSerializer.Meta):
-        fields = AccountSerializer.Meta.fields + ("password", "current_password")
 
-    def update(self, instance, validated_data):
-        validated_data.pop("current_password", None)
-        password = validated_data.pop("password", None)
-        for key, value in validated_data.items():
-            setattr(instance, key, value)
-        if "username" in validated_data:
-            instance.email = instance.username
-        if password is not None:
-            instance.set_password(password)
-        instance.save()
-        return instance
+class PasswordChangeSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True, trim_whitespace=False, max_length=128)
+    confirm_password = serializers.CharField(write_only=True, trim_whitespace=False, max_length=128)
+
+    def validate(self, attrs):
+        if attrs["password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError({"confirm_password": "비밀번호 확인이 일치하지 않습니다."})
+        attrs["password"] = validate_account_password(attrs["password"], name=self.context["request"].user.first_name)
+        return attrs

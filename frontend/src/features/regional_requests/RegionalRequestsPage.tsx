@@ -87,7 +87,7 @@ export default function RegionalRequestsPage({ snapshot, user, setDirty }: Featu
   const [formDirty, setFormDirty] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const canWrite = Boolean(user && user.role !== "observer");
+  const canWrite = Boolean(user);
 
   const load = useCallback(async () => {
     setLoading(true);

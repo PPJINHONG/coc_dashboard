@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from .models import NavigationPreference
 from .registry import hideable_tabs
+from .services import record_log
 
 COOKIE = 'coc_navigation'
 COOKIE_SALT = 'coc-navigation-browser'
@@ -27,6 +28,12 @@ class PreferenceSerializer(serializers.ModelSerializer):
         tabs = hideable_tabs()
         fields['hidden_tabs'] = serializers.ListField(child=serializers.ChoiceField(choices=tabs), max_length=len(tabs), required=False)
         return fields
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # 삭제된 기능을 과거에 숨긴 사용자도 현재 탭 설정을 다시 저장할 수 있게 합니다.
+        data['hidden_tabs'] = [tab for tab in data['hidden_tabs'] if tab in hideable_tabs()]
+        return data
 
     def validate_hidden_tabs(self, values):
         return list(dict.fromkeys(values))
@@ -60,7 +67,9 @@ class NavigationPreferenceView(APIView):
         serializer = PreferenceSerializer(preference, data=request.data if save else {}, partial=True)
         if save:
             serializer.is_valid(raise_exception=True)
+            before = PreferenceSerializer(preference).data
             serializer.save()
+            record_log(request, 'navigation', 'update', '개인 화면 설정 변경', before=before, after=serializer.data)
         response = Response(PreferenceSerializer(preference).data)
         response['Cache-Control'] = 'private, no-store'
         response.set_signed_cookie(COOKIE, str(browser_key), salt=COOKIE_SALT, max_age=365 * 24 * 3600, httponly=True, samesite='Lax', secure=request.is_secure())

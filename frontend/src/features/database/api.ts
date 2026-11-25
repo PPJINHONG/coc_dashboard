@@ -54,18 +54,3 @@ export const rows = (table: string, params: Record<string, string>) =>
     "GET",
     `${tablePath(table)}rows/?${new URLSearchParams(params)}`,
   );
-
-// 호환용 공통데이터(리전·인력) 추가·수정·삭제
-export type MasterKind = "regions" | "staff-members";
-export const saveMaster = (
-  kind: MasterKind,
-  values: Record<string, unknown>,
-  pk?: string | number,
-) =>
-  request(
-    pk === undefined ? "POST" : "PATCH",
-    `${base}common/${kind}/${pk === undefined ? "" : `${encodeURIComponent(pk)}/`}`,
-    values,
-  );
-export const deleteMaster = (kind: MasterKind, pk: string | number) =>
-  request("DELETE", `${base}common/${kind}/${encodeURIComponent(pk)}/`);

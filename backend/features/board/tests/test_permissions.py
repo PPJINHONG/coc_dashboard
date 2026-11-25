@@ -34,9 +34,10 @@ def people(db):
 
 
 @pytest.mark.django_db
-def test_observer_cannot_write_posts(people):
-    assert login(people["olive"]).post("/api/board/posts/", {"title": "t", "content": "c"}, format="json").status_code == 403
-    assert not Post.objects.exists()
+def test_legacy_observer_group_does_not_make_user_read_only(people):
+    response = login(people["olive"]).post("/api/board/posts/", {"title": "t", "content": "c"}, format="json")
+    assert response.status_code == 201
+    assert Post.objects.count() == 1
 
 
 @pytest.mark.django_db

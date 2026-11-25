@@ -19,8 +19,9 @@ interface AuthContextValue {
   user: User | null;
   // anon 전환 사유 안내(세션 만료, 서버 오류 등)
   notice: string | null;
-  login: (username: string, password: string) => Promise<User>;
+  login: (name: string, password: string) => Promise<User>;
   register: (data: Registration) => Promise<void>;
+  changePassword: (password: string, confirmPassword: string) => Promise<User>;
   logout: () => Promise<void>;
 }
 
@@ -65,8 +66,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [toAnon]);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const me = await authApi.login(username, password);
+  const login = useCallback(async (name: string, password: string) => {
+    const me = await authApi.login(name, password);
     setUser(me);
     setStatus("authed");
     setNotice(null);
@@ -78,6 +79,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(me);
     setStatus("authed");
     setNotice(null);
+  }, []);
+
+  const changePassword = useCallback(async (password: string, confirmPassword: string) => {
+    const me = await authApi.changePassword(password, confirmPassword);
+    setUser(me);
+    setStatus("authed");
+    setNotice(null);
+    return me;
   }, []);
 
   const logout = useCallback(async () => {
@@ -92,8 +101,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [toAnon]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, notice, login, register, logout }),
-    [status, user, notice, login, register, logout],
+    () => ({ status, user, notice, login, register, changePassword, logout }),
+    [status, user, notice, login, register, changePassword, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

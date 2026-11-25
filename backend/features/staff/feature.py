@@ -1,7 +1,7 @@
 from reporting.registry import Feature, Section
 from reporting.models import StaffMember
 
-from .models import StaffAssignment, StaffCalendarEvent, StaffResponsibility, StaffChoice, StaffColumn
+from .models import StaffAssignment, StaffCalendarEvent, StaffResponsibility, StaffChoice, StaffColumn, StaffTableLayout
 from .serializers import StaffSerializer
 
 SECTION = Section(
@@ -11,8 +11,7 @@ SECTION = Section(
     unique_fields=('staff',),
     related=('staff', 'account'),
     prefetch=('calendar_events', 'account__groups'),
-    history_models=(StaffMember, StaffAssignment, StaffCalendarEvent, StaffResponsibility, StaffColumn, StaffChoice),
-    private_fields=('grade',),
+    history_models=(StaffMember, StaffAssignment, StaffCalendarEvent, StaffResponsibility, StaffColumn, StaffChoice, StaffTableLayout),
     history_labels=lambda: dict(StaffColumn.objects.values_list('key', 'label')),
 )
 

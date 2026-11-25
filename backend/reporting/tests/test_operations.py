@@ -30,7 +30,7 @@ def base(db):
 
 
 def resource(**values):
-    return {'region': 101, 'service': 'TEST', 'host_count': 12, 'vm_count': None, **values}
+    return {'region': 101, 'service': 'HCLOUD', 'host_count': 12, 'vm_count': None, **values}
 
 
 def save(client, section, rows, revision=0):
@@ -166,7 +166,7 @@ def test_region_has_no_display_order(client, base):
 
 @pytest.mark.django_db
 @pytest.mark.parametrize('role', ['anonymous', 'member', 'inactive_admin', 'admin'])
-def test_change_history_requires_active_login_and_members_only_see_own(role):
+def test_change_history_requires_active_admin(role):
     ChangeLog.objects.create(section='resources', action='update', actor_name='관리자', summary='관리자 이력')
     client = APIClient()
     if role != 'anonymous':
@@ -180,7 +180,5 @@ def test_change_history_requires_active_login_and_members_only_see_own(role):
     if role == 'admin':
         assert response.status_code == 200 and response.data['results'][0]['summary'] == '관리자 이력'
         assert len(logs) == 1
-    elif role == 'member':
-        assert response.status_code == 200 and response.data['results'] == [] and logs == []
     else:
         assert response.status_code == 403 and logs == []

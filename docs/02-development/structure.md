@@ -14,12 +14,13 @@
 | 운영 인력 탭 | `features/staff/` | `features/staff/` |
 | 권역별 요청작업 탭·티켓·본문 이미지 | `features/regional_requests/` | `features/regional_requests/` |
 | 권역별 작업공지 탭 | `features/regional_notices/` | `features/regional_notices/` |
-| 리포트 탭(본문 비어 있음) | `features/report/` | — |
+| 권역별 핸드오버 탭·본문 이미지 | `features/regional_handovers/` | `features/regional_handovers/` |
+| 월간 운영 리포트 · PDF 출력 | `features/report/` | 각 기능의 조회 API |
 | 변경 이력 탭 | `features/logs/` | `reporting/` (ChangeLog) |
 | DB 관리 탭(DB 원본 읽기 전용) | `features/database/` | `database_admin/`, `reporting/` |
 | 사이드바·상단바·홈 카드·탭 관리 | `app/` | `reporting/navigation.py` |
 | 로그인·회원가입·팀원 초대 | `app/LoginPage.tsx`, `app/InviteDialog.tsx` | `core/`, `invites/` |
-| 리전·인력 공통데이터(편집 화면 미연결) | `shared/api/operations.ts`, `features/database/api.ts` | `reporting/models.py` |
+| 리전·인력 공통데이터(편집 화면 미연결) | — | `reporting/models.py` |
 | 버튼·입력·표·모달 같은 공통 부품과 색상 | `shared/components/`, `shared/styles/` | — |
 | 권한(관리자·옵저버·사용자)·행동 이력 | — | `core/roles.py`, `core/models.py` |
 | 게시판·대시보드 API(화면 미연결) | — | `features/board/`, `features/dashboard/` |
@@ -67,7 +68,7 @@ frontend/src/
 | `adminOnly` | 관리자에게만 보이는 관리자 메뉴 |
 | `hideable: false` | 탭 관리에서 숨길 수 없음(기본은 숨김 가능) |
 | `english`, `description`, `homeCount` | 홈의 전체 기능 카드와 탭 관리 목록 |
-| `featured` | 홈의 주요 기능 카드(미리보기 포함) |
+| `homeCard` | 홈 카드에 표시할 기능 전용 SVG 로고(`logo`)와 배경 계열(`tone`) |
 | `subpages` | 활성 기능 아래 사이드 탭과 `#tab=<id>&view=<subpage>` 주소. 기본 화면은 `id: ""`로 등록 |
 | `Page` | 탭을 눌렀을 때 보이는 기본 화면 |
 

@@ -48,6 +48,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "core.middleware.ForcePasswordChangeMiddleware",
 ]
 # Nginx(localhost:8080) 뒤에서 CSRF Origin 검사를 통과시키기 위한 신뢰 출처입니다.
 # 접속 포트가 다를 때만 DJANGO_CSRF_TRUSTED_ORIGINS(쉼표 구분)로 바꿉니다.
@@ -89,10 +90,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 DEVELOPMENT_AUTH_BYPASS = os.environ.get("DEVELOPMENT_AUTH_BYPASS", "false").lower() == "true"
 
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
-    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
-    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 4},
+    },
 ]
 
 # 게시판(features/board) 첨부 이미지 저장 위치입니다. 파일은 /api/board/images/<id>/ 로만 제공합니다.

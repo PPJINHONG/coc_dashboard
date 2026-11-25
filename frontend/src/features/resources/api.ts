@@ -1,9 +1,12 @@
 import { request } from "../../shared/api/client";
 import type { DataRow } from "../../shared/api/operations";
 
+export const RESOURCE_SERVICES = ["HCLOUD", "CCS"] as const;
+export type ResourceService = (typeof RESOURCE_SERVICES)[number];
+
 export interface ResourceInput {
   region: number;
-  service: string;
+  service: ResourceService;
   host_count: number;
   vm_count: number | null;
   compute_rack_count: number | null;

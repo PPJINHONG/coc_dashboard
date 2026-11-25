@@ -74,7 +74,7 @@ function OptionField({
   );
 }
 
-// 로그인한 팀원이 관리자 없이 바로 초대 링크를 만들고 공유합니다.
+// 관리자 전용 초대 링크 생성·공유.
 export default function InviteDialog({ onClose }: { onClose: () => void }) {
   const [options, setOptions] = useState<InviteOptions | null>(null);
   const [expiresDays, setExpiresDays] = useState(1);
@@ -139,8 +139,7 @@ export default function InviteDialog({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="팀원 초대" onClose={() => !busy && onClose()}>
       <p className="invite-intro">
-        링크를 만들어 팀 메신저에 붙여 넣으면, 받은 사람이 바로 가입합니다. 관리자 승인은 필요
-        없습니다.
+        관리자 초대 링크를 팀원에게 전달하면 이름·이메일·비밀번호로 가입 가능
       </p>
       <div className="invite-create">
         <OptionField
@@ -168,9 +167,6 @@ export default function InviteDialog({ onClose }: { onClose: () => void }) {
           {busy ? "처리 중…" : "링크 만들기"}
         </button>
       </div>
-      {options && options.max_uses.length <= 1 && (
-        <p className="invite-note">한 번에 더 많은 인원이 필요하면 관리자에게 링크를 요청해 주세요.</p>
-      )}
 
       {created && (
         <div className="invite-created" role="status">

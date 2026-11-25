@@ -10,13 +10,16 @@ export function monthAt(month: string, offset: number) {
 
 type Months = Record<string, DataRow[]>;
 
+export const loadResourceHistory = (month: string, length: number) =>
+  request<Months>("GET", `/api/operations/resources/trend/?month=${month}&months=${length}`);
+
 export function useResourceHistory(month: string, length: number, revision: number) {
   const [attempt, setAttempt] = useState(0);
   const key = `${month}/${length}/${revision}/${attempt}`;
   const [result, setResult] = useState<{ key: string; months?: Months; error?: string }>();
   useEffect(() => {
     let active = true;
-    request<Months>("GET", `/api/operations/resources/trend/?month=${month}&months=${length}`).then((months) => {
+    loadResourceHistory(month, length).then((months) => {
       if (active) setResult({ key, months });
     }).catch((err) => {
       if (active) setResult({ key, error: errorMessage(err) });

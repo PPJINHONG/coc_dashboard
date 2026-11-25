@@ -1,9 +1,4 @@
-"""계정 권한(관리자·옵저버·사용자)과 사용자 행동 이력 공용 도구.
-
-- 관리자(admin): is_staff=True. 모든 글·댓글을 수정·삭제하고 모든 이력을 확인합니다.
-- 옵저버(observer): 'observer' 그룹. 조회만 가능합니다.
-- 사용자(user): 그 외 활성 계정. 글·댓글을 작성하고 본인이 저장한 데이터만 수정·삭제합니다.
-"""
+"""관리자와 일반 사용자(화면 표시: 책임) 권한 공용 도구."""
 
 from django.contrib.auth.models import Group
 from django.contrib.sessions.models import Session
@@ -12,51 +7,32 @@ from rest_framework.permissions import BasePermission
 
 from .models import UserActivity
 
-ROLE_ADMIN, ROLE_OBSERVER, ROLE_USER = "admin", "observer", "user"
-# 팀장: 운영 인력 전체 국가 편집. 그룹장: 관리 국가(KR·EU·NA 중 하나 이상)의 운영 인력만 편집. 그 밖에는 사용자와 같습니다.
-ROLE_TEAM_LEAD, ROLE_GROUP_LEAD = "team_lead", "group_lead"
+ROLE_ADMIN, ROLE_USER = "admin", "user"
+# 과거 코드·마이그레이션 import 호환용 이름입니다. 현재 권한 판정에서는 모두 일반 사용자로 처리합니다.
+ROLE_TEAM_LEAD, ROLE_GROUP_LEAD, ROLE_OBSERVER = "team_lead", "group_lead", "observer"
 COUNTRIES = ("KR", "EU", "NA")
 TEAM_LEAD_GROUP = "team_lead"
-GROUP_LEAD_PREFIX = "group_lead_"  # 그룹 이름 group_lead_KR 등. 한 사람이 여러 국가를 맡을 수 있습니다.
-ROLES = [(ROLE_ADMIN, "관리자"), (ROLE_TEAM_LEAD, "팀장"), (ROLE_GROUP_LEAD, "그룹장"), (ROLE_OBSERVER, "옵저버(읽기 전용)"), (ROLE_USER, "사용자")]
-ROLE_LEVELS = {ROLE_ADMIN: 3, ROLE_TEAM_LEAD: 2, ROLE_GROUP_LEAD: 1, ROLE_USER: 0, ROLE_OBSERVER: 0}
+GROUP_LEAD_PREFIX = "group_lead_"
 OBSERVER_GROUP = "observer"
-READ_ONLY_MESSAGE = "읽기 전용(옵저버) 계정은 데이터를 변경할 수 없습니다."
+ROLES = [(ROLE_ADMIN, "관리자"), (ROLE_USER, "책임")]
+ROLE_LEVELS = {ROLE_ADMIN: 1, ROLE_USER: 0}
+READ_ONLY_MESSAGE = "데이터 변경 권한이 없습니다."
 
 
 def user_role(user):
     if not user or not user.is_authenticated:
         return None
-    if user.is_staff:
-        return ROLE_ADMIN
-    names = set(user.groups.values_list("name", flat=True))
-    if OBSERVER_GROUP in names:
-        return ROLE_OBSERVER
-    if TEAM_LEAD_GROUP in names:
-        return ROLE_TEAM_LEAD
-    if any(name.startswith(GROUP_LEAD_PREFIX) for name in names):
-        return ROLE_GROUP_LEAD
-    return ROLE_USER
+    return ROLE_ADMIN if user.is_staff else ROLE_USER
 
 
 def managed_countries(user):
-    """그룹장이 맡은 국가 목록(KR·EU·NA 순서). 그룹장이 아니면 빈 목록입니다."""
-    if not user or not user.is_authenticated:
-        return []
-    names = set(user.groups.values_list("name", flat=True))
-    return [code for code in COUNTRIES if f"{GROUP_LEAD_PREFIX}{code}" in names]
+    return []
 
 
 def staff_edit_countries(user):
-    """운영 인력을 편집할 수 있는 국가. 관리자·팀장은 전체, 그룹장은 관리 국가, 그 외는 없음."""
     if not user or not user.is_authenticated or not user.is_active:
         return []
-    role = user_role(user)
-    if role in (ROLE_ADMIN, ROLE_TEAM_LEAD):
-        return list(COUNTRIES)
-    if role == ROLE_GROUP_LEAD:
-        return managed_countries(user)
-    return []
+    return list(COUNTRIES) if is_admin(user) else []
 
 
 def is_admin(user):
@@ -64,52 +40,37 @@ def is_admin(user):
 
 
 def can_manage_members(user):
-    return bool(user and user.is_authenticated and user.is_active and user_role(user) in (ROLE_ADMIN, ROLE_TEAM_LEAD))
+    return is_admin(user)
 
 
 def assignable_roles(user):
-    if not can_manage_members(user):
-        return []
-    level = ROLE_LEVELS[user_role(user)]
-    return [(role, label) for role, label in ROLES if ROLE_LEVELS[role] < level]
+    return list(ROLES) if is_admin(user) else []
 
 
 def can_manage_account(actor, target):
-    return bool(can_manage_members(actor) and actor.pk != target.pk and not target.is_superuser
-                and ROLE_LEVELS.get(user_role(target), 3) < ROLE_LEVELS[user_role(actor)])
+    return bool(is_admin(actor) and actor.pk != target.pk and not target.is_superuser)
 
 
 def can_write(user):
-    return bool(user and user.is_authenticated and user.is_active and user_role(user) != ROLE_OBSERVER)
+    return bool(user and user.is_authenticated and user.is_active)
 
 
 def owns(user, username):
-    return bool(username) and username.lower() == user.username.lower()
+    return bool(username) and username.casefold() == user.username.casefold()
 
 
 def can_modify(user, author_username):
-    """관리자이거나, 쓰기 권한이 있는 작성자 본인이면 수정·삭제할 수 있습니다."""
     return is_admin(user) or (can_write(user) and owns(user, author_username))
 
 
 def apply_role(user, role, countries=None):
-    """권한을 저장합니다. is_staff는 관리자 여부, 옵저버·팀장·그룹장(관리 국가별)은 그룹 소속으로 구분합니다."""
+    """관리자 또는 일반 사용자 역할을 적용하고 과거 권한 그룹을 제거합니다."""
     user.is_staff = role == ROLE_ADMIN
     user.save(update_fields=["is_staff"])
-    wanted = set()
-    if role == ROLE_OBSERVER:
-        wanted.add(OBSERVER_GROUP)
-    elif role == ROLE_TEAM_LEAD:
-        wanted.add(TEAM_LEAD_GROUP)
-    elif role == ROLE_GROUP_LEAD:
-        wanted.update(f"{GROUP_LEAD_PREFIX}{code}" for code in (countries or []) if code in COUNTRIES)
     managed = [OBSERVER_GROUP, TEAM_LEAD_GROUP, *(f"{GROUP_LEAD_PREFIX}{code}" for code in COUNTRIES)]
-    for name in managed:
-        group, _ = Group.objects.get_or_create(name=name)
-        if name in wanted:
-            user.groups.add(group)
-        else:
-            user.groups.remove(group)
+    groups = Group.objects.filter(name__in=managed)
+    if groups.exists():
+        user.groups.remove(*groups)
 
 
 class CanWrite(BasePermission):
@@ -126,7 +87,6 @@ def display_name(user):
 
 
 def diff(before, after):
-    """두 스냅샷에서 바뀐 항목만 {항목: {before, after}} 형태로 돌려줍니다."""
     keys = [key for key in dict.fromkeys([*(before or {}), *(after or {})])]
     return {
         key: {"before": (before or {}).get(key), "after": (after or {}).get(key)}
@@ -136,13 +96,12 @@ def diff(before, after):
 
 
 def client_ip(request):
-    forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
-    value = (forwarded.split(",")[0].strip() if forwarded else request.META.get("REMOTE_ADDR")) or None
-    return value
+    forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "") if request is not None else ""
+    value = (forwarded.split(",")[0].strip() if forwarded else request.META.get("REMOTE_ADDR")) if request is not None else None
+    return value or None
 
 
 def record_activity(request, action, summary, target_type="", target_id="", before=None, after=None, user=None):
-    """행동 이력 1건을 저장합니다. 수정이면 변경 항목(changes)도 함께 남깁니다."""
     user = user if user is not None else request.user
     authenticated = bool(user and getattr(user, "is_authenticated", False))
     changes = diff(before, after) if action == "update" else {}
@@ -156,17 +115,16 @@ def record_activity(request, action, summary, target_type="", target_id="", befo
         before_data=before or {},
         after_data=after or {},
         changes=changes,
-        ip_address=client_ip(request) if request is not None else None,
+        ip_address=client_ip(request),
     )
 
 
 def online_sessions():
-    """만료되지 않은 로그인 세션 수를 계정 id별로 돌려줍니다."""
     counts = {}
     for session in Session.objects.filter(expire_date__gt=timezone.now()):
         try:
             user_id = session.get_decoded().get("_auth_user_id")
-        except Exception:  # 손상되거나 서명 키가 바뀐 세션은 무시합니다.
+        except Exception:
             continue
         if user_id is not None:
             counts[int(user_id)] = counts.get(int(user_id), 0) + 1

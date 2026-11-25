@@ -1,101 +1,48 @@
-# 권한(관리자·옵저버·사용자)과 사용자 행동 이력 테스트. 기능별 쓰기 권한은 각 기능 앱 tests에 있습니다.
 import pytest
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
-from core.models import UserActivity
-from core.roles import ROLE_OBSERVER, apply_role
-from reporting.models import Region
-
-PASSWORD = "StrongExample!93427"
-OPS = "/api/operations/"
-ADMIN = "/api/db-admin/"
-
-
-def make_user(username, role="user", name=""):
-    user = get_user_model().objects.create_user(username=username, password=PASSWORD, first_name=name or username.split("@")[0], is_staff=role == "admin")
-    if role == ROLE_OBSERVER:
-        apply_role(user, ROLE_OBSERVER)
-    return user
-
-
-def login(user):
-    client = APIClient()
-    assert client.login(username=user.username, password=PASSWORD)
-    return client
+from core.roles import apply_role, assignable_roles, can_manage_members, staff_edit_countries, user_role
 
 
 @pytest.fixture
-def region(db):
-    return Region.objects.create(region_name="서울")
-
-
-@pytest.fixture
-def people(db):
-    return {
-        "admin": make_user("admin@example.com", "admin"),
-        "alice": make_user("alice@example.com"),
-        "bob": make_user("bob@example.com"),
-        "olive": make_user("olive@example.com", ROLE_OBSERVER),
-    }
-
-
-def request_body(region, **values):
-    return {
-        "region": "KR",
-        "title": "디스크 작업 요청",
-        "content_html": "<p>사용률 91% 확인</p>",
-        "requester": "운영팀",
-        "schedule_timezone": "KST",
-        "schedule_start_local": "2026-11-20T10:00",
-        "schedule_end_local": "2026-11-20T11:00",
-        "status": "open",
-        "assignee_regions": ["KR"],
-        "assignee_name": "운영 담당자",
-        **values,
-    }
+def users(db):
+    admin = get_user_model().objects.create_user(username="관리자", first_name="관리자", email="admin@example.com", is_staff=True)
+    member = get_user_model().objects.create_user(username="책임", first_name="책임", email="member@example.com")
+    return admin, member
 
 
 @pytest.mark.django_db
-def test_role_is_exposed_on_me(people):
-    assert login(people["admin"]).get("/api/me/").data["role"] == "admin"
-    assert login(people["alice"]).get("/api/me/").data["role"] == "user"
-    assert login(people["olive"]).get("/api/me/").data["role"] == "observer"
+def test_only_admin_and_user_roles_are_exposed(users):
+    admin, member = users
+    assert user_role(admin) == "admin" and user_role(member) == "user"
+    assert assignable_roles(admin) == [("admin", "관리자"), ("user", "책임")]
+    assert assignable_roles(member) == []
+    assert can_manage_members(admin) and not can_manage_members(member)
+    assert staff_edit_countries(admin) == ["KR", "EU", "NA"]
+    assert staff_edit_countries(member) == []
 
 
 @pytest.mark.django_db
-def test_admin_sees_sessions_activity_and_changes_roles(people, region):
-    alice = login(people["alice"])
-    alice.post(OPS + "regional_requests/", request_body(region), format="json")
-    admin = login(people["admin"])
-    accounts = {row["username"]: row for row in admin.get(ADMIN + "accounts/").data}
-    assert accounts["alice@example.com"]["is_online"] is True and accounts["alice@example.com"]["role"] == "user"
-    assert accounts["bob@example.com"]["is_online"] is False
-    assert accounts["olive@example.com"]["role"] == "observer"
-
-    history = admin.get(ADMIN + f"accounts/{people['alice'].pk}/activities/").data
-    assert [row["action"] for row in history["activities"]] == ["create", "login"]
-
-    # 권한 변경: 사용자 -> 옵저버 -> 팀장 -> 사용자. 동급 관리자는 지정할 수 없습니다.
-    pk = people["alice"].pk
-    assert admin.patch(ADMIN + f"accounts/{pk}/", {"role": "observer"}, format="json").data["role"] == "observer"
-    assert alice.post(OPS + "regional_requests/", request_body(region), format="json").status_code == 403
-    assert admin.patch(ADMIN + f"accounts/{pk}/", {"role": "admin"}, format="json").status_code == 400
-    assert admin.patch(ADMIN + f"accounts/{pk}/", {"role": "team_lead"}, format="json").data["role"] == "team_lead"
-    assert admin.patch(ADMIN + f"accounts/{pk}/", {"role": "user"}, format="json").data["role"] == "user"
-    assert alice.post(OPS + "regional_requests/", request_body(region), format="json").status_code == 201
-
-    # 로그아웃하면 세션이 끝나고 이력에 남습니다.
-    alice.post("/api/auth/logout/")
-    accounts = {row["username"]: row for row in admin.get(ADMIN + "accounts/").data}
-    assert accounts["alice@example.com"]["is_online"] is False
-    assert UserActivity.objects.filter(user=people["alice"], action="logout").exists()
-
-    # 현재 관리자는 자신의 관리자 권한을 해제할 수 없습니다.
-    assert admin.patch(ADMIN + f"accounts/{people['admin'].pk}/", {"role": "observer"}, format="json").status_code == 400
+def test_legacy_groups_do_not_grant_permissions(users):
+    _, member = users
+    for legacy in ("team_lead", "group_lead_KR", "observer"):
+        from django.contrib.auth.models import Group
+        member.groups.add(Group.objects.create(name=legacy))
+    assert user_role(member) == "user"
+    assert not can_manage_members(member) and staff_edit_countries(member) == []
+    apply_role(member, "user")
+    assert not member.groups.filter(name__in=["team_lead", "group_lead_KR", "observer"]).exists()
 
 
 @pytest.mark.django_db
-def test_non_admin_cannot_read_activity(people):
-    assert login(people["alice"]).get(ADMIN + f"accounts/{people['alice'].pk}/activities/").status_code == 403
-    assert login(people["olive"]).get(ADMIN + "accounts/").status_code == 403
+def test_user_cannot_access_management_apis(users):
+    admin, member = users
+    client = APIClient(); client.force_authenticate(member)
+    assert client.get("/api/members/").status_code == 403
+    assert client.get("/api/operations/logs/").status_code == 403
+    assert client.get("/api/db-admin/").status_code == 403
+    assert client.get("/api/invites/").status_code == 403
+    admin_client = APIClient(); admin_client.force_authenticate(admin)
+    assert admin_client.get("/api/members/").status_code == 200
+    assert admin_client.get("/api/operations/logs/").status_code == 200

@@ -41,7 +41,7 @@ def test_anonymous_and_non_admin_cannot_access_even_in_development(path):
 @pytest.mark.django_db
 def test_catalog_only_lists_website_tables_and_raw_data_is_readonly(client):
     names = {table['name'] for table in client.get(ROOT).data['tables']}
-    assert names == {'auth_user', 'ops_regions', 'ops_staff_members', 'infra_resources', 'ops_staff_assignments', 'ops_staff_calendar_events', 'ops_staff_responsibilities', 'ops_staff_choices', 'ops_staff_columns', 'ops_staff_headcount_records', 'ops_regional_notices', 'ops_regional_requests', 'ops_regional_request_images', 'user_activity_logs'}
+    assert names == {'auth_user', 'account_security', 'ops_regions', 'ops_staff_members', 'infra_resources', 'ops_staff_assignments', 'ops_staff_calendar_events', 'ops_staff_responsibilities', 'ops_staff_choices', 'ops_staff_columns', 'ops_staff_headcount_records', 'ops_regional_notices', 'ops_regional_requests', 'ops_regional_request_images', 'ops_regional_handovers', 'ops_regional_handover_images', 'user_activity_logs'}
     assert 'ops_services' not in connection.introspection.table_names()
     assert 'services' not in client.get('/api/operations/bootstrap/').data
     assert client.post(ROOT + 'common/services/', {'service_code': 'NEW', 'service_name': '새 서비스'}, format='json').status_code == 400
@@ -79,23 +79,19 @@ def test_credentials_hidden_in_raw_metadata_and_rows(client):
 
 @pytest.mark.django_db
 def test_account_creation_edit_role_password_login_and_delete(client):
-    values = {'name': '운영 사용자', 'username': 'member@example.com', 'password': 'StrongExample!93427', 'is_staff': False, 'is_active': True}
+    values = {'name': '운영 사용자', 'email': 'member@example.com', 'is_active': True}
     response = client.post(ROOT + 'accounts/', values, format='json')
     assert response.status_code == 201, response.data
-    assert 'password' not in response.data
     pk = response.data['id']
     user = get_user_model().objects.get(pk=pk)
-    assert user.check_password(values['password']) and not user.is_staff
-    assert APIClient().login(username=user.username, password=values['password'])
-    assert client.patch(ROOT + f'accounts/{pk}/', {'is_staff': True}, format='json').status_code == 400
-    response = client.patch(ROOT + f'accounts/{pk}/', {'name': '권한 변경', 'role': 'team_lead', 'password': 'ChangedExample!83472'}, format='json')
+    assert user.username == '운영 사용자' and user.check_password('1111') and not user.is_staff
+    response = client.patch(ROOT + f'accounts/{pk}/', {'name': '권한 변경', 'role': 'admin'})
     assert response.status_code == 200, response.data
-    user.refresh_from_db(); assert not user.is_staff and user.groups.filter(name='team_lead').exists() and user.first_name == '권한 변경' and user.check_password('ChangedExample!83472')
+    user.refresh_from_db(); assert user.is_staff and user.first_name == user.username == '권한 변경'
     raw = client.get(ROOT + 'tables/auth_user/rows/').data
     assert any(row['values']['first_name'] == '권한 변경' for row in raw['rows'])
-    assert 'StrongExample' not in str(list(DatabaseChangeLog.objects.values()))
-    assert 'ChangedExample' not in str(list(DatabaseChangeLog.objects.values()))
-    assert client.delete(ROOT + f'accounts/{pk}/', {'confirm_username': user.username}, format='json').status_code == 204
+    assert '1111' not in str(list(DatabaseChangeLog.objects.values()))
+    assert client.delete(ROOT + f'accounts/{pk}/', {'confirm_name': user.username}, format='json').status_code == 204
     assert not get_user_model().objects.filter(pk=pk).exists()
 
 
@@ -107,9 +103,9 @@ def test_own_admin_cannot_be_disabled_demoted_or_deleted(client, admin):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize('changes', [{'username': 'not-email'}, {'password': '12345678'}, {'username': 'admin@example.com'}])
+@pytest.mark.parametrize('changes', [{'name': ''}, {'email': 'not-email'}])
 def test_invalid_accounts_are_not_created(client, changes):
-    response = client.post(ROOT + 'accounts/', {'name': '사용자', 'username': 'user@example.com', 'password': 'StrongExample!93427', **changes}, format='json')
+    response = client.post(ROOT + 'accounts/', {'name': '사용자', 'email': 'user@example.com', **changes}, format='json')
     assert response.status_code == 400, response.data
     assert get_user_model().objects.count() == 1
 
@@ -150,7 +146,7 @@ def test_staff_name_only_preserves_links_and_allows_same_name(client):
     pk = response.data['id']
     same_name = client.post(ROOT + 'common/staff-members/', {'staff_name': '운영자'}, format='json')
     assert same_name.status_code == 201 and same_name.data['id'] != pk
-    StaffAssignment.objects.create(country_code='KR', staff_id=pk, job_title='운영', company_name='회사')
+    StaffAssignment.objects.create(country_code='KR', staff_id=pk, job_title='운영')
     response = client.patch(ROOT + f'common/staff-members/{pk}/', {'staff_name': '새 이름'}, format='json')
     assert response.status_code == 200
     snapshot = client.get('/api/operations/current/').data

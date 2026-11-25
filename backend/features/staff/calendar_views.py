@@ -7,19 +7,18 @@ from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from invites.services import find_invite
-from core.roles import is_admin, can_manage_members, record_activity, staff_edit_countries
+from core.roles import is_admin, record_activity, staff_edit_countries
 from reporting.history import capture_history
 from reporting.months import parse_month
 from reporting.services import lock_state, check_revision, bump, record_log
-from .models import StaffAssignment, StaffCalendarEvent, StaffResponsibility, StaffChoice, StaffHeadcountRecord
-from .permissions import can_view_grade, owns_profile
+from .models import StaffAssignment, StaffCalendarEvent, StaffResponsibility, StaffColumn, StaffHeadcountRecord
+from .permissions import owns_profile
 from .serializers import CalendarSerializer, ResponsibilitySerializer, local_today
-from .items import choice_rows, item_catalog
+from .items import choice_rows, column_order, item_catalog
 
 
 @method_decorator(csrf_protect, name='dispatch')
@@ -51,16 +50,15 @@ class StaffOptionsView(StaffView):
     def get(self, request):
         profile = StaffAssignment.objects.filter(account=request.user).first()
         accounts = []
-        if can_view_grade(request.user):
-            accounts = [{'id': user.pk, 'name': user.get_full_name() or user.username, 'username': user.username}
+        if is_admin(request.user):
+            accounts = [{'id': user.pk, 'name': user.get_full_name() or user.username, 'username': user.username, 'email': user.email}
                         for user in get_user_model().objects.filter(is_active=True).order_by('first_name', 'username')]
         return Response({
             'my_assignment': profile.pk if profile else None,
             'can_edit_calendar': bool(profile and owns_profile(request.user, profile)),
-            'can_view_grade': can_view_grade(request.user),
-            'can_manage_choices': can_manage_members(request.user),
-            'choices': choice_rows(can_view_grade(request.user)),
-            'items': item_catalog(can_view_grade(request.user)),
+            'can_manage_choices': is_admin(request.user),
+            'choices': choice_rows(),
+            'items': item_catalog(), 'column_order': column_order(),
             'accounts': accounts,
             'responsibilities': ResponsibilitySerializer(StaffResponsibility.objects.select_related(
                 'site_representative__staff', 'team_lead__staff', 'group_lead__staff'), many=True).data,
@@ -169,13 +167,18 @@ class StaffTrendView(StaffView):
         if not 2 <= end.year <= 9998:
             raise ValidationError('지원하지 않는 조회 연도입니다.')
         company = request.query_params.get('company', '')
+        company_column = StaffColumn.objects.filter(label__iexact='소속사').first()
         rows = StaffAssignment.objects.all()
         if country:
             rows = rows.filter(country_code=country)
         if company:
-            rows = rows.filter(company_name=company)
-        missing = rows.filter(deployment_date__isnull=True).count()
-        known = list(rows.filter(deployment_date__isnull=False))
+            if company_column is None:
+                rows = rows.none()
+            else:
+                rows = rows.filter(**{f'custom_values__{company_column.key}': company})
+        people = list(rows.values_list('hire_date', 'resignation_date', 'deployment_date', 'assignment_end_date'))
+        missing = sum(deployment is None for _, _, deployment, _ in people)
+        today = local_today(country or 'KR')
         # 월별 인원 기록이 있는 달은 기록값을 씁니다. 기록에는 소속사 구분이 없으므로 소속사 필터에서는 쓰지 않습니다.
         records = {}
         if not company:
@@ -189,31 +192,30 @@ class StaffTrendView(StaffView):
             index = end.year * 12 + end.month - 1 - offset
             first = date(index // 12, index % 12 + 1, 1)
             last = (first.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
-            # 진행 중인 달은 권역 현지의 오늘까지 집계합니다.
-            if first in records:
-                count, entries, exits = records[first]
-                result.append({'month': first.strftime('%Y-%m'), 'entries': entries, 'exits': exits, 'headcount': count, 'net': entries - exits, 'recorded': True})
-                continue
-            cutoff = min(last, local_today(country or 'KR'))
-            entries = sum(first <= row.deployment_date <= cutoff for row in known)
-            exits = sum(bool(row.resignation_date and first <= row.resignation_date <= cutoff) for row in known)
-            count = sum(row.deployment_date <= cutoff and (not row.resignation_date or row.resignation_date > cutoff) for row in known)
-            result.append({'month': first.strftime('%Y-%m'), 'entries': entries, 'exits': exits, 'headcount': count, 'net': entries - exits, 'recorded': False})
+            cutoff = min(last, today)
+            hires, resignations, deployments, assignment_ends, headcount = 0, 0, 0, 0, 0
+            for hire, resignation, deployment, assignment_end in people:
+                hires += bool(hire and first <= hire <= cutoff)
+                resignations += bool(resignation and first <= resignation <= cutoff)
+                deployments += bool(deployment and first <= deployment <= cutoff)
+                assignment_ends += bool(assignment_end and first <= assignment_end <= cutoff)
+                headcount += bool(deployment and deployment <= cutoff
+                                  and (not resignation or resignation > cutoff)
+                                  and (not assignment_end or assignment_end > cutoff))
+            recorded = first in records
+            count, entries, exits = records.get(first, (headcount, deployments, resignations))
+            result.append({
+                'month': first.strftime('%Y-%m'), 'headcount': count, 'recorded': recorded,
+                'hires': hires, 'resignations': resignations, 'deployments': deployments,
+                'assignment_ends': assignment_ends, 'future': first > today and not recorded,
+                'entries': entries, 'exits': exits, 'net': entries - exits,
+            })
+        companies = []
+        if company_column is not None:
+            companies = sorted({
+                str(values.get(company_column.key))
+                for values in StaffAssignment.objects.values_list('custom_values', flat=True)
+                if values.get(company_column.key)
+            })
         return Response({'months': result, 'missing_dates': missing, 'grouping': '현재 권역·소속사 기준',
-                         'companies': list(StaffAssignment.objects.exclude(company_name='').order_by('company_name').values_list('company_name', flat=True).distinct())})
-
-
-class SignupOptionsView(APIView):
-    """가입 화면의 국가별 근무지 선택지. 유효한 초대 링크가 있을 때만 근무지 이름을 알려 줍니다."""
-
-    permission_classes = [AllowAny]
-    authentication_classes = []
-
-    def get(self, request, token):
-        invite, state = find_invite(token)
-        if invite is None:
-            return Response({'detail': '초대 링크가 올바르지 않습니다.'}, status=404)
-        result = {country: [] for country in ('KR', 'EU', 'NA')}
-        for country, value in StaffChoice.objects.filter(kind='work_location').values_list('country_code', 'value'):
-            result.setdefault(country, []).append(value)
-        return Response({'work_locations': result})
+                         'companies': companies})

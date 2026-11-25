@@ -14,7 +14,7 @@ export default function ResourceTopology({ rows, data, country, month, revision 
   const areas = country ? [country] : areaOrder(sites.map((site) => site.area));
   const hosts = measure(rows, "host_count");
   return (
-    <section className="resource-map resource-visual-panel" aria-label="인프라 자원 구성도">
+    <section className="resource-map" aria-label="인프라 자원 구성도">
       <header className="resource-visual-header"><h2>권역별 자원 구성도</h2><span>{month} 기준</span>{error && <button className="btn btn-sm" onClick={retry}>전월 조회 재시도</button>}</header>
       <div className="resource-tree">
         <article className="resource-root-node">
@@ -31,7 +31,7 @@ export default function ResourceTopology({ rows, data, country, month, revision 
             const change = counts.value !== null && before.value !== null && !counts.incomplete && !before.incomplete
               ? counts.value - before.value : null;
             return <div className={`resource-branch resource-area-${area.toLowerCase()}`} key={area}>
-              <article className="resource-area-node"><h3><i />{area}</h3>
+              <article className="resource-area-node"><h3>{area}</h3>
                 <strong>{amountText(counts)} <small>Host</small></strong>
                 <p className="resource-host-change"><span>전월 대비 Host</span>
                   <b>{error ? "조회 실패" : !months ? "조회 중…" : change === null ? "비교 자료 부족"
@@ -40,7 +40,17 @@ export default function ResourceTopology({ rows, data, country, month, revision 
               </article>
               <div className="resource-leaves">
                 {members.map((site) => <div className="resource-leaf" key={site.id}><article>
-                  <header><strong>{site.name}</strong><span>{site.rows.map((row) => String(row.service)).join(" · ")}</span></header>
+                  <header>
+                    <strong>{site.name}</strong>
+                    <span className="resource-map-services">
+                      {site.rows.map((row, index) => (
+                        <span key={String(row.service)}>
+                          {index > 0 && " · "}
+                          <b data-service={String(row.service)}>{String(row.service)}</b>
+                        </span>
+                      ))}
+                    </span>
+                  </header>
                   <dl>{metrics.map(({ key, label }) => <div key={key}><dt>{label}</dt><dd>{amountText(measure(site.rows, key))}</dd></div>)}</dl>
                 </article></div>)}
                 {!members.length && <div className="resource-leaf"><p>등록된 자원이 없습니다.</p></div>}
